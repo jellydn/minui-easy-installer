@@ -8,6 +8,8 @@
 - Frontend dev server on port 1420
 - Use `vitest` for TypeScript unit testing (tests in `*.test.ts` files)
 - Device profiles and types live in `src/types/`
+- External services accept fetch function parameter for testability
+- Use discriminated unions for result types (success/error pattern)
 
 ## 2026-06-13 - US-001
 - Session: (local)
@@ -93,4 +95,24 @@
 - Dialog displays device and drive information from existing types
 - CSS uses rgba overlay for modal background
 - Confirmation flow prevents accidental writes to wrong drives
+---
+
+## 2026-06-13 - US-006
+- Session: (local)
+- Created release metadata types in `src/types/release.ts`
+- Added MinUIRelease, ReleaseChecksums, ReleaseFetchError, ReleaseFetchResult types
+- Implemented parseGitHubRelease() to parse GitHub API response
+- Implemented fetchMinUIRelease() with configurable fetch function for testability
+- Uses GitHub API endpoint for latest MinUI release
+- Handles network errors, 404, and parse failures with typed error codes
+- Created 12 unit tests covering valid parsing, missing assets, network errors, and parse failures
+- All quality checks pass: typecheck, lint, vitest
+
+**Learnings for future iterations:**
+- Release types live in `src/types/release.ts`
+- GitHub API URL for MinUI: `https://api.github.com/repos/shauninman/MinUI/releases/latest`
+- fetchMinUIRelease() accepts optional fetchFn parameter for testing
+- Error codes: NETWORK_ERROR, PARSE_ERROR, NOT_FOUND
+- Base and extras archives identified by URL keyword matching ("base", "extras")
+- Version extracted from tag_name with "v" prefix stripped
 ---
