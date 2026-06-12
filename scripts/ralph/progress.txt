@@ -116,3 +116,23 @@
 - Base and extras archives identified by URL keyword matching ("base", "extras")
 - Version extracted from tag_name with "v" prefix stripped
 ---
+
+## 2026-06-13 - US-007
+- Session: (local)
+- Created download module in Rust (src-tauri/src/download.rs)
+- Implemented async archive downloading using reqwest
+- Implemented SHA256 checksum verification using sha2 crate
+- Added Tauri commands: download_and_verify_archive, verify_archive_checksum
+- Created TypeScript types and functions in src/types/archive.ts
+- Added 8 frontend tests for download and checksum verification
+- Added 3 Rust tests for checksum verification
+- All quality checks pass: typecheck, lint, vitest, cargo check
+
+**Learnings for future iterations:**
+- Download module lives in `src-tauri/src/download.rs`
+- Uses async reqwest for HTTP requests (blocking not available in Tauri async context)
+- SHA256 checksum verification is case-insensitive for hex strings
+- TempDir is used for temporary archive storage (leaked to keep alive for caller)
+- TypeScript wrapper in `src/types/archive.ts` provides frontend-friendly API
+- Error codes: NETWORK_ERROR, CHECKSUM_ERROR, FILE_ERROR, UNKNOWN_ERROR
+---

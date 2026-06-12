@@ -1,7 +1,6 @@
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -42,7 +41,7 @@ pub fn verify_checksum(file_path: &str, expected_checksum: &str) -> Result<bool,
     Ok(computed.eq_ignore_ascii_case(expected_checksum))
 }
 
-pub fn download_archive(
+pub async fn download_archive(
     url: &str,
     expected_checksum: Option<&str>,
 ) -> Result<DownloadResult, String> {
@@ -53,8 +52,9 @@ pub fn download_archive(
 
     let file_path = temp_dir.path().join(file_name);
 
-    let response =
-        reqwest::blocking::get(url).map_err(|e| format!("Failed to download archive: {}", e))?;
+    let response = reqwest::get(url)
+        .await
+        .map_err(|e| format!("Failed to download archive: {}", e))?;
 
     if !response.status().is_success() {
         return Err(format!(
@@ -65,6 +65,7 @@ pub fn download_archive(
 
     let bytes = response
         .bytes()
+        .await
         .map_err(|e| format!("Failed to read response bytes: {}", e))?;
 
     fs::write(&file_path, &bytes).map_err(|e| format!("Failed to write archive to disk: {}", e))?;
@@ -111,7 +112,7 @@ mod tests {
         write!(temp_file, "test content").unwrap();
 
         // SHA256 of "test content"
-        let expected = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+        let expected = "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72";
 
         let result = verify_checksum(temp_file.path().to_str().unwrap(), expected);
         assert!(result.unwrap());
@@ -131,7 +132,7 @@ mod tests {
         let mut temp_file = tempfile::NamedTempFile::new().unwrap();
         write!(temp_file, "test content").unwrap();
 
-        let expected = "9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08";
+        let expected = "6AE8A75555209FD6C44157C0AED8016E763FF435A19CF186F76863140143FF72";
 
         let result = verify_checksum(temp_file.path().to_str().unwrap(), expected);
         assert!(result.unwrap());

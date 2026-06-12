@@ -45,6 +45,9 @@ npm test
 - Device profiles and types: `src/types/device.ts`
 - Drive types and helpers: `src/types/drive.ts`
 - Drive detection backend: `src-tauri/src/drives.rs`
+- Archive download and verification: `src-tauri/src/download.rs`
+- Archive types and helpers: `src/types/archive.ts`
+- Release metadata types: `src/types/release.ts`
 - Tests: `*.test.ts` files (vitest)
 - Rust backend: `src-tauri/src/`
 - Confirmation dialogs: `src/ConfirmDialog.tsx` (overlay modal for write operations)

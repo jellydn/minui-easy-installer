@@ -117,8 +117,8 @@
         "Rust checks pass"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Created download module in Rust (src-tauri/src/download.rs) with async archive downloading via reqwest and SHA256 checksum verification. Added Tauri commands download_and_verify_archive and verify_archive_checksum. Created TypeScript types and functions in src/types/archive.ts. Added 8 frontend tests and 3 Rust tests. All quality checks pass."
     },
     {
       "id": "US-008",
