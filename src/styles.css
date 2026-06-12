@@ -73,3 +73,84 @@ button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
+
+select {
+  width: 100%;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-family: inherit;
+  color: #f6f6f6;
+  background-color: #2a2a4a;
+  border: 1px solid #3a3a5a;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+select option {
+  background-color: #1a1a2e;
+  color: #f6f6f6;
+}
+
+.drive-selector {
+  margin-top: 1rem;
+}
+
+.drive-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.drive-item {
+  margin: 0.5rem 0;
+}
+
+.drive-item button {
+  width: 100%;
+  text-align: left;
+  background: #2a2a4a;
+  border: 1px solid #3a3a5a;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.drive-item.selected button {
+  border-color: #ff6b35;
+  background: #2a2a3a;
+}
+
+.drive-name {
+  font-weight: 600;
+}
+
+.drive-details {
+  font-size: 0.875rem;
+  color: #a0a0a0;
+}
+
+.selected-drive {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #1a1a2e;
+  border-radius: 8px;
+}
+
+.selected-drive p {
+  margin: 0.25rem 0;
+}
+
+.error {
+  color: #ff4444;
+  margin: 1rem 0;
+}
+
+.empty-state {
+  color: #a0a0a0;
+  font-style: italic;
+}
+
+.ready {
+  border-color: #44ff44;
+}

@@ -40,3 +40,24 @@
 - Use vitest for TypeScript testing (config in `vitest.config.ts`)
 - Tests run with `npm test` or `vitest run`
 ---
+
+## 2026-06-13 - US-003
+- Session: (local)
+- Created Rust backend command `get_removable_drives` for detecting SD cards
+- macOS: uses `diskutil list external` with text parsing fallback to `df`
+- Windows: uses PowerShell `Get-CimInstance Win32_LogicalDisk` where DriveType=2
+- Created TypeScript types in `src/types/drive.ts` with formatSize helper
+- Created DriveSelector React component with refresh button and selection UI
+- Updated Home.tsx with device selector and drive selector cards
+- Added CSS styles for drive list and selection states
+- Created unit tests for formatSize and getDriveDisplayName
+- All quality checks pass: typecheck, lint, vitest, cargo check
+
+**Learnings for future iterations:**
+- Drive detection lives in `src-tauri/src/drives.rs`
+- Tauri v2 custom commands don't need explicit capability permissions (core:default suffices)
+- Use `diskutil list external` on macOS for reliable removable drive detection
+- Windows removable drives have DriveType=2 in Win32_LogicalDisk
+- Frontend invokes Rust commands via `@tauri-apps/api/core` invoke()
+- All drive fields use Option types to handle missing filesystem/size info
+---

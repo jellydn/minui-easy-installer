@@ -50,8 +50,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Rust backend detects removable drives via diskutil/df on macOS and PowerShell on Windows. Frontend DriveSelector component displays drives in a selectable list. Handles missing filesystem info with null values. All quality checks pass."
     },
     {
       "id": "US-004",

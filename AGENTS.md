@@ -43,6 +43,8 @@ npm test
 ## Code Organization
 
 - Device profiles and types: `src/types/device.ts`
+- Drive types and helpers: `src/types/drive.ts`
+- Drive detection backend: `src-tauri/src/drives.rs`
 - Tests: `*.test.ts` files (vitest)
 - Rust backend: `src-tauri/src/`
 
