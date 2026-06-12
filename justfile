@@ -2,6 +2,9 @@
 default:
     @just --list
 
+# Run full Tauri dev (Rust + React)
+run: tauri-dev
+
 # Frontend dev server
 dev:
     npm run dev
