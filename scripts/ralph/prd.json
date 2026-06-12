@@ -135,8 +135,8 @@
         "Rust checks pass"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Created extract.rs module with ZIP extraction using zip crate. Includes path traversal protection, canonical path validation, and file permission preservation. Tauri command extract_archive_to_directory exposed. TypeScript wrapper extractArchive() in archive.ts. 6 Rust tests and 7 frontend tests pass. Pre-existing test failure in drives::test_parse_size_str is unrelated."
     },
     {
       "id": "US-009",

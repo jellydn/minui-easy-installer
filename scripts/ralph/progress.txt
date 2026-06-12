@@ -10,6 +10,8 @@
 - Device profiles and types live in `src/types/`
 - External services accept fetch function parameter for testability
 - Use discriminated unions for result types (success/error pattern)
+- TempDir is leaked to keep alive for caller (Rust backend pattern)
+- zip crate v0.6 uses `zip::write::FileOptions` not `SimpleFileOptions`
 
 ## 2026-06-13 - US-001
 - Session: (local)
@@ -135,4 +137,25 @@
 - TempDir is used for temporary archive storage (leaked to keep alive for caller)
 - TypeScript wrapper in `src/types/archive.ts` provides frontend-friendly API
 - Error codes: NETWORK_ERROR, CHECKSUM_ERROR, FILE_ERROR, UNKNOWN_ERROR
+---
+
+## 2026-06-13 - US-008
+- Session: (local)
+- Created extract.rs module for ZIP archive extraction
+- Added zip crate v0.6 dependency
+- Implemented path traversal protection with canonical path validation
+- Tauri command extract_archive_to_directory exposed to frontend
+- TypeScript wrapper extractArchive() added to archive.ts
+- Added 6 Rust tests for extraction, path traversal, and error handling
+- Added 7 frontend tests for extraction API
+- All new quality checks pass: typecheck, lint, vitest, cargo test (extract module)
+- Pre-existing test failure: drives::test_parse_size_str (unrelated)
+
+**Learnings for future iterations:**
+- Extraction module lives in `src-tauri/src/extract.rs`
+- Uses `zip` crate v0.6 (API uses `zip::write::FileOptions` not `SimpleFileOptions`)
+- Path traversal protection validates both entry paths and canonical destination paths
+- TempDir is leaked to keep alive for caller (same pattern as download.rs)
+- Error codes: PATH_TRAVERSAL, FILE_ERROR, ARCHIVE_ERROR, UNKNOWN_ERROR
+- File permissions are preserved on Unix via unix_mode()
 ---
