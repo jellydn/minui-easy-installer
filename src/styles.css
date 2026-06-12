@@ -154,3 +154,58 @@ select option {
 .ready {
   border-color: #44ff44;
 }
+
+.device-selector {
+  margin-top: 1rem;
+}
+
+.device-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.device-item {
+  margin: 0;
+}
+
+.device-item button {
+  width: 100%;
+  text-align: left;
+  background: #2a2a4a;
+  border: 1px solid #3a3a5a;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 80px;
+}
+
+.device-item.selected button {
+  border-color: #ff6b35;
+  background: #2a2a3a;
+}
+
+.device-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.device-platform {
+  font-size: 0.875rem;
+  color: #a0a0a0;
+}
+
+.selected-device {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #1a1a2e;
+  border-radius: 8px;
+}
+
+.selected-device p {
+  margin: 0.25rem 0;
+}
