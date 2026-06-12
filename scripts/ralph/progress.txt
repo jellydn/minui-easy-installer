@@ -1,0 +1,25 @@
+## Codebase Patterns
+- Tauri v2 with React frontend, Vite bundler
+- TypeScript strict mode enabled
+- Rust edition 2021, tauri 2.x
+- Icons must be RGBA PNG format (not RGB)
+- Pin `plist` to 1.7.0 and `serde_with` to 3.11.0 to avoid `time` crate v0.3.47+ conflicts with `cookie` 0.18.1
+- Use `oxlint` for linting (already configured in package.json)
+- Frontend dev server on port 1420
+
+## 2026-06-13 - US-001
+- Session: (local)
+- Scaffolded Tauri v2 application with Rust backend and React frontend
+- Created basic Home screen component with styled UI
+- Configured TypeScript, ESLint (oxlint), and Rust build pipeline
+- Resolved `time`/`cookie` crate dependency conflict by pinning plist and serde_with versions
+- Created placeholder RGBA PNG icons for Tauri bundling
+- All quality checks pass: typecheck, lint, cargo check
+
+**Learnings for future iterations:**
+- Icons must use RGBA color type (6), not RGB (2) — Tauri validates this at compile time
+- `cookie` v0.18.1 conflicts with `time` v0.3.47+ due to trait coherence issues; pin `plist` to 1.7.0 and `serde_with` to 3.11.0
+- `tauri-plugin-shell` pulls in `cookie` transitively — can omit if not needed initially
+- `cargo check` from `src-tauri/` directory for faster iteration than `cargo build`
+- Frontend: Vite dev server, React 18, TypeScript strict mode
+---

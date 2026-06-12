@@ -1,0 +1,430 @@
+{
+  "project": "MinUI Easy Installer & Package Store",
+  "branchName": "ralph/minui-easy-installer-package-store",
+  "description": "Cross-platform desktop app that simplifies MinUI installation, updates, SD card validation, and package management for supported retro handheld devices.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Scaffold Tauri desktop app",
+      "description": "As a developer, I need a Tauri v2 app with a Rust backend and React frontend so that future installer and store features have a working foundation.",
+      "acceptanceCriteria": [
+        "Create or configure a Tauri v2 application with Rust backend and React frontend",
+        "App has a basic Home screen route or view",
+        "Project scripts document how to run development, typecheck, lint, and Rust checks",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Completed. Tauri v2 scaffolded with React frontend. typecheck, lint, and cargo check all pass."
+    },
+    {
+      "id": "US-002",
+      "title": "Define device profiles",
+      "description": "As a developer, I need supported handhelds represented as device profiles so that install and package logic can resolve the correct paths for each device.",
+      "acceptanceCriteria": [
+        "Add device profiles for TrimUI Brick, TrimUI Smart Pro, Miyoo Mini+, Miyoo A30, Miyoo Flip, RG35XX Plus, RG35XX H, and RG35XX SP",
+        "Each profile includes a stable id, display name, platform identifier, and install path rules placeholder",
+        "Unsupported devices are not included as selectable install targets",
+        "Add unit tests for device profile lookup by id",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Detect removable storage devices",
+      "description": "As a beginner, I want the app to detect my inserted SD card so that I do not need to locate the drive manually.",
+      "acceptanceCriteria": [
+        "Rust backend command lists removable storage devices with name, mount path, size, filesystem when available, and available space",
+        "Frontend displays the detected drives in a selectable list",
+        "Drive data handles missing filesystem information without crashing",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add device selector UI",
+      "description": "As a user, I want to select my handheld model so that the installer uses the correct MinUI platform files.",
+      "acceptanceCriteria": [
+        "Device selector lists TrimUI Brick, TrimUI Smart Pro, Miyoo Mini+, Miyoo A30, Miyoo Flip, RG35XX Plus, RG35XX H, and RG35XX SP",
+        "Selected device persists for the current app session",
+        "Selected device id is available to installer actions",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Require write confirmation before SD card changes",
+      "description": "As a user, I want a clear confirmation before the app writes to my SD card so that I do not accidentally modify the wrong drive.",
+      "acceptanceCriteria": [
+        "Install and update actions show a confirmation step before writing to a selected drive",
+        "Confirmation displays selected drive name, mount path, size, and selected device",
+        "No write command is invoked until the user confirms",
+        "Canceling confirmation returns to the previous screen without writing",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Fetch MinUI release metadata",
+      "description": "As a user, I want the app to find the latest MinUI release so that I do not need to visit GitHub manually.",
+      "acceptanceCriteria": [
+        "Add a release metadata service that fetches latest MinUI release information from a configured source",
+        "Metadata includes version, Base archive URL, Extras archive URL when available, and checksums when available",
+        "Network or parse failures return a user-readable error state",
+        "Add tests for successful metadata parsing and failed fetch handling",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Download and verify archives",
+      "description": "As a user, I want installer downloads to be verified so that corrupted release files are not installed to my SD card.",
+      "acceptanceCriteria": [
+        "Backend can download an archive from a URL to a temporary working directory",
+        "Backend verifies checksum when checksum metadata is provided",
+        "Checksum mismatch returns a failed result and does not continue installation",
+        "Download progress can be reported to the frontend",
+        "Add tests for checksum success and checksum mismatch",
+        "Typecheck passes",
+        "Tests pass",
+        "Rust checks pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Extract MinUI archives safely",
+      "description": "As a user, I want the app to extract MinUI archives safely so that only expected files are prepared for installation.",
+      "acceptanceCriteria": [
+        "Backend extracts ZIP archives into a temporary working directory",
+        "Archive extraction rejects path traversal entries",
+        "Extraction errors are reported as recoverable installation errors",
+        "Temporary extraction path is returned for the copy step",
+        "Add tests for valid extraction and path traversal rejection",
+        "Typecheck passes",
+        "Tests pass",
+        "Rust checks pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Install MinUI Base and Extras",
+      "description": "As a user, I want to install the latest MinUI release with one click so that I do not need to download and extract files manually.",
+      "acceptanceCriteria": [
+        "Installer copies Base files required by the selected device profile to the selected SD card",
+        "Installer copies Extras files required by the selected device profile when available",
+        "Installer shows progress for download, extract, copy, and validation steps",
+        "Failed copy operations show a recoverable error and do not report success",
+        "User ROM and save folders are not deleted by the install flow",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Validate MinUI installation",
+      "description": "As a user, I want the app to validate the SD card after installation so that I know MinUI was installed correctly.",
+      "acceptanceCriteria": [
+        "Validator checks expected MinUI folders and files for the selected device profile",
+        "Validator checks essential PAK files from Extras when Extras are installed",
+        "Validator checks available free space after installation",
+        "Validation result lists passed checks and failed checks",
+        "Validation report can be copied from the UI",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Detect installed MinUI version and updates",
+      "description": "As an existing MinUI user, I want the app to detect available MinUI updates so that I do not need to compare release versions manually.",
+      "acceptanceCriteria": [
+        "Backend detects installed MinUI version from SD card metadata when available",
+        "Backend compares installed version with latest release metadata",
+        "Home screen shows installed version and update availability",
+        "Missing installed version metadata is handled with an unknown version state",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Update installed MinUI safely",
+      "description": "As an existing MinUI user, I want the app to install MinUI updates without deleting my ROMs or saves.",
+      "acceptanceCriteria": [
+        "Update flow downloads and verifies the latest release before writing files",
+        "Update flow replaces MinUI files needed for the selected device profile",
+        "Update flow preserves ROM folders, save folders, and user configuration files",
+        "Update completion shows validation results",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Define package registry schema",
+      "description": "As a maintainer, I want a static package registry schema so that packages can be distributed without operating a backend service.",
+      "acceptanceCriteria": [
+        "Create package registry types or schema for name, version, author, category, description, downloads, rating, artifact URL, checksum, supported devices, and install path rules",
+        "Validate registry entries before they are used by the app",
+        "Invalid package entries are skipped and logged without breaking the whole store",
+        "Add tests for valid registry entries and invalid registry entries",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Load package registry from static URL",
+      "description": "As a user, I want the package store to load available packages from a static registry so that package listings can update without an app release.",
+      "acceptanceCriteria": [
+        "App fetches registry JSON from a configured URL such as https://packages.minui.dev/registry/index.json",
+        "App parses and validates package registry data before displaying packages",
+        "Registry fetch failure shows a clear retry state",
+        "Add tests for successful registry load and failed registry load",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Build package store browse and search UI",
+      "description": "As a user, I want to browse available packages so that I can extend MinUI without searching GitHub manually.",
+      "acceptanceCriteria": [
+        "Store screen supports categories: Utilities, Emulators, Network, and Community",
+        "Package cards show name, version, author, category, description, downloads, and rating when present",
+        "Search filters packages by package name and description",
+        "Empty search results show a clear empty state",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Install packages from registry metadata",
+      "description": "As a user, I want to install packages from the store so that I do not need to copy PAK files manually.",
+      "acceptanceCriteria": [
+        "Package installer downloads package artifact URL from registry metadata",
+        "Package installer verifies checksum when provided",
+        "Package installer copies package files according to registry install path rules and selected device profile",
+        "Installed package is marked installed after validation",
+        "Add tests for package install path resolution",
+        "Typecheck passes",
+        "Tests pass",
+        "Rust checks pass"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Install Wifi.pak from the store",
+      "description": "As a user, I want to install Wifi.pak from the app so that I do not need to copy files into Tools folders manually.",
+      "acceptanceCriteria": [
+        "Wifi.pak appears in the package store under Network or Utilities",
+        "Clicking Install downloads the configured Wifi.pak artifact",
+        "Installer copies Wifi.pak into the correct Tools folder for the selected device profile",
+        "App marks Wifi.pak as installed after validation",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Install SSH.pak from the store",
+      "description": "As a user, I want to install SSH.pak from the app so that I can enable remote access tools more easily.",
+      "acceptanceCriteria": [
+        "SSH.pak appears in the package store",
+        "Clicking Install downloads the configured SSH.pak artifact",
+        "Installer copies SSH.pak into the correct folder for the selected device profile",
+        "App marks SSH.pak as installed after validation",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Create WiFi credentials wizard",
+      "description": "As a user, I want a WiFi wizard to save credentials so that I do not need to manually create wifi.txt.",
+      "acceptanceCriteria": [
+        "Wizard can start after Wifi.pak is installed or prompt the user to install Wifi.pak first",
+        "User can enter SSID manually",
+        "User can enter password in a masked password field",
+        "WiFi password is not logged in plaintext",
+        "Wizard writes wifi.txt in the correct location and format for Wifi.pak",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Add optional WiFi network scanning",
+      "description": "As a user, I want to scan nearby WiFi networks when supported so that I can select my SSID instead of typing it manually.",
+      "acceptanceCriteria": [
+        "Backend exposes WiFi network scan command when supported by the host operating system",
+        "Wizard lists scanned SSIDs when scanning succeeds",
+        "Wizard falls back to manual SSID entry when scanning is unavailable or fails",
+        "Scan failures do not block manual WiFi setup",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Detect package updates",
+      "description": "As a user, I want the app to detect package updates so that installed tools stay current.",
+      "acceptanceCriteria": [
+        "Backend detects installed package versions when package metadata exists on the SD card",
+        "Backend compares installed package versions with registry versions",
+        "Home screen lists available package updates",
+        "Unknown installed package versions are handled without crashing",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Implement Update All flow",
+      "description": "As a user, I want one action to update MinUI and packages so that maintenance is simple.",
+      "acceptanceCriteria": [
+        "Home screen shows Update All when MinUI or package updates are available",
+        "Update All updates MinUI before packages when both are available",
+        "Update All preserves user ROMs, saves, and package configuration unless a package explicitly requires migration",
+        "Update All shows progress and final validation results",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Check SD card health",
+      "description": "As a user, I want the app to check my SD card for common problems so that I can fix issues before booting my handheld.",
+      "acceptanceCriteria": [
+        "Health checker warns when filesystem is known and is not FAT32",
+        "Health checker reports available space",
+        "Health checker reports missing expected MinUI folders",
+        "Health checker reports missing PAK files for installed packages",
+        "Health checker displays a copyable support report",
+        "Typecheck passes",
+        "Lint passes",
+        "Rust checks pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Polish Home screen status summary",
+      "description": "As a user, I want the Home screen to summarize my device, SD card, installation, and updates so that I know what action to take next.",
+      "acceptanceCriteria": [
+        "Home screen shows detected device or selected device",
+        "Home screen shows selected SD card size and filesystem when available",
+        "Home screen shows installed MinUI version or unknown state",
+        "Home screen shows number of available updates",
+        "Home screen includes Install Package and Update All actions when relevant",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

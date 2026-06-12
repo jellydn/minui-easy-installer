@@ -1,0 +1,17 @@
+#:schema https://www.schemastore.org/prek.json
+
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "trailing-whitespace" },
+    { id = "end-of-file-fixer" },
+    { id = "check-added-large-files" },
+]
+
+# npm lint & typecheck
+[[repos]]
+repo = "local"
+hooks = [
+    { id = "npm-lint", name = "eslint", entry = "npm run lint -- --fix", language = "system", files = "\\.(ts|tsx)$", pass_filenames = false },
+    { id = "npm-typecheck", name = "typecheck", entry = "npm run typecheck", language = "system", files = "\\.(ts|tsx)$", pass_filenames = false },
+]

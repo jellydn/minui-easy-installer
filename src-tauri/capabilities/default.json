@@ -1,0 +1,9 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegram/nicegram-tauri/main/crates/tauri-utils/schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}
