@@ -47,6 +47,7 @@ npm test
 - Drive detection backend: `src-tauri/src/drives.rs`
 - Tests: `*.test.ts` files (vitest)
 - Rust backend: `src-tauri/src/`
+- Confirmation dialogs: `src/ConfirmDialog.tsx` (overlay modal for write operations)
 
 ## Ralph Agent Loop
 

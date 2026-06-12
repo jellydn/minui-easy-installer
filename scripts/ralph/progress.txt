@@ -77,3 +77,20 @@
 - CSS uses CSS Grid for device list layout (grid-template-columns with repeat(auto-fill))
 - Browser testing requires ChromeDevTools MCP (not currently configured)
 ---
+
+## 2026-06-13 - US-005
+- Session: (local)
+- Created ConfirmDialog component for write confirmation
+- Displays selected drive name, mount path, size, and selected device
+- User must confirm before any write operations
+- Cancel returns to previous state without writing
+- Added CSS styles for confirmation dialog overlay and layout
+- All quality checks pass: typecheck, lint, vitest, cargo check
+
+**Learnings for future iterations:**
+- Confirmation dialogs use fixed overlay with centered modal
+- State management for dialogs uses simple boolean state in parent component
+- Dialog displays device and drive information from existing types
+- CSS uses rgba overlay for modal background
+- Confirmation flow prevents accidental writes to wrong drives
+---
