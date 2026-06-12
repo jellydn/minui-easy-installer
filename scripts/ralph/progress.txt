@@ -6,6 +6,8 @@
 - Pin `plist` to 1.7.0 and `serde_with` to 3.11.0 to avoid `time` crate v0.3.47+ conflicts with `cookie` 0.18.1
 - Use `oxlint` for linting (already configured in package.json)
 - Frontend dev server on port 1420
+- Use `vitest` for TypeScript unit testing (tests in `*.test.ts` files)
+- Device profiles and types live in `src/types/`
 
 ## 2026-06-13 - US-001
 - Session: (local)
@@ -22,4 +24,19 @@
 - `tauri-plugin-shell` pulls in `cookie` transitively — can omit if not needed initially
 - `cargo check` from `src-tauri/` directory for faster iteration than `cargo build`
 - Frontend: Vite dev server, React 18, TypeScript strict mode
+---
+
+## 2026-06-13 - US-002
+- Session: (local)
+- Created device profiles for all 8 supported handhelds
+- Added TypeScript types for DeviceProfile and InstallPathRules
+- Implemented getDeviceProfile() and getAllDeviceProfiles() functions
+- Added vitest as test framework
+- Created unit tests for device profile lookup
+- All quality checks pass: typecheck, lint, vitest
+
+**Learnings for future iterations:**
+- Device profiles live in `src/types/device.ts`
+- Use vitest for TypeScript testing (config in `vitest.config.ts`)
+- Tests run with `npm test` or `vitest run`
 ---

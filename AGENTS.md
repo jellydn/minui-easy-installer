@@ -23,15 +23,28 @@ Target devices: TrimUI Brick, TrimUI Smart Pro, Miyoo Mini+, Miyoo A30, Miyoo Fl
 
 ## Running Dev
 
-No build system set up yet. When Tauri project is scaffolded:
-
 ```bash
 # Frontend dev
 npm run dev
 
 # Full Tauri dev (Rust + React)
 cargo tauri dev
+
+# Typecheck
+npm run typecheck
+
+# Lint
+npm run lint
+
+# Test
+npm test
 ```
+
+## Code Organization
+
+- Device profiles and types: `src/types/device.ts`
+- Tests: `*.test.ts` files (vitest)
+- Rust backend: `src-tauri/src/`
 
 ## Ralph Agent Loop
 
