@@ -298,3 +298,72 @@ select option {
 .confirm-proceed:hover {
   background: #ff8c5a;
 }
+
+/* Install Progress */
+.install-progress {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.install-progress h2 {
+  margin-top: 0;
+  color: #ff6b35;
+}
+
+.install-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #2a2a4a;
+  border-top: 4px solid #ff6b35;
+  border-radius: 50%;
+  margin: 1.5rem auto;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.install-message {
+  color: #a0a0a0;
+  margin: 1rem 0;
+}
+
+.install-summary {
+  margin: 1.5rem 0;
+  text-align: left;
+  padding: 1rem;
+  background: rgba(68, 255, 68, 0.1);
+  border: 1px solid rgba(68, 255, 68, 0.3);
+  border-radius: 8px;
+}
+
+.install-summary p {
+  margin: 0.5rem 0;
+}
+
+.install-success {
+  color: #44ff44;
+  font-weight: 600;
+  margin-bottom: 1rem !important;
+}
+
+.install-error {
+  margin: 1.5rem 0;
+  text-align: left;
+  padding: 1rem;
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  border-radius: 8px;
+}
+
+.install-retry-hint {
+  color: #a0a0a0;
+  font-size: 0.9rem;
+  margin-top: 0.5rem !important;
+}
+
+.install-actions {
+  margin-top: 1.5rem;
+}
