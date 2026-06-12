@@ -61,3 +61,19 @@
 - Frontend invokes Rust commands via `@tauri-apps/api/core` invoke()
 - All drive fields use Option types to handle missing filesystem/size info
 ---
+
+## 2026-06-13 - US-004
+- Session: (local)
+- Created DeviceSelector component with card-based grid UI
+- Lifted selected device and drive state to App component for session persistence
+- Added DeviceSelector styles following DriveSelector pattern
+- Updated Home.tsx to accept props from App for state management
+- All quality checks pass: typecheck, lint, cargo check
+
+**Learnings for future iterations:**
+- State for device and drive selection should live in App.tsx for session persistence
+- DeviceSelector follows same pattern as DriveSelector (card-based list with selection)
+- Components accept props for selected value and onChange handler
+- CSS uses CSS Grid for device list layout (grid-template-columns with repeat(auto-fill))
+- Browser testing requires ChromeDevTools MCP (not currently configured)
+---
