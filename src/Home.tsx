@@ -1,3 +1,5 @@
+import { useState } from "react";
+import ConfirmDialog from "./ConfirmDialog";
 import DeviceSelector from "./DeviceSelector";
 import DriveSelector from "./DriveSelector";
 import type { RemovableDrive } from "./types/drive";
@@ -15,6 +17,20 @@ function Home({
 	selectedDrive,
 	onSelectDrive,
 }: HomeProps) {
+	const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+	const handleInstallClick = () => {
+		setShowConfirmDialog(true);
+	};
+
+	const handleConfirmInstall = () => {
+		setShowConfirmDialog(false);
+	};
+
+	const handleCancelInstall = () => {
+		setShowConfirmDialog(false);
+	};
+
 	return (
 		<div className="home">
 			<h1>MinUI Easy Installer</h1>
@@ -39,7 +55,19 @@ function Home({
 			{selectedDrive && selectedDevice && (
 				<div className="card ready">
 					<h2>Ready to Install</h2>
+					<button type="button" onClick={handleInstallClick}>
+						Install MinUI
+					</button>
 				</div>
+			)}
+
+			{showConfirmDialog && selectedDevice && selectedDrive && (
+				<ConfirmDialog
+					selectedDevice={selectedDevice}
+					selectedDrive={selectedDrive}
+					onConfirm={handleConfirmInstall}
+					onCancel={handleCancelInstall}
+				/>
 			)}
 		</div>
 	);
