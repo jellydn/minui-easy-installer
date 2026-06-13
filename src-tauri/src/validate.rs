@@ -63,39 +63,49 @@ fn check_directory_exists(sd_root: &Path, relative_path: &str) -> ValidationChec
     }
 }
 
-fn check_pak_files(sd_root: &Path, tools_dir: &str) -> Vec<ValidationCheck> {
-    let mut checks = Vec::new();
-    let tools_path = sd_root.join(tools_dir.trim_start_matches('/'));
+/// Recursively count .pak directories under a given path.
+fn count_pak_dirs(path: &Path) -> u32 {
+    let mut count = 0u32;
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if entry_path.is_dir() {
+                if name.ends_with(".pak") {
+                    count += 1;
+                } else {
+                    count += count_pak_dirs(&entry_path);
+                }
+            }
+        }
+    }
+    count
+}
 
-    if !tools_path.exists() {
+fn check_pak_files(sd_root: &Path, dir: &str) -> Vec<ValidationCheck> {
+    let mut checks = Vec::new();
+    let dir_path = sd_root.join(dir.trim_start_matches('/'));
+
+    if !dir_path.exists() {
         checks.push(ValidationCheck {
-            name: "Tools directory".to_string(),
+            name: format!("{} directory", dir),
             passed: false,
-            message: format!("Missing Tools directory at {}", tools_dir),
+            message: format!("Missing {} directory", dir),
         });
         return checks;
     }
 
-    // Check for .pak directories in Tools directory (MinUI uses .pak dirs, not files)
-    if let Ok(entries) = fs::read_dir(&tools_path) {
-        let mut pak_count = 0u32;
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().to_lowercase();
-            if entry.path().is_dir() && name.ends_with(".pak") {
-                pak_count += 1;
-            }
-        }
+    let pak_count = count_pak_dirs(&dir_path);
 
-        checks.push(ValidationCheck {
-            name: "PAK packages count".to_string(),
-            passed: pak_count > 0,
-            message: if pak_count > 0 {
-                format!("Found {} PAK package(s) in {}", pak_count, tools_dir)
-            } else {
-                format!("No PAK packages found in {}", tools_dir)
-            },
-        });
-    }
+    checks.push(ValidationCheck {
+        name: format!("PAK packages in {}", dir),
+        passed: pak_count > 0,
+        message: if pak_count > 0 {
+            format!("Found {} PAK package(s) in {}", pak_count, dir)
+        } else {
+            format!("No PAK packages found in {}", dir)
+        },
+    });
 
     checks
 }
@@ -141,10 +151,12 @@ pub fn validate_installation(
     // Check Tools directory exists
     checks.push(check_directory_exists(sd_root, extras_dir));
 
-    // Check PAK files if extras were installed
+    // Check PAK files if extras were installed (PAKs are inside Tools/<platform>/ or Emus/<platform>/)
     if has_extras {
-        let pak_checks = check_pak_files(sd_root, extras_dir);
-        checks.extend(pak_checks);
+        let tools_pak = check_pak_files(sd_root, "Tools");
+        let emus_pak = check_pak_files(sd_root, "Emus");
+        checks.extend(tools_pak);
+        checks.extend(emus_pak);
     }
 
     // Check free space
@@ -263,8 +275,8 @@ pub fn check_sd_card_health(
         }
     }
 
-    // Check for MinUI folders
-    let minui_folders = ["Apps", "Tools", "Emus"];
+    // Check for MinUI folders (Apps is optional — not all releases create it)
+    let minui_folders = ["Tools", "Emus"];
     for folder in &minui_folders {
         let folder_path = sd_root.join(folder);
         let exists = folder_path.exists() && folder_path.is_dir();
@@ -435,9 +447,9 @@ mod tests {
         fs::write(sd_root.join("MinUI.zip"), "archive").unwrap();
         fs::write(sd_root.join("minui.txt"), "MinUI 2025.01.01").unwrap();
 
-        // Create Tools with pak directories (MinUI uses .pak dirs)
-        fs::create_dir_all(sd_root.join("Tools/wifi.pak")).unwrap();
-        fs::create_dir_all(sd_root.join("Tools/ssh.pak")).unwrap();
+        // Create Tools with pak directories (MinUI uses .pak dirs per platform)
+        fs::create_dir_all(sd_root.join("Tools/rg35xxplus/wifi.pak")).unwrap();
+        fs::create_dir_all(sd_root.join("Emus/rg35xxplus/mgba.pak")).unwrap();
 
         let result = validate_installation(sd_root.to_str().unwrap(), true, "/Tools").unwrap();
 
@@ -507,10 +519,6 @@ mod tests {
         assert!(health
             .checks
             .iter()
-            .any(|c| c.name == "folder_apps" && !c.passed));
-        assert!(health
-            .checks
-            .iter()
             .any(|c| c.name == "folder_tools" && !c.passed));
         assert!(!health.support_report.is_empty());
     }
@@ -520,7 +528,6 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let sd_root = temp.path();
 
-        std::fs::create_dir_all(sd_root.join("Apps")).unwrap();
         std::fs::create_dir_all(sd_root.join("Tools")).unwrap();
         std::fs::create_dir_all(sd_root.join("Emus")).unwrap();
 
@@ -528,10 +535,6 @@ mod tests {
         assert!(result.is_ok());
 
         let health = result.unwrap();
-        assert!(health
-            .checks
-            .iter()
-            .any(|c| c.name == "folder_apps" && c.passed));
         assert!(health
             .checks
             .iter()
