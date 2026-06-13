@@ -251,13 +251,8 @@ pub async fn install_package(
     sd_mount: &str,
     rules: &PackageInstallPathRules,
 ) -> Result<PackageInstallResult, String> {
-    // Step 1: Verify checksum is provided (required for store packages)
-    let checksum = checksum.ok_or_else(|| {
-        "Checksum is required for store package installs — missing checksum means the package cannot be verified".to_string()
-    })?;
-
-    // Step 2: Download the artifact
-    let (download_result, _artifact_temp) = download::download_archive(artifact_url, Some(checksum))
+    // Step 1: Download the artifact (checksum verification is optional — not all registries provide them)
+    let (download_result, _artifact_temp) = download::download_archive(artifact_url, checksum)
         .await
         .map_err(|e| format!("Package download failed: {}", e))?;
 
