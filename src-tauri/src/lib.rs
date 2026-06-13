@@ -5,6 +5,7 @@ mod install;
 mod package;
 mod validate;
 mod version;
+mod wifi;
 
 use tauri::Manager;
 
@@ -95,6 +96,15 @@ async fn install_package(
     package::install_package(&artifact_url, checksum.as_deref(), &sd_mount, &rules).await
 }
 
+#[tauri::command]
+fn write_wifi_config(
+    sd_mount: String,
+    ssid: String,
+    password: String,
+) -> Result<(), String> {
+    wifi::write_wifi_config(&sd_mount, &ssid, &password)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -107,7 +117,8 @@ pub fn run() {
             validate_installation,
             format_validation_report,
             check_minui_version,
-            install_package
+            install_package,
+            write_wifi_config
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

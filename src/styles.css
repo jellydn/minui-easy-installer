@@ -749,3 +749,90 @@ select option {
   text-align: center;
   margin-top: 0.5rem;
 }
+
+/* WiFi Wizard */
+.wifi-wizard {
+  padding: 1rem 0;
+}
+
+.wifi-wizard h2 {
+  margin-top: 0;
+  color: #ff6b35;
+}
+
+.wifi-description {
+  color: #a0a0a0;
+  margin-bottom: 1.5rem;
+}
+
+.wifi-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: #f6f6f6;
+}
+
+.form-group input {
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #f6f6f6;
+  background-color: #2a2a4a;
+  border: 1px solid #3a3a5a;
+  border-radius: 8px;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #ff6b35;
+}
+
+.form-group input::placeholder {
+  color: #666;
+}
+
+.wifi-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}
+
+.wifi-cancel {
+  background: #2a2a4a;
+  border: 1px solid #3a3a5a;
+}
+
+.wifi-cancel:hover {
+  background: #3a3a5a;
+}
+
+.wifi-save {
+  background: #ff6b35;
+  border: 1px solid #ff8c5a;
+}
+
+.wifi-save:hover {
+  background: #ff8c5a;
+}
+
+.wifi-save:disabled {
+  background: #3a3a5a;
+  border-color: #4a4a6a;
+  cursor: not-allowed;
+}
+
+.success-message {
+  color: #44ff44;
+  font-size: 1.1rem;
+}

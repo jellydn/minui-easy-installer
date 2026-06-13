@@ -2,8 +2,9 @@ import { useState } from "react";
 import Home from "./Home";
 import PackageStore from "./PackageStore";
 import type { RemovableDrive } from "./types/drive";
+import WifiWizard from "./WifiWizard";
 
-type Screen = "home" | "store";
+type Screen = "home" | "store" | "wifi";
 
 function App() {
 	const [screen, setScreen] = useState<Screen>("home");
@@ -29,6 +30,13 @@ function App() {
 				>
 					Package Store
 				</button>
+				<button
+					type="button"
+					className={`nav-btn ${screen === "wifi" ? "active" : ""}`}
+					onClick={() => setScreen("wifi")}
+				>
+					WiFi Setup
+				</button>
 			</nav>
 
 			{screen === "home" && (
@@ -45,6 +53,16 @@ function App() {
 					selectedDevice={selectedDevice}
 					selectedDrive={selectedDrive?.mount_path || null}
 				/>
+			)}
+
+			{screen === "wifi" && (
+				<div className="card">
+					<WifiWizard
+						sdMount={selectedDrive?.mount_path || null}
+						onComplete={() => setScreen("home")}
+						onCancel={() => setScreen("home")}
+					/>
+				</div>
 			)}
 		</main>
 	);
