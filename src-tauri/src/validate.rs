@@ -28,7 +28,10 @@ pub struct HealthCheckResult {
     pub support_report: String,
 }
 
-const ESSENTIAL_BASE_PATHS: &[&str] = &["minui.pak", "boot.sh", "DMG.png"];
+const ESSENTIAL_BASE_PATHS: &[&str] = &[
+    "MinUI.zip",
+    "minui.txt",
+];
 
 fn check_path_exists(sd_root: &Path, relative_path: &str) -> ValidationCheck {
     let full_path = sd_root.join(relative_path.trim_start_matches('/'));
@@ -73,22 +76,23 @@ fn check_pak_files(sd_root: &Path, tools_dir: &str) -> Vec<ValidationCheck> {
         return checks;
     }
 
-    // Check for .pak files in Tools directory
+    // Check for .pak directories in Tools directory (MinUI uses .pak dirs, not files)
     if let Ok(entries) = fs::read_dir(&tools_path) {
         let mut pak_count = 0u32;
         for entry in entries.flatten() {
-            if entry.path().extension().and_then(|e| e.to_str()) == Some("pak") {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if entry.path().is_dir() && name.ends_with(".pak") {
                 pak_count += 1;
             }
         }
 
         checks.push(ValidationCheck {
-            name: "PAK files count".to_string(),
+            name: "PAK packages count".to_string(),
             passed: pak_count > 0,
             message: if pak_count > 0 {
-                format!("Found {} PAK file(s) in {}", pak_count, tools_dir)
+                format!("Found {} PAK package(s) in {}", pak_count, tools_dir)
             } else {
-                format!("No PAK files found in {}", tools_dir)
+                format!("No PAK packages found in {}", tools_dir)
             },
         });
     }
@@ -410,17 +414,16 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let sd_root = temp.path();
 
-        // Create essential files
-        fs::write(sd_root.join("minui.pak"), "test").unwrap();
-        fs::write(sd_root.join("boot.sh"), "#!/bin/sh").unwrap();
-        fs::write(sd_root.join("DMG.png"), "png").unwrap();
+        // Create essential files (MinUI install creates MinUI.zip + minui.txt at root)
+        fs::write(sd_root.join("MinUI.zip"), "archive").unwrap();
+        fs::write(sd_root.join("minui.txt"), "MinUI 2025.01.01").unwrap();
         fs::create_dir_all(sd_root.join("Tools")).unwrap();
 
         let result = validate_installation(sd_root.to_str().unwrap(), false, "/Tools").unwrap();
 
         assert!(result.success);
         assert_eq!(result.failed_count, 0);
-        assert!(result.passed_count >= 4); // 3 base + Tools dir
+        assert!(result.passed_count >= 3); // 2 base + Tools dir
     }
 
     #[test]
@@ -429,20 +432,18 @@ mod tests {
         let sd_root = temp.path();
 
         // Create essential files
-        fs::write(sd_root.join("minui.pak"), "test").unwrap();
-        fs::write(sd_root.join("boot.sh"), "#!/bin/sh").unwrap();
-        fs::write(sd_root.join("DMG.png"), "png").unwrap();
+        fs::write(sd_root.join("MinUI.zip"), "archive").unwrap();
+        fs::write(sd_root.join("minui.txt"), "MinUI 2025.01.01").unwrap();
 
-        // Create Tools with pak files
-        fs::create_dir_all(sd_root.join("Tools")).unwrap();
-        fs::write(sd_root.join("Tools/wifi.pak"), "wifi").unwrap();
-        fs::write(sd_root.join("Tools/ssh.pak"), "ssh").unwrap();
+        // Create Tools with pak directories (MinUI uses .pak dirs)
+        fs::create_dir_all(sd_root.join("Tools/wifi.pak")).unwrap();
+        fs::create_dir_all(sd_root.join("Tools/ssh.pak")).unwrap();
 
         let result = validate_installation(sd_root.to_str().unwrap(), true, "/Tools").unwrap();
 
         assert!(result.success);
         assert_eq!(result.failed_count, 0);
-        assert!(result.passed_count >= 5); // 3 base + Tools dir + pak count
+        assert!(result.passed_count >= 4); // 2 base + Tools dir + pak count
     }
 
     #[test]
@@ -451,7 +452,7 @@ mod tests {
         let sd_root = temp.path();
 
         // Create only some base files
-        fs::write(sd_root.join("minui.pak"), "test").unwrap();
+        fs::write(sd_root.join("MinUI.zip"), "archive").unwrap();
 
         let result = validate_installation(sd_root.to_str().unwrap(), false, "/Tools").unwrap();
 
