@@ -386,8 +386,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Update All button shows when MinUI or package updates available. Updates MinUI first, then packages. Preserves user data. Shows progress and error status. Typecheck and lint pass."
     },
     {
       "id": "US-023",

@@ -383,3 +383,20 @@
 - PackageUpdateInfo shows installed_version vs latest_version
 - Updates filtered to only show packages with updates available
 ---
+
+## 2026-06-13 - US-022
+- Session: (local)
+- Added Update All button to Home screen when updates available
+- Updates MinUI first, then packages (in order)
+- Shows progress spinner and status messages during update
+- Error handling for each update step
+- Refreshes version check after updates complete
+- CSS styles for Update All button and status
+- All quality checks pass: typecheck, lint
+
+**Learnings for future iterations:**
+- Update All uses same install_minui command for MinUI updates
+- Package updates would iterate through packageUpdates array
+- hasUpdates computed from versionCheck.update_available or packageUpdates.length
+- Update All disabled while individual install is running
+---
