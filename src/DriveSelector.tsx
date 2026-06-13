@@ -12,6 +12,10 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
 	const [drives, setDrives] = useState<RemovableDrive[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [showFormatConfirm, setShowFormatConfirm] = useState(false);
+	const [isFormatting, setIsFormatting] = useState(false);
+	const [formatError, setFormatError] = useState<string | null>(null);
+	const [formatSuccess, setFormatSuccess] = useState(false);
 
 	const fetchDrives = async () => {
 		setLoading(true);
@@ -29,6 +33,35 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
 	useEffect(() => {
 		fetchDrives();
 	}, []);
+
+	const handleFormat = async () => {
+		if (!selectedDrive) return;
+
+		setIsFormatting(true);
+		setFormatError(null);
+
+		try {
+			await invoke("format_drive", {
+				mountPath: selectedDrive.mount_path,
+				volumeName: selectedDrive.name,
+			});
+			setFormatSuccess(true);
+			setShowFormatConfirm(false);
+
+			// Refresh drives after format to show new filesystem
+			await fetchDrives();
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			setFormatError(message);
+		} finally {
+			setIsFormatting(false);
+		}
+	};
+
+	const isNotFat32 =
+		selectedDrive?.filesystem &&
+		!selectedDrive.filesystem.toUpperCase().includes("FAT32") &&
+		!selectedDrive.filesystem.toUpperCase().includes("MS-DOS");
 
 	return (
 		<div className="drive-selector">
@@ -69,6 +102,69 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
 					<p>Selected: {getDriveDisplayName(selectedDrive)}</p>
 					<p>Mount: {selectedDrive.mount_path}</p>
 					<p>Free: {formatSize(selectedDrive.available_bytes)}</p>
+
+					{isNotFat32 && (
+						<div className="format-section">
+							<p className="format-warning">
+								This drive is not formatted as FAT32. MinUI requires a FAT32
+								filesystem.
+							</p>
+							<button
+								type="button"
+								className="format-btn"
+								onClick={() => setShowFormatConfirm(true)}
+							>
+								Format to FAT32
+							</button>
+						</div>
+					)}
+
+					{formatSuccess && (
+						<p className="success-message">Drive formatted successfully!</p>
+					)}
+				</div>
+			)}
+
+			{showFormatConfirm && selectedDrive && (
+				<div className="confirm-overlay">
+					<div className="confirm-dialog">
+						<h2>Format Drive?</h2>
+						<p className="confirm-warning">
+							This will <strong>erase all data</strong> on{" "}
+							<strong>{selectedDrive.name}</strong> ({selectedDrive.mount_path})
+							and format it as FAT32. This cannot be undone.
+						</p>
+
+						{formatError && <p className="error">{formatError}</p>}
+
+						{isFormatting && (
+							<p className="formatting-hint">
+								Formatting drive, please wait...
+							</p>
+						)}
+
+						<div className="confirm-actions">
+							<button
+								type="button"
+								className="confirm-cancel"
+								onClick={() => {
+									setShowFormatConfirm(false);
+									setFormatError(null);
+								}}
+								disabled={isFormatting}
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								className="confirm-proceed danger"
+								onClick={handleFormat}
+								disabled={isFormatting}
+							>
+								{isFormatting ? "Formatting..." : "Format to FAT32"}
+							</button>
+						</div>
+					</div>
 				</div>
 			)}
 		</div>

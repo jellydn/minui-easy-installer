@@ -65,6 +65,100 @@ pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
     Ok(drives)
 }
 
+/// Format a drive to FAT32 on macOS using diskutil.
+///
+/// # Arguments
+/// * `mount_path` - Mount path of the volume to format (e.g. `/Volumes/NEXT28`)
+/// * `volume_name` - New name for the volume after formatting
+///
+/// WARNING: This destroys all data on the drive.
+#[cfg(target_os = "macos")]
+pub fn format_drive(mount_path: &str, volume_name: &str) -> Result<(), String> {
+    // Find the disk identifier from the mount path
+    let output = Command::new("diskutil")
+        .args(["info", mount_path])
+        .output()
+        .map_err(|e| format!("Failed to get disk info: {}", e))?;
+
+    if !output.status.success() {
+        return Err("Unable to find disk information for the selected volume".to_string());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut disk_id: Option<String> = None;
+    let mut part_of_whole: Option<String> = None;
+
+    for line in stdout.lines() {
+        if let Some(device) = line.strip_prefix("   Device Node:") {
+            disk_id = Some(device.trim().to_string());
+        }
+        if let Some(whole) = line.strip_prefix("   Part of Whole:") {
+            let val = whole.trim().to_string();
+            if val != "No" {
+                part_of_whole = Some(val);
+            }
+        }
+    }
+
+    let device = disk_id.ok_or("Could not determine device node")?;
+
+    // If this is a partition, use the parent disk
+    let target = if let Some(ref parent) = part_of_whole {
+        // Unmount the partition first
+        let unmount = Command::new("diskutil")
+            .args(["unmount", &device])
+            .output()
+            .map_err(|e| format!("Failed to unmount: {}", e))?;
+
+        if !unmount.status.success() {
+            let stderr = String::from_utf8_lossy(&unmount.stderr);
+            return Err(format!("Failed to unmount partition: {}", stderr));
+        }
+
+        parent.clone()
+    } else {
+        device
+    };
+
+    // Erase the disk with FAT32
+    let format_name = volume_name.trim();
+    let format_name = if format_name.is_empty() {
+        "MINUI"
+    } else {
+        format_name
+    };
+
+    // Truncate to 11 chars (FAT32 volume label limit)
+    let format_name: String = format_name.chars().take(11).collect();
+
+    let result = Command::new("diskutil")
+        .args([
+            "eraseDisk",
+            "FAT32",
+            &format_name,
+            &target,
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run diskutil: {}", e))?;
+
+    if result.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        Err(format!("Format failed: {}", stderr))
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub fn format_drive(_mount_path: &str, _volume_name: &str) -> Result<(), String> {
+    Err("Formatting is not yet supported on Windows".to_string())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub fn format_drive(_mount_path: &str, _volume_name: &str) -> Result<(), String> {
+    Err("Formatting is not yet supported on this platform".to_string())
+}
+
 #[cfg(target_os = "macos")]
 fn get_filesystem(mount_path: &str) -> Option<String> {
     let output = Command::new("diskutil")

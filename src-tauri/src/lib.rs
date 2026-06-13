@@ -15,6 +15,11 @@ fn get_removable_drives() -> Result<Vec<drives::RemovableDrive>, String> {
 }
 
 #[tauri::command]
+fn format_drive(mount_path: String, volume_name: String) -> Result<(), String> {
+    drives::format_drive(&mount_path, &volume_name)
+}
+
+#[tauri::command]
 async fn download_and_verify_archive(
     url: String,
     checksum: Option<String>,
@@ -148,6 +153,7 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             get_removable_drives,
+            format_drive,
             download_and_verify_archive,
             verify_archive_checksum,
             extract_archive_to_directory,
