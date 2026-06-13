@@ -129,8 +129,11 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
 
 	if (isLoading) {
 		return (
-			<div className="package-store">
-				<h2>Package Store</h2>
+			<div className="screen">
+				<h1>Package Store</h1>
+				<p className="subtitle">
+					Browse and install add-on packages for your MinUI device.
+				</p>
 				<div className="store-loading">
 					<div className="install-spinner" />
 					<p>Loading packages...</p>
@@ -141,8 +144,11 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
 
 	if (error) {
 		return (
-			<div className="package-store">
-				<h2>Package Store</h2>
+			<div className="screen">
+				<h1>Package Store</h1>
+				<p className="subtitle">
+					Browse and install add-on packages for your MinUI device.
+				</p>
 				<div className="store-error">
 					<p className="error">Failed to load packages: {error}</p>
 					<button type="button" onClick={handleRetry}>

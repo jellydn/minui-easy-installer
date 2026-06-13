@@ -1,3 +1,5 @@
+import { classifyError } from "./install";
+
 export interface PackageRegistryEntry {
 	name: string;
 	version: string;
@@ -366,18 +368,7 @@ export async function installPackage(options: {
 		}
 
 		const errorMsg = result.error || "Package installation failed";
-		let code: PackageInstallError["code"] = "COPY_ERROR";
-
-		if (errorMsg.includes("download")) {
-			code = "DOWNLOAD_ERROR";
-		} else if (
-			errorMsg.includes("extraction") ||
-			errorMsg.includes("extract")
-		) {
-			code = "EXTRACTION_ERROR";
-		} else if (errorMsg.includes("checksum")) {
-			code = "CHECKSUM_ERROR";
-		}
+		const code = classifyError(errorMsg);
 
 		return {
 			success: false,

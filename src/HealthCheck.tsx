@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatSize } from "./types/drive";
 import type { HealthCheckResult } from "./types/validate";
 import { checkSdCardHealth } from "./types/validate";
 
@@ -103,7 +104,7 @@ function HealthCheck({ sdMount, devicePlatform }: HealthCheckProps) {
 
 					{healthResult.free_space_bytes !== null && (
 						<p className="health-space">
-							Free Space: {formatBytes(healthResult.free_space_bytes)}
+							Free Space: {formatSize(healthResult.free_space_bytes)}
 						</p>
 					)}
 
@@ -120,23 +121,6 @@ function HealthCheck({ sdMount, devicePlatform }: HealthCheckProps) {
 			)}
 		</div>
 	);
-}
-
-function formatBytes(bytes: number): string {
-	const KB = 1024;
-	const MB = KB * 1024;
-	const GB = MB * 1024;
-
-	if (bytes >= GB) {
-		return `${(bytes / GB).toFixed(2)} GB`;
-	}
-	if (bytes >= MB) {
-		return `${(bytes / MB).toFixed(2)} MB`;
-	}
-	if (bytes >= KB) {
-		return `${(bytes / KB).toFixed(2)} KB`;
-	}
-	return `${bytes} bytes`;
 }
 
 export default HealthCheck;

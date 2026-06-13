@@ -3,6 +3,7 @@ use std::path::Path;
 
 use crate::download;
 use crate::extract;
+use crate::fs_utils;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallResult {
@@ -33,55 +34,6 @@ fn is_preserved_path(path: &Path, sd_root: &Path) -> bool {
     false
 }
 
-/// Copies a directory tree from src to dst, skipping preserved folders.
-/// Returns the number of files copied.
-fn copy_dir_recursive(src: &Path, dst: &Path, _sd_root: &Path) -> Result<u32, String> {
-    let mut files_copied = 0u32;
-
-    let entries = fs::read_dir(src)
-        .map_err(|e| format!("Failed to read directory {}: {}", src.display(), e))?;
-
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        // Skip preserved folders (ROMS, Saves, etc.)
-        if is_preserved_path(&src_path, src) {
-            continue;
-        }
-
-        if src_path.is_dir() {
-            fs::create_dir_all(&dst_path)
-                .map_err(|e| format!("Failed to create directory {}: {}", dst_path.display(), e))?;
-            files_copied += copy_dir_recursive(&src_path, &dst_path, _sd_root)?;
-        } else {
-            if let Some(parent) = dst_path.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
-            }
-            fs::copy(&src_path, &dst_path).map_err(|e| {
-                format!(
-                    "Failed to copy {} to {}: {}",
-                    src_path.display(),
-                    dst_path.display(),
-                    e
-                )
-            })?;
-            files_copied += 1;
-        }
-    }
-
-    Ok(files_copied)
-}
-
-/// Copies all files from extracted MinUI base archive to SD card root.
-///
-/// The MinUI base archive has all platform folders at the root level
-/// (trimui/, miyoo/, rg35xxplus/, etc.) plus shared files (MinUI.zip,
-/// README.txt, em_ui.sh). Per MinUI docs: "Copy all the folders from
-/// this zip file to the root of your primary card." The device selects
-/// the appropriate platform folder on first boot.
 pub fn copy_base_files(
     extracted_base_path: &str,
     sd_mount: &str,
@@ -89,7 +41,7 @@ pub fn copy_base_files(
 ) -> Result<u32, String> {
     let base_dir = Path::new(extracted_base_path);
     let sd_root = Path::new(sd_mount);
-    copy_dir_recursive(base_dir, sd_root, sd_root)
+    fs_utils::copy_dir_recursive(base_dir, sd_root, &|path| is_preserved_path(path, base_dir))
 }
 
 /// Copies Extras files to the SD card extras directory.
@@ -109,7 +61,7 @@ pub fn copy_extras_files(
     fs::create_dir_all(&extras_dst)
         .map_err(|e| format!("Failed to create extras directory: {}", e))?;
 
-    copy_dir_recursive(extras_src, &extras_dst, sd_root)
+    fs_utils::copy_dir_recursive(extras_src, &extras_dst, &|path| is_preserved_path(path, extras_src))
 }
 
 /// Runs extras download → extract → copy, returning the number of files copied.
@@ -260,7 +212,7 @@ mod tests {
         f.write_all(b"hello").unwrap();
         drop(f);
 
-        let copied = copy_dir_recursive(&src, &dst, &sd_root).unwrap();
+        let copied = fs_utils::copy_dir_recursive(&src, &dst, &|_| false).unwrap();
         assert_eq!(copied, 1);
         assert!(dst.join("test.txt").exists());
     }
@@ -281,7 +233,7 @@ mod tests {
         fs::write(src.join("Saves/save.sav"), "save").unwrap();
         fs::write(src.join("Tools/tool.pak"), "tool").unwrap();
 
-        let copied = copy_dir_recursive(&src, &dst, &sd_root).unwrap();
+        let copied = fs_utils::copy_dir_recursive(&src, &dst, &|path| is_preserved_path(path, &src)).unwrap();
         assert_eq!(copied, 1); // Only tool.pak
         assert!(!dst.join("ROMS").exists());
         assert!(!dst.join("Saves").exists());

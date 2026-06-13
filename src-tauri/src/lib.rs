@@ -1,6 +1,7 @@
 mod download;
 mod drives;
 mod extract;
+mod fs_utils;
 mod install;
 mod package;
 mod validate;

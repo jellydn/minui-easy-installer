@@ -16,6 +16,20 @@ export type InstallError = {
 		| "UNKNOWN_ERROR";
 };
 
+export type InstallErrorCode = InstallError["code"];
+
+/** Infers error code from a Rust error message string */
+export function classifyError(
+	errorMsg: string,
+	defaultCode: InstallErrorCode = "COPY_ERROR",
+): InstallErrorCode {
+	if (errorMsg.includes("download")) return "DOWNLOAD_ERROR";
+	if (errorMsg.includes("extraction") || errorMsg.includes("extract"))
+		return "EXTRACTION_ERROR";
+	if (errorMsg.includes("checksum")) return "CHECKSUM_ERROR";
+	return defaultCode;
+}
+
 export type InstallResultEither =
 	| { success: true; data: InstallResult }
 	| { success: false; error: InstallError };
@@ -56,18 +70,7 @@ export async function installMinui(options: {
 		}
 
 		const errorMsg = result.error || "Installation failed";
-		let code: InstallError["code"] = "COPY_ERROR";
-
-		if (errorMsg.includes("download")) {
-			code = "DOWNLOAD_ERROR";
-		} else if (
-			errorMsg.includes("extraction") ||
-			errorMsg.includes("extract")
-		) {
-			code = "EXTRACTION_ERROR";
-		} else if (errorMsg.includes("checksum")) {
-			code = "CHECKSUM_ERROR";
-		}
+		const code = classifyError(errorMsg);
 
 		return {
 			success: false,

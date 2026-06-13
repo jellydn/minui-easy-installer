@@ -3,6 +3,7 @@ use std::path::Path;
 
 use crate::download;
 use crate::extract;
+use crate::fs_utils;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PackageInstallResult {
@@ -97,74 +98,7 @@ fn copy_package_files(
 
 /// Copies contents of src directory to dst directory (non-recursive for top level).
 fn copy_dir_contents(src: &Path, dst: &Path) -> Result<u32, String> {
-    let mut files_copied = 0u32;
-
-    let entries = fs::read_dir(src)
-        .map_err(|e| format!("Failed to read directory {}: {}", src.display(), e))?;
-
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        if src_path.is_dir() {
-            fs::create_dir_all(&dst_path)
-                .map_err(|e| format!("Failed to create directory {}: {}", dst_path.display(), e))?;
-            files_copied += copy_dir_recursive(&src_path, &dst_path)?;
-        } else {
-            if let Some(parent) = dst_path.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
-            }
-            fs::copy(&src_path, &dst_path).map_err(|e| {
-                format!(
-                    "Failed to copy {} to {}: {}",
-                    src_path.display(),
-                    dst_path.display(),
-                    e
-                )
-            })?;
-            files_copied += 1;
-        }
-    }
-
-    Ok(files_copied)
-}
-
-/// Recursively copies directory tree.
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<u32, String> {
-    let mut files_copied = 0u32;
-
-    let entries = fs::read_dir(src)
-        .map_err(|e| format!("Failed to read directory {}: {}", src.display(), e))?;
-
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        if src_path.is_dir() {
-            fs::create_dir_all(&dst_path)
-                .map_err(|e| format!("Failed to create directory {}: {}", dst_path.display(), e))?;
-            files_copied += copy_dir_recursive(&src_path, &dst_path)?;
-        } else {
-            if let Some(parent) = dst_path.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
-            }
-            fs::copy(&src_path, &dst_path).map_err(|e| {
-                format!(
-                    "Failed to copy {} to {}: {}",
-                    src_path.display(),
-                    dst_path.display(),
-                    e
-                )
-            })?;
-            files_copied += 1;
-        }
-    }
-
-    Ok(files_copied)
+    fs_utils::copy_dir_contents(src, dst)
 }
 
 /// Detect installed packages on the SD card.

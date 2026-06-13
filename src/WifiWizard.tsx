@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 
 interface WifiWizardProps {
@@ -21,7 +22,6 @@ function WifiWizard({ sdMount, onComplete, onCancel }: WifiWizardProps) {
 		setScanFailed(false);
 
 		try {
-			const { invoke } = await import("@tauri-apps/api/core");
 			const networks = await invoke<string[]>("scan_wifi_networks");
 			setScannedNetworks(networks);
 
@@ -61,7 +61,6 @@ function WifiWizard({ sdMount, onComplete, onCancel }: WifiWizardProps) {
 		setError(null);
 
 		try {
-			const { invoke } = await import("@tauri-apps/api/core");
 			await invoke("write_wifi_config", {
 				sdMount,
 				ssid: ssid.trim(),

@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { formatSize } from "./types/drive";
 import type { ValidationResult } from "./types/validate";
 import { formatValidationReport } from "./types/validate";
 
@@ -79,7 +80,7 @@ function ValidationReportUI({
 			{result.free_space_bytes !== null && (
 				<div className="validation-space">
 					<h3>Free Space</h3>
-					<p>{formatBytes(result.free_space_bytes)}</p>
+					<p>{formatSize(result.free_space_bytes)}</p>
 				</div>
 			)}
 
@@ -98,23 +99,6 @@ function ValidationReportUI({
 			</div>
 		</div>
 	);
-}
-
-function formatBytes(bytes: number): string {
-	const KB = 1024;
-	const MB = KB * 1024;
-	const GB = MB * 1024;
-
-	if (bytes >= GB) {
-		return `${(bytes / GB).toFixed(2)} GB`;
-	}
-	if (bytes >= MB) {
-		return `${(bytes / MB).toFixed(2)} MB`;
-	}
-	if (bytes >= KB) {
-		return `${(bytes / KB).toFixed(2)} KB`;
-	}
-	return `${bytes} bytes`;
 }
 
 export default ValidationReportUI;

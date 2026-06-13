@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 
@@ -166,28 +167,32 @@ pub fn validate_installation(
 
 pub fn format_validation_report(result: &ValidationResult) -> String {
     let mut report = String::new();
-    report.push_str("MinUI Installation Validation Report\n");
-    report.push_str("=====================================\n\n");
+    let _ = writeln!(report, "MinUI Installation Validation Report");
+    let _ = writeln!(report, "=====================================");
+    let _ = writeln!(report);
 
     if result.success {
-        report.push_str("Status: PASSED\n\n");
+        let _ = writeln!(report, "Status: PASSED");
     } else {
-        report.push_str("Status: FAILED\n\n");
+        let _ = writeln!(report, "Status: FAILED");
     }
-
-    report.push_str(&format!(
-        "Checks: {} passed, {} failed\n\n",
+    let _ = writeln!(report);
+    let _ = writeln!(
+        report,
+        "Checks: {} passed, {} failed",
         result.passed_count, result.failed_count
-    ));
+    );
+    let _ = writeln!(report);
 
-    report.push_str("Details:\n");
+    let _ = writeln!(report, "Details:");
     for check in &result.checks {
         let status = if check.passed { "✓" } else { "✗" };
-        report.push_str(&format!("  {} {}\n", status, check.message));
+        let _ = writeln!(report, "  {} {}", status, check.message);
     }
 
     if let Some(space) = result.free_space_bytes {
-        report.push_str(&format!("\nFree Space: {}\n", format_bytes(space)));
+        let _ = writeln!(report);
+        let _ = write!(report, "Free Space: {}", format_bytes(space));
     }
 
     report
