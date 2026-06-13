@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager};
+
 mod download;
 mod drives;
 mod extract;
@@ -8,7 +11,6 @@ mod validate;
 mod version;
 mod wifi;
 
-use tauri::Manager;
 
 #[tauri::command]
 async fn get_removable_drives() -> Result<Vec<drives::RemovableDrive>, String> {
@@ -50,15 +52,20 @@ async fn extract_archive_to_directory(
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn install_minui(
+    app_handle: AppHandle,
     base_url: String,
     extras_url: Option<String>,
     base_checksum: Option<String>,
     extras_checksum: Option<String>,
     sd_mount: String,
     platform: String,
-    extras_dir: String,
+    extras_platform: String,
     version: String,
 ) -> Result<install::InstallResult, String> {
+    let handle = app_handle.clone();
+    let progress = Arc::new(move |event: install::InstallProgressEvent| {
+        let _ = handle.emit("install-progress", event);
+    });
     install::install_minui(
         &base_url,
         extras_url.as_deref(),
@@ -66,8 +73,9 @@ async fn install_minui(
         extras_checksum.as_deref(),
         &sd_mount,
         &platform,
-        &extras_dir,
+        &extras_platform,
         &version,
+        progress,
     )
     .await
 }

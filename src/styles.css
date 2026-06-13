@@ -335,6 +335,33 @@ select option {
 	font-weight: 500;
 }
 
+.install-plan {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.install-plan li {
+	color: #ffffff;
+	padding: 0.35rem 0;
+	font-size: 0.875rem;
+	line-height: 1.4;
+}
+
+.install-plan li::before {
+	content: "→";
+	color: #666;
+	margin-right: 0.5rem;
+}
+
+.install-plan code {
+	background: #1a1a1a;
+	padding: 1px 5px;
+	border-radius: 3px;
+	font-size: 0.8125rem;
+	color: #cccccc;
+}
+
 .confirm-actions {
 	display: flex;
 	gap: 1rem;
@@ -395,6 +422,54 @@ select option {
 .install-message {
 	color: #999999;
 	margin: 1rem 0;
+}
+
+.install-log {
+	margin: 1rem 0;
+	text-align: left;
+	padding: 10px 12px;
+	border: 1px solid #333333;
+	border-radius: 4px;
+	background: #0d0d0d;
+	max-height: 200px;
+	overflow-y: auto;
+	font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+	font-size: 0.8125rem;
+	line-height: 1.6;
+}
+
+.log-line {
+	display: flex;
+	gap: 0.5rem;
+	align-items: baseline;
+	opacity: 0.85;
+}
+
+.log-line.log-download {
+	color: #6ab0f3;
+}
+
+.log-line.log-extract {
+	color: #c7a5f3;
+}
+
+.log-line.log-copy {
+	color: #6dd8a5;
+}
+
+.log-line.log-finish {
+	color: #999999;
+}
+
+.log-step {
+	flex-shrink: 0;
+	width: 1.2em;
+	text-align: center;
+	color: #666666;
+}
+
+.log-details {
+	color: #cccccc;
 }
 
 .install-summary {

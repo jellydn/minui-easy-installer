@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::download;
 use crate::extract;
@@ -13,6 +14,16 @@ pub struct InstallResult {
     pub extras_files_copied: u32,
     pub extras_warning: Option<String>,
 }
+
+/// Progress event emitted during the install flow.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InstallProgressEvent {
+    pub step: String,
+    pub details: String,
+}
+
+/// Callback for reporting install progress. Passed through the install flow.
+pub type ProgressCallback = Arc<dyn Fn(InstallProgressEvent) + Send + Sync>;
 
 /// Folders that must never be deleted or overwritten during install
 const PRESERVED_FOLDERS: &[&str] = &[
@@ -44,24 +55,63 @@ pub fn copy_base_files(
     fs_utils::copy_dir_recursive(base_dir, sd_root, &|path| is_preserved_path(path, base_dir))
 }
 
-/// Copies Extras files to the SD card extras directory.
+/// Copies Extras files to the SD card, filtering by platform.
+///
+/// The extras archive contains all platforms' emulators and tools at:
+///   Emus/{platform}/{pakName}.pak/
+///   Tools/{platform}/{pakName}.pak/
+///   Bios/          (shared across all devices)
+///
+/// This function only copies:
+///   1. Everything under `Emus/{extras_platform}/` → SD `Emus/{extras_platform}/`
+///   2. Everything under `Tools/{extras_platform}/` → SD `Tools/{extras_platform}/`
+///   3. Everything under `Bios/` → SD `Bios/`
 pub fn copy_extras_files(
     extracted_extras_path: &str,
     sd_mount: &str,
-    extras_dir: &str,
+    extras_platform: &str,
 ) -> Result<u32, String> {
     let extras_src = Path::new(extracted_extras_path);
     let sd_root = Path::new(sd_mount);
-    let extras_dst = sd_root.join(extras_dir.trim_start_matches('/'));
 
     if !extras_src.exists() {
         return Err("Extras source directory does not exist".to_string());
     }
 
-    fs::create_dir_all(&extras_dst)
-        .map_err(|e| format!("Failed to create extras directory: {}", e))?;
+    let mut files_copied = 0u32;
 
-    fs_utils::copy_dir_recursive(extras_src, &extras_dst, &|path| is_preserved_path(path, extras_src))
+    // Copy Bios/ (shared across all devices)
+    let bios_src = extras_src.join("Bios");
+    if bios_src.exists() {
+        let bios_dst = sd_root.join("Bios");
+        fs::create_dir_all(&bios_dst)
+            .map_err(|e| format!("Failed to create Bios directory: {}", e))?;
+        files_copied += fs_utils::copy_dir_recursive(&bios_src, &bios_dst, &|_| false)?;
+    }
+
+    // Copy Emus/{extras_platform}/
+    let emus_platform_src = extras_src.join("Emus").join(extras_platform);
+    if emus_platform_src.exists() {
+        let emus_platform_dst = sd_root.join("Emus").join(extras_platform);
+        fs::create_dir_all(&emus_platform_dst)
+            .map_err(|e| format!("Failed to create Emus/{} directory: {}", extras_platform, e))?;
+        files_copied +=
+            fs_utils::copy_dir_recursive(&emus_platform_src, &emus_platform_dst, &|_| false)?;
+    }
+
+    // Copy Tools/{extras_platform}/
+    let tools_platform_src = extras_src.join("Tools").join(extras_platform);
+    if tools_platform_src.exists() {
+        let tools_platform_dst = sd_root.join("Tools").join(extras_platform);
+        fs::create_dir_all(&tools_platform_dst)
+            .map_err(|e| {
+                format!("Failed to create Tools/{} directory: {}", extras_platform, e)
+            })?;
+        files_copied +=
+            fs_utils::copy_dir_recursive(&tools_platform_src, &tools_platform_dst, &|_| false)?;
+    }
+
+    Ok(files_copied)
 }
 
 /// Runs extras download → extract → copy, returning the number of files copied.
@@ -70,16 +120,34 @@ async fn try_install_extras(
     url: &str,
     checksum: Option<&str>,
     sd_mount: &str,
-    extras_dir: &str,
+    extras_platform: &str,
+    progress: ProgressCallback,
 ) -> Result<u32, String> {
+    progress(InstallProgressEvent {
+        step: "download".to_string(),
+        details: "Downloading extras archive...".to_string(),
+    });
     let (result, _temp) = download::download_archive(url, checksum)
         .await
         .map_err(|e| format!("Extras download failed: {}", e))?;
     let path = result.file_path.ok_or("No extras download path")?;
+
+    progress(InstallProgressEvent {
+        step: "extract".to_string(),
+        details: "Extracting extras archive...".to_string(),
+    });
     let (extraction, _temp) = extract::extract_archive(&path, None)
         .map_err(|e| format!("Extras extraction failed: {}", e))?;
     let extracted = extraction.output_path.ok_or("No extras extraction path")?;
-    copy_extras_files(&extracted, sd_mount, extras_dir)
+
+    progress(InstallProgressEvent {
+        step: "copy".to_string(),
+        details: format!(
+            "Copying device extras to /Emus/{}/ and /Tools/{}/...",
+            extras_platform, extras_platform
+        ),
+    });
+    copy_extras_files(&extracted, sd_mount, extras_platform)
         .map_err(|e| format!("Extras copy failed: {}", e))
 }
 
@@ -94,10 +162,16 @@ pub async fn install_minui(
     extras_checksum: Option<&str>,
     sd_mount: &str,
     platform: &str,
-    extras_dir: &str,
+    extras_platform: &str,
     version: &str,
+    progress: ProgressCallback,
 ) -> Result<InstallResult, String> {
-    // Step 1: Download and extract base
+    // Step 1: Download base archive
+    let file_name = base_url.rsplit('/').next().unwrap_or("MinUI.zip");
+    progress(InstallProgressEvent {
+        step: "download".to_string(),
+        details: format!("Downloading {}", file_name),
+    });
     let (base_result, _base_temp) = download::download_archive(base_url, base_checksum)
         .await
         .map_err(|e| format!("Base download failed: {}", e))?;
@@ -114,6 +188,11 @@ pub async fn install_minui(
 
     let base_path = base_result.file_path.ok_or("No base file path returned")?;
 
+    // Step 2: Extract base archive
+    progress(InstallProgressEvent {
+        step: "extract".to_string(),
+        details: "Extracting MinUI base archive...".to_string(),
+    });
     let (base_extraction, _base_extract_temp) =
         extract::extract_archive(&base_path, None).map_err(|e| format!("Base extraction failed: {}", e))?;
 
@@ -135,22 +214,30 @@ pub async fn install_minui(
         .output_path
         .ok_or("No base extraction path returned")?;
 
-    // Step 2: Copy base files
+    // Step 3: Copy base files to SD card
+    progress(InstallProgressEvent {
+        step: "copy".to_string(),
+        details: "Copying base files to SD card...".to_string(),
+    });
     let base_files_copied =
         copy_base_files(&base_extracted, sd_mount, platform)?;
 
-    // Step 3: Download and extract extras (if available) — non-fatal on failure
+    // Step 4: Download and extract extras (if available) — non-fatal on failure
     let mut extras_files_copied = 0u32;
     let mut extras_warning: Option<String> = None;
 
     if let Some(url) = extras_url {
-        match try_install_extras(url, extras_checksum, sd_mount, extras_dir).await {
+        match try_install_extras(url, extras_checksum, sd_mount, extras_platform, progress.clone()).await {
             Ok(copied) => extras_files_copied = copied,
             Err(e) => extras_warning = Some(e),
         }
     }
 
     // Write version metadata after successful install
+    progress(InstallProgressEvent {
+        step: "finish".to_string(),
+        details: format!("Writing version metadata (MinUI {})", version),
+    });
     let minui_txt_path = Path::new(sd_mount).join("minui.txt");
     let _ = fs::write(&minui_txt_path, format!("MinUI {}\n", version));
 
@@ -267,24 +354,49 @@ mod tests {
     }
 
     #[test]
-    fn test_copy_extras_files() {
+    fn test_copy_extras_files_filters_by_platform() {
         let temp = tempfile::tempdir().unwrap();
         let extras_src = temp.path().join("extras_extracted");
         let sd_root = temp.path().join("sdcard");
+        let platform = "rg35xxplus";
 
-        fs::create_dir_all(&extras_src).unwrap();
-        fs::create_dir_all(sd_root.join("Tools")).unwrap();
+        // Create a realistic extras archive structure with multiple platforms
+        fs::create_dir_all(extras_src.join("Emus/rg35xxplus/mgba.pak")).unwrap();
+        fs::create_dir_all(extras_src.join("Emus/rg35xxplus/gambatte.pak")).unwrap();
+        fs::create_dir_all(extras_src.join("Tools/rg35xxplus/wifi.pak")).unwrap();
+        fs::create_dir_all(extras_src.join("Tools/rg35xxplus/ssh.pak")).unwrap();
+        fs::create_dir_all(extras_src.join("Tools/trimuismart/dc.pak")).unwrap();
+        fs::create_dir_all(extras_src.join("Tools/trimuismart/wifi.pak")).unwrap();
+        fs::create_dir_all(extras_src.join("Bios")).unwrap();
 
-        fs::write(extras_src.join("wifi.pak"), "wifi").unwrap();
+        fs::write(extras_src.join("Emus/rg35xxplus/mgba.pak/launch.sh"), "emu").unwrap();
+        fs::write(extras_src.join("Emus/rg35xxplus/gambatte.pak/launch.sh"), "emu").unwrap();
+        fs::write(extras_src.join("Tools/rg35xxplus/wifi.pak/launch.sh"), "tool").unwrap();
+        fs::write(extras_src.join("Tools/rg35xxplus/ssh.pak/launch.sh"), "tool").unwrap();
+        fs::write(extras_src.join("Tools/trimuismart/dc.pak/launch.sh"), "tool").unwrap();
+        fs::write(extras_src.join("Tools/trimuismart/wifi.pak/launch.sh"), "tool").unwrap();
+        fs::write(extras_src.join("Bios/gba_bios.bin"), "bios").unwrap();
 
         let copied = copy_extras_files(
             extras_src.to_str().unwrap(),
             sd_root.to_str().unwrap(),
-            "/Tools",
+            platform,
         )
         .unwrap();
 
-        assert_eq!(copied, 1);
-        assert!(sd_root.join("Tools/wifi.pak").exists());
+        // Should copy: 2 emus + 2 tools + 1 bios = 5 files (not the trimuismart ones)
+        assert_eq!(copied, 5);
+
+        // Verify rg35xxplus emus and tools were copied
+        assert!(sd_root.join("Emus/rg35xxplus/mgba.pak/launch.sh").exists());
+        assert!(sd_root.join("Emus/rg35xxplus/gambatte.pak/launch.sh").exists());
+        assert!(sd_root.join("Tools/rg35xxplus/wifi.pak/launch.sh").exists());
+        assert!(sd_root.join("Tools/rg35xxplus/ssh.pak/launch.sh").exists());
+
+        // Verify trimuismart stuff was NOT copied
+        assert!(!sd_root.join("Tools/trimuismart").exists());
+
+        // Verify Bios was copied
+        assert!(sd_root.join("Bios/gba_bios.bin").exists());
     }
 }

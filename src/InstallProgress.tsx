@@ -1,8 +1,10 @@
-import type { InstallPhase } from "./types/install";
+import { useEffect, useRef } from "react";
+import type { InstallPhase, InstallProgressEvent } from "./types/install";
 
 interface InstallProgressProps {
 	phase: InstallPhase;
 	message: string;
+	log: InstallProgressEvent[];
 	baseFilesCopied: number;
 	extrasFilesCopied: number;
 	extrasWarning: string | null;
@@ -12,22 +14,29 @@ interface InstallProgressProps {
 
 const PHASE_LABELS: Record<InstallPhase, string> = {
 	idle: "Preparing...",
-	downloading: "Downloading MinUI",
-	extracting: "Extracting Archives",
-	copying: "Copying Files to SD Card",
-	complete: "Installation Complete",
-	error: "Installation Failed",
+	downloading: "Downloading",
+	extracting: "Extracting",
+	copying: "Copying to SD Card",
+	complete: "Complete",
+	error: "Failed",
 };
 
 function InstallProgressUI({
 	phase,
 	message,
+	log,
 	baseFilesCopied,
 	extrasFilesCopied,
 	extrasWarning,
 	error,
 	onDismiss,
 }: InstallProgressProps) {
+	const logEnd = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		logEnd.current?.scrollIntoView({ behavior: "smooth" });
+	}, [log]);
+
 	return (
 		<div className="install-progress">
 			<h2>{PHASE_LABELS[phase]}</h2>
@@ -36,7 +45,19 @@ function InstallProgressUI({
 				<div className="install-spinner" />
 			)}
 
-			<p className="install-message">{message || "Please wait..."}</p>
+			{message && <p className="install-message">{message}</p>}
+
+			{log.length > 0 && (
+				<div className="install-log">
+					{log.map((entry, i) => (
+						<div key={i} className={`log-line log-${entry.step}`}>
+							<span className="log-step">{STEP_ICON[entry.step] ?? "•"}</span>
+							<span className="log-details">{entry.details}</span>
+						</div>
+					))}
+					<div ref={logEnd} />
+				</div>
+			)}
 
 			{phase === "complete" && (
 				<div className="install-summary">
@@ -72,5 +93,13 @@ function InstallProgressUI({
 		</div>
 	);
 }
+
+const STEP_ICON: Record<string, string> = {
+	fetch: "✓",
+	download: "↓",
+	extract: "▸",
+	copy: "→",
+	finish: "✓",
+};
 
 export default InstallProgressUI;
