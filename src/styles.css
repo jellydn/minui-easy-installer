@@ -21,6 +21,26 @@
   text-align: center;
 }
 
+.app-nav {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.nav-btn {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+}
+
+.nav-btn.active {
+  background: #ff6b35;
+  border-color: #ff8c5a;
+}
+
 .home {
   max-width: 600px;
   margin: 0 auto;
@@ -558,4 +578,156 @@ select option {
 .up-to-date {
   color: #44ff44;
   margin: 0.5rem 0;
+}
+
+/* Package Store */
+.package-store {
+  margin-top: 1rem;
+}
+
+.store-loading {
+  text-align: center;
+  padding: 2rem;
+}
+
+.store-loading p {
+  color: #a0a0a0;
+  margin-top: 1rem;
+}
+
+.store-error {
+  text-align: center;
+  padding: 1rem;
+}
+
+.store-controls {
+  margin: 1rem 0;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #f6f6f6;
+  background-color: #2a2a4a;
+  border: 1px solid #3a3a5a;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #ff6b35;
+}
+
+.search-input::placeholder {
+  color: #666;
+}
+
+.category-filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.category-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  background: #2a2a4a;
+  border: 1px solid #3a3a5a;
+  border-radius: 6px;
+}
+
+.category-btn.active {
+  background: #ff6b35;
+  border-color: #ff8c5a;
+}
+
+.store-empty {
+  text-align: center;
+  padding: 2rem;
+  color: #a0a0a0;
+  font-style: italic;
+}
+
+.package-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.package-card {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.package-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.package-name {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #f6f6f6;
+}
+
+.package-version {
+  font-size: 0.875rem;
+  color: #a0a0a0;
+}
+
+.package-author {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #888;
+}
+
+.package-category {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  background: #2a2a4a;
+  border-radius: 4px;
+  color: #ff6b35;
+  width: fit-content;
+}
+
+.package-description {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  color: #c0c0c0;
+  flex-grow: 1;
+}
+
+.package-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.package-rating {
+  color: #ffaa00;
+}
+
+.install-btn {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  background: #ff6b35;
+  border: 1px solid #ff8c5a;
+}
+
+.install-btn:hover {
+  background: #ff8c5a;
 }
