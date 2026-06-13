@@ -329,3 +329,21 @@
 - Install button disabled when device/drive not selected
 - Error handling shows install failures in store UI
 ---
+
+## 2026-06-13 - US-019
+- Session: (local)
+- Created WifiWizard component with SSID and password inputs
+- Created Rust wifi module (src-tauri/src/wifi.rs)
+- write_wifi_config command writes wifi.txt to SD card root
+- Format: "SSID: <name>\nPASS: <password>\n" (MinUI-compatible)
+- Password field uses type="password" for masking
+- Added WiFi Setup navigation tab to App
+- Added 4 Rust tests for wifi config writing
+- All quality checks pass: typecheck, lint, cargo test
+
+**Learnings for future iterations:**
+- WiFi module lives in `src-tauri/src/wifi.rs`
+- wifi.txt format is simple key-value pairs compatible with MinUI Wifi.pak
+- WiFi wizard accessible via navigation tab (not gated by Wifi.pak installation)
+- Password is never logged - only written to file
+---

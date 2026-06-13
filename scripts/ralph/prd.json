@@ -332,8 +332,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Created WifiWizard component with SSID and password fields. Rust wifi module writes wifi.txt to SD card in MinUI-compatible format. Password field is masked. WiFi config not logged in plaintext. 4 Rust tests and typecheck/lint pass."
     },
     {
       "id": "US-020",
