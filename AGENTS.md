@@ -26,7 +26,7 @@ Target devices: TrimUI Brick, TrimUI Smart Pro, Miyoo Mini+, Miyoo A30, Miyoo Fl
 - **MinUI releases**: GitHub API `api.github.com/repos/shauninman/MinUI/releases/latest` (parsed in `src/types/release.ts`). Checksums not yet parsed from release metadata.
 - **Package registry**: Static JSON at `packages.minui.dev/registry/index.json`
 - **Device platform mapping**: Device ID = folder name in archive (e.g. `trimui-brick` → `trimui-brick/`). All 8 devices share same `installPathRules`: `baseDir="/"`, `extrasDir="/"`, `toolsDir="/Tools"`.
-- **WiFi config**: Always `<sd_root>/wifi.txt` with format `SSID: <name>\nPASS: <password>\n`. Same for all devices.
+- **WiFi config**: Always `<sd_root>/wifi.txt` with one `SSID:PASSWORD` per line. Lines starting with `#` are comments. SSIDs can contain spaces. Same for all devices.
 - **Version tracking**: MinUI base reads `minui.txt` or `.minui/version` (never written by installer). Packages read `Tools/*/version.txt` (included in archives). Installer does not write version metadata.
 - **Extras**: Always installed when release includes extras archive. No user opt-out UI exists.
 - **OS floor**: Windows 10+, macOS 10.15+ (Tauri v2 requirement). macOS 14.4+ has `airport` deprecation risk for WiFi scanning.

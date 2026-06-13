@@ -188,7 +188,7 @@
           "type": "tool",
           "description": "WiFi connection management",
           "configFile": "wifi.txt",
-          "configFormat": "SSID: <name>\\nPASS: <password>"
+          "configFormat": "SSID:PASSWORD per line, # comments"
         }
       ]
     },

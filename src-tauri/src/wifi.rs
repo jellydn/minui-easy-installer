@@ -4,16 +4,17 @@ use std::process::Command;
 
 /// Write WiFi configuration to SD card.
 ///
-/// Creates wifi.txt in the root of the SD card with MinUI's expected format:
-/// ```text
-/// <network_name>
-/// <password>
-/// ```
+/// Creates or appends to wifi.txt in the root of the SD card with MinUI's
+/// expected format: one `SSID:PASSWORD` per line. Lines starting with `#`
+/// are comments and ignored. SSIDs can contain spaces.
 ///
-/// Per MinUI docs: "Open wifi.txt in a plain text editor and enter your
-/// network name and password on two separate lines and save, eg.
-///   minui
-///   lessismore"
+/// Example:
+/// ```text
+/// # home
+/// My Network:MyPassword123
+/// # guest
+/// GuestWiFi:guestpass
+/// ```
 pub fn write_wifi_config(sd_mount: &str, ssid: &str, password: &str) -> Result<(), String> {
     let sd_root = Path::new(sd_mount);
 
@@ -21,12 +22,36 @@ pub fn write_wifi_config(sd_mount: &str, ssid: &str, password: &str) -> Result<(
         return Err("SD card mount point does not exist".to_string());
     }
 
-    if ssid.trim().is_empty() {
+    let ssid = ssid.trim();
+    if ssid.is_empty() {
         return Err("SSID cannot be empty".to_string());
     }
 
     let wifi_path = sd_root.join("wifi.txt");
-    let content = format!("{}\n{}\n", ssid.trim(), password);
+
+    // Read existing entries, filtering out any previous entry for this SSID
+    let mut entries = Vec::new();
+    if wifi_path.exists() {
+        if let Ok(content) = fs::read_to_string(&wifi_path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    entries.push(line.to_string());
+                } else if let Some(colon_pos) = trimmed.find(':') {
+                    let existing_ssid = trimmed[..colon_pos].trim();
+                    if existing_ssid != ssid {
+                        entries.push(line.to_string());
+                    }
+                } else {
+                    entries.push(line.to_string());
+                }
+            }
+        }
+    }
+
+    entries.push(format!("{}:{}", ssid, password));
+
+    let content = format!("{}\n", entries.join("\n"));
 
     fs::write(&wifi_path, content).map_err(|e| format!("Failed to write wifi.txt: {}", e))?;
 
@@ -244,12 +269,8 @@ mod tests {
         assert!(wifi_path.exists());
 
         let content = fs::read_to_string(wifi_path).unwrap();
-        assert!(content.contains("MyNetwork"));
-        assert!(content.contains("MyPassword123"));
-        // MinUI format: SSID on first line, password on second
-        let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines[0], "MyNetwork");
-        assert_eq!(lines[1], "MyPassword123");
+        // MinUI format: SSID:PASSWORD on one line
+        assert!(content.contains("MyNetwork:MyPassword123"));
     }
 
     #[test]
@@ -275,13 +296,52 @@ mod tests {
         // Write first config
         write_wifi_config(sd_root.to_str().unwrap(), "OldSSID", "OldPass").unwrap();
 
-        // Write second config (should overwrite)
+        // Write second config for a different SSID (both should be preserved)
         write_wifi_config(sd_root.to_str().unwrap(), "NewSSID", "NewPass").unwrap();
 
         let content = fs::read_to_string(sd_root.join("wifi.txt")).unwrap();
-        assert!(content.contains("NewSSID"));
-        assert!(content.contains("NewPass"));
-        assert!(!content.contains("OldSSID"));
+        assert!(content.contains("OldSSID:OldPass"));
+        assert!(content.contains("NewSSID:NewPass"));
+    }
+
+    #[test]
+    fn test_write_wifi_config_updates_same_ssid() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        write_wifi_config(sd_root.to_str().unwrap(), "MyNetwork", "OldPass").unwrap();
+        write_wifi_config(sd_root.to_str().unwrap(), "MyNetwork", "NewPass").unwrap();
+
+        let content = fs::read_to_string(sd_root.join("wifi.txt")).unwrap();
+        assert!(content.contains("MyNetwork:NewPass"));
+        assert!(!content.contains("OldPass"));
+    }
+
+    #[test]
+    fn test_write_wifi_config_ssid_with_spaces() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        write_wifi_config(sd_root.to_str().unwrap(), "awesome wifi for home", "secret").unwrap();
+
+        let content = fs::read_to_string(sd_root.join("wifi.txt")).unwrap();
+        assert!(content.contains("awesome wifi for home:secret"));
+    }
+
+    #[test]
+    fn test_write_wifi_config_preserves_comments() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        // Pre-write a file with comments
+        let wifi_path = sd_root.join("wifi.txt");
+        fs::write(&wifi_path, "# my home network\n").unwrap();
+
+        write_wifi_config(sd_root.to_str().unwrap(), "MyNetwork", "pass").unwrap();
+
+        let content = fs::read_to_string(wifi_path).unwrap();
+        assert!(content.contains("# my home network"));
+        assert!(content.contains("MyNetwork:pass"));
     }
 
     #[test]
