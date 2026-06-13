@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getDeviceProfile } from "./types/device";
 import type {
 	PackageCategory,
 	PackageRegistry,
@@ -26,6 +27,10 @@ interface PackageInstallState {
 }
 
 function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
+	const profile = selectedDevice ? getDeviceProfile(selectedDevice) : null;
+	const extrasPlatform =
+		profile?.extrasPlatform || selectedDevice || "{platform}";
+
 	const [registry, setRegistry] = useState<PackageRegistry | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -107,7 +112,7 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
 				targetDir: pkg.installPathRules.targetDir,
 				extractToRoot: pkg.installPathRules.extractToRoot,
 				pakName: pkg.installPathRules.pakName || pkg.name.replace(/\s+/g, "."),
-				platform: selectedDevice,
+				platform: extrasPlatform,
 			});
 
 			setInstallStates((prev) => ({
@@ -117,7 +122,7 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
 					: { status: "error", error: result.error.message },
 			}));
 		},
-		[selectedDevice, selectedDrive],
+		[selectedDevice, selectedDrive, extrasPlatform],
 	);
 
 	const handleInstallAll = useCallback(async () => {
@@ -270,7 +275,7 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
 								installState={installStates[pkg.name] || { status: "idle" }}
 								onInstall={handleInstall}
 								canInstall={!!selectedDrive}
-								selectedDevice={selectedDevice}
+								extrasPlatform={extrasPlatform}
 							/>
 						))}
 					</div>
@@ -285,17 +290,16 @@ interface PackageCardProps {
 	installState: PackageInstallState;
 	onInstall: (pkg: PackageRegistryEntry) => void;
 	canInstall: boolean;
-	selectedDevice: string | null;
+	extrasPlatform: string;
 }
 
 function installDestination(
 	pkg: PackageRegistryEntry,
-	selectedDevice: string | null,
+	platform: string,
 ): string {
 	const baseDir = pkg.category === "Emulators" ? "Emus" : "Tools";
-	const device = selectedDevice || "{platform}";
 	const pakName = pkg.installPathRules.pakName || pkg.name.replace(/\s+/g, ".");
-	return `${baseDir}/${device}/${pakName}.pak/`;
+	return `${baseDir}/${platform}/${pakName}.pak/`;
 }
 
 function PackageCard({
@@ -303,9 +307,9 @@ function PackageCard({
 	installState,
 	onInstall,
 	canInstall,
-	selectedDevice,
+	extrasPlatform,
 }: PackageCardProps) {
-	const destLabel = installDestination(pkg, selectedDevice);
+	const destLabel = installDestination(pkg, extrasPlatform);
 
 	return (
 		<div className="package-card">
