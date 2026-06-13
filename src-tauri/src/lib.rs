@@ -15,7 +15,7 @@ fn get_removable_drives() -> Result<Vec<drives::RemovableDrive>, String> {
 }
 
 #[tauri::command]
-fn format_drive(mount_path: String, volume_name: String) -> Result<(), String> {
+async fn format_drive(mount_path: String, volume_name: String) -> Result<(), String> {
     drives::format_drive(&mount_path, &volume_name)
 }
 
@@ -118,12 +118,12 @@ fn write_wifi_config(
 }
 
 #[tauri::command]
-fn scan_wifi_networks() -> Vec<String> {
+async fn scan_wifi_networks() -> Vec<String> {
     wifi::scan_wifi_networks()
 }
 
 #[tauri::command]
-fn get_current_wifi_ssid() -> Option<String> {
+async fn get_current_wifi_ssid() -> Option<String> {
     wifi::get_current_wifi_ssid()
 }
 
