@@ -2,6 +2,7 @@ mod download;
 mod drives;
 mod extract;
 mod install;
+mod package;
 mod validate;
 mod version;
 
@@ -79,6 +80,21 @@ fn check_minui_version(
     version::check_for_updates(&sd_mount, latest_version.as_deref())
 }
 
+#[tauri::command]
+async fn install_package(
+    artifact_url: String,
+    checksum: Option<String>,
+    sd_mount: String,
+    target_dir: String,
+    extract_to_root: bool,
+) -> Result<package::PackageInstallResult, String> {
+    let rules = package::PackageInstallPathRules {
+        target_dir,
+        extract_to_root,
+    };
+    package::install_package(&artifact_url, checksum.as_deref(), &sd_mount, &rules).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -90,7 +106,8 @@ pub fn run() {
             install_minui,
             validate_installation,
             format_validation_report,
-            check_minui_version
+            check_minui_version,
+            install_package
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

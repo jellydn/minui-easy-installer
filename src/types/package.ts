@@ -306,9 +306,77 @@ export function parsePackageRegistry(data: unknown): {
 	};
 }
 
+export async function installPackage(options: {
+	artifactUrl: string;
+	checksum?: string;
+	sdMount: string;
+	targetDir: string;
+	extractToRoot: boolean;
+}): Promise<PackageInstallResultEither> {
+	try {
+		const { invoke } = await import("@tauri-apps/api/core");
+		const result = await invoke<PackageInstallResult>("install_package", {
+			artifactUrl: options.artifactUrl,
+			checksum: options.checksum || null,
+			sdMount: options.sdMount,
+			targetDir: options.targetDir,
+			extractToRoot: options.extractToRoot,
+		});
+
+		if (result.success) {
+			return { success: true, data: result };
+		}
+
+		const errorMsg = result.error || "Package installation failed";
+		let code: PackageInstallError["code"] = "COPY_ERROR";
+
+		if (errorMsg.includes("download")) {
+			code = "DOWNLOAD_ERROR";
+		} else if (
+			errorMsg.includes("extraction") ||
+			errorMsg.includes("extract")
+		) {
+			code = "EXTRACTION_ERROR";
+		} else if (errorMsg.includes("checksum")) {
+			code = "CHECKSUM_ERROR";
+		}
+
+		return {
+			success: false,
+			error: { message: errorMsg, code },
+		};
+	} catch (err) {
+		const message = err instanceof Error ? err.message : "Unknown error";
+		return {
+			success: false,
+			error: { message, code: "UNKNOWN_ERROR" },
+		};
+	}
+}
+
 export type PackageRegistryFetchResult =
 	| { success: true; data: PackageRegistry }
 	| { success: false; error: PackageRegistryError };
+
+export interface PackageInstallResult {
+	success: boolean;
+	error: string | null;
+	files_copied: number;
+}
+
+export type PackageInstallError = {
+	message: string;
+	code:
+		| "DOWNLOAD_ERROR"
+		| "EXTRACTION_ERROR"
+		| "COPY_ERROR"
+		| "CHECKSUM_ERROR"
+		| "UNKNOWN_ERROR";
+};
+
+export type PackageInstallResultEither =
+	| { success: true; data: PackageInstallResult }
+	| { success: false; error: PackageInstallError };
 
 export async function fetchPackageRegistry(
 	fetchFn: typeof globalThis.fetch = globalThis.fetch,
