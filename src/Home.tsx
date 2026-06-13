@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import DeviceSelector from "./DeviceSelector";
 import DriveSelector from "./DriveSelector";
@@ -10,6 +10,8 @@ import { installMinui } from "./types/install";
 import { fetchMinUIRelease } from "./types/release";
 import type { ValidationResult } from "./types/validate";
 import { validateInstallation } from "./types/validate";
+import type { VersionCheckResult } from "./types/version";
+import { checkMinuiVersion } from "./types/version";
 import ValidationReportUI from "./ValidationReport";
 
 interface HomeProps {
@@ -33,6 +35,53 @@ function Home({
 	const [extrasFilesCopied, setExtrasFilesCopied] = useState(0);
 	const [validationResult, setValidationResult] =
 		useState<ValidationResult | null>(null);
+	const [versionCheck, setVersionCheck] = useState<VersionCheckResult | null>(
+		null,
+	);
+	const [isCheckingVersion, setIsCheckingVersion] = useState(false);
+
+	// Check installed version when drive is selected
+	useEffect(() => {
+		if (!selectedDrive) {
+			setVersionCheck(null);
+			return;
+		}
+
+		let cancelled = false;
+
+		async function checkVersion() {
+			setIsCheckingVersion(true);
+			try {
+				// First fetch latest release to get version
+				const releaseResult = await fetchMinUIRelease();
+				const latestVersion = releaseResult.success
+					? releaseResult.data.version
+					: undefined;
+
+				// Then check installed version
+				const result = await checkMinuiVersion({
+					sdMount: selectedDrive!.mount_path,
+					latestVersion,
+				});
+
+				if (!cancelled && result.success) {
+					setVersionCheck(result.data);
+				}
+			} catch {
+				// Version check failure is non-fatal
+			} finally {
+				if (!cancelled) {
+					setIsCheckingVersion(false);
+				}
+			}
+		}
+
+		checkVersion();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [selectedDrive]);
 
 	const handleInstallClick = () => {
 		setShowConfirmDialog(true);
@@ -188,15 +237,45 @@ function Home({
 						/>
 					</div>
 
+					{selectedDrive && (
+						<div className="card version-status">
+							<h2>Installation Status</h2>
+							{isCheckingVersion ? (
+								<p className="checking">Checking version...</p>
+							) : versionCheck ? (
+								<div className="version-info">
+									{versionCheck.installed ? (
+										<p className="installed-version">
+											Installed: MinUI v{versionCheck.installed.version}
+										</p>
+									) : (
+										<p className="no-version">MinUI not detected on SD card</p>
+									)}
+									{versionCheck.update_available ? (
+										<p className="update-available">
+											Update available: v{versionCheck.latest}
+										</p>
+									) : versionCheck.installed ? (
+										<p className="up-to-date">MinUI is up to date</p>
+									) : null}
+								</div>
+							) : (
+								<p className="no-version">Select a drive to check version</p>
+							)}
+						</div>
+					)}
+
 					{selectedDrive && selectedDevice && (
 						<div className="card ready">
-							<h2>Ready to Install</h2>
+							<h2>
+								{versionCheck?.installed ? "Update MinUI" : "Install MinUI"}
+							</h2>
 							<button
 								type="button"
 								onClick={handleInstallClick}
 								disabled={isInstalling}
 							>
-								Install MinUI
+								{versionCheck?.installed ? "Update MinUI" : "Install MinUI"}
 							</button>
 						</div>
 					)}

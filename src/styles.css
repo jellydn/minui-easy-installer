@@ -519,3 +519,43 @@ select option {
 .done-btn:hover {
   background: #3a3a5a;
 }
+
+/* Version Status */
+.version-status {
+  margin-top: 1rem;
+}
+
+.version-info {
+  margin-top: 0.5rem;
+}
+
+.checking {
+  color: #a0a0a0;
+  font-style: italic;
+}
+
+.installed-version {
+  color: #44ff44;
+  font-weight: 500;
+  margin: 0.5rem 0;
+}
+
+.no-version {
+  color: #a0a0a0;
+  margin: 0.5rem 0;
+}
+
+.update-available {
+  color: #ffaa00;
+  font-weight: 500;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: rgba(255, 170, 0, 0.1);
+  border: 1px solid rgba(255, 170, 0, 0.3);
+  border-radius: 6px;
+}
+
+.up-to-date {
+  color: #44ff44;
+  margin: 0.5rem 0;
+}

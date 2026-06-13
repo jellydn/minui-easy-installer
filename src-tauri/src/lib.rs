@@ -3,6 +3,7 @@ mod drives;
 mod extract;
 mod install;
 mod validate;
+mod version;
 
 use tauri::Manager;
 
@@ -70,6 +71,14 @@ fn format_validation_report(result: validate::ValidationResult) -> String {
     validate::format_validation_report(&result)
 }
 
+#[tauri::command]
+fn check_minui_version(
+    sd_mount: String,
+    latest_version: Option<String>,
+) -> version::VersionCheckResult {
+    version::check_for_updates(&sd_mount, latest_version.as_deref())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -80,7 +89,8 @@ pub fn run() {
             extract_archive_to_directory,
             install_minui,
             validate_installation,
-            format_validation_report
+            format_validation_report,
+            check_minui_version
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]
