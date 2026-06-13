@@ -330,14 +330,25 @@ brighter border. Placeholder text uses dim gray.
 ### Confirmation Dialog
 
 Modal overlay with 90% black backdrop. Dialog card contains warning text,
-device/drive details in labeled sections, and Cancel/Proceed action buttons.
+device/drive details in labeled sections, an install plan section, and
+Cancel/Proceed action buttons. The install plan shows:
+
+- **Base**: All folders from base archive copied to SD root (incl. ROMS)
+- **Extras**: Device emulators/tools to `/Emus/{platform}/` and `/Tools/{platform}/`,
+  plus shared BIOS (uses extras platform name, e.g. `tg5040` for TrimUI Smart Pro)
+- **Preserved**: Existing ROMS, Saves, BIOS, CHEATS unchanged
+
 Cancel uses secondary styling, Proceed uses primary inversion.
 
 ### Package Cards
 
 Three-column grid items with package name, version, author, category label,
-description, and install button. Category uses muted text. Installed packages
-show muted "Installed" label instead of install button.
+description, install destination path, and install button. Category uses muted
+text. Installed packages show muted "Installed" label instead of install button.
+
+**Install destination**: Shows the exact platform path packages will install to,
+e.g. `/Emus/tg5040/DC.pak/`. The platform folder uses the device's extras
+platform name (resolved from `DeviceProfile.extrasPlatform`), not the device ID.
 
 ### Install Button
 
@@ -352,9 +363,14 @@ hint in muted italic. Failed scan shows muted warning text.
 
 ### Install Progress
 
-Centered layout with rotating spinner, phase message, and file copy counters.
-Success state shows white text summary. Error state shows muted error text with
-retry hint.
+Centered layout with rotating spinner, live scrollable log panel, phase
+message, and file copy counters. During install the backend emits events
+(download, extract, copy, finish) displayed in real time:
+
+- **Log panel**: 200px max-height scrollable monospace panel with color-coded
+  lines — download (blue), extract (purple), copy (green), finish (gray)
+- **Phase spinner**: Shown during active install, hidden on complete/error
+- **Summary**: Base/extras file counts and warnings on completion
 
 ### Validation Report
 

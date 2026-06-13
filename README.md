@@ -11,15 +11,15 @@ Think "Balena Etcher for MinUI" — insert an SD card, select your device, click
 
 ## ✨ Features
 
-- ⚡️ One-click MinUI installation and updates
-- 📦 Built-in package store (Wifi.pak, SSH.pak, and more)
-- 💾 SD card detection and validation
+- ⚡️ One-click MinUI installation and updates with real-time progress log
+- 📦 Built-in package store with per-device platform paths (e.g., `/Emus/tg5040/DC.pak/`)
+- 💾 SD card detection and validation with health checks
 - 📶 WiFi configuration wizard
-- 🎮 Supports: TrimUI Brick, TrimUI Smart Pro, Miyoo Mini+, Miyoo A30, Miyoo Flip, RG35XX Plus, RG35XX H, RG35XX SP
+- 🎮 Supports 17 devices across TrimUI, Miyoo, Anbernic, and more
 
 ## Status
 
-🚧 Early development. PRD is defined, implementation not yet started.
+✅ Active development — install, update, package store, and WiFi flows are working.
 
 ## Tech Stack
 
