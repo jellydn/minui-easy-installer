@@ -1,9 +1,8 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import type { PackageRegistry, PackageRegistryEntry } from "./package";
 import {
 	fetchPackageRegistry,
 	parsePackageRegistry,
-	REGISTRY_URL,
 	validatePackageEntry,
 	validatePackageRegistry,
 } from "./package";
@@ -248,174 +247,33 @@ describe("parsePackageRegistry", () => {
 });
 
 describe("fetchPackageRegistry", () => {
-	const validRegistryData = {
-		version: "1.0.0",
-		packages: [
-			{
-				name: "wifi.pak",
-				version: "1.0.0",
-				author: "MinUI",
-				category: "Network",
-				description: "WiFi support",
-				downloads: 100,
-				rating: 4.0,
-				artifactUrl: "https://github.com/minui/wifi.pak.zip",
-				checksum: null,
-				supportedDevices: ["miyoo-mini-plus"],
-				installPathRules: {
-					targetDir: "/Tools",
-					extractToRoot: false,
-				},
-			},
-		],
-	};
+	test("loads and converts local store.json", async () => {
+		const result = await fetchPackageRegistry();
 
-	test("fetches registry successfully", async () => {
-		const mockFetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve(validRegistryData),
-		});
-
-		const result = await fetchPackageRegistry(mockFetch);
 		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.version).toBe("1.0.0");
-			expect(result.data.packages).toHaveLength(1);
-		}
-		expect(mockFetch).toHaveBeenCalledWith(REGISTRY_URL, expect.any(Object));
-	});
+		if (!result.success) return;
 
-	test("handles 404 response", async () => {
-		const mockFetch = vi.fn().mockResolvedValue({
-			ok: false,
-			status: 404,
-		});
+		expect(result.data.version).toBe("1.0.0");
+		expect(result.data.packages.length).toBeGreaterThan(0);
 
-		const result = await fetchPackageRegistry(mockFetch);
-		expect(result.success).toBe(false);
-		if (!result.success) {
-			expect(result.error.code).toBe("NOT_FOUND");
-		}
-	});
+		// Verify Grout is included
+		const grout = result.data.packages.find((p) => p.name === "Grout");
+		expect(grout).toBeDefined();
+		expect(grout!.artifactUrl).toBe(
+			"https://github.com/rommapp/grout/releases/download/v4.8.1.0/Grout-MinUI.zip",
+		);
+		expect(grout!.category).toBe("Utilities");
 
-	test("handles network error", async () => {
-		const mockFetch = vi.fn().mockRejectedValue(new Error("Network error"));
+		// Verify dreamcast is in emulators
+		const dc = result.data.packages.find((p) => p.name === "Dreamcast");
+		expect(dc).toBeDefined();
+		expect(dc!.category).toBe("Emulators");
 
-		const result = await fetchPackageRegistry(mockFetch);
-		expect(result.success).toBe(false);
-		if (!result.success) {
-			expect(result.error.code).toBe("NETWORK_ERROR");
-		}
-	});
-
-	test("handles invalid registry data", async () => {
-		const mockFetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ invalid: true }),
-		});
-
-		const result = await fetchPackageRegistry(mockFetch);
-		expect(result.success).toBe(false);
-		if (!result.success) {
-			expect(result.error.code).toBe("VALIDATION_ERROR");
-		}
-	});
-
-	test("rejects non-allowlisted registry URL", async () => {
-		const customUrl = "https://custom.registry.com/packages.json";
-		const mockFetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve(validRegistryData),
-		});
-
-		const result = await fetchPackageRegistry(mockFetch, customUrl);
-		expect(result.success).toBe(false);
-		if (!result.success) {
-			expect(result.error.code).toBe("INVALID_ENTRY");
-		}
-		expect(mockFetch).not.toHaveBeenCalled();
-	});
-
-	test("accepts allowlisted registry URL", async () => {
-		const customUrl =
-			"https://raw.githubusercontent.com/josegonzalez/pakman/main/paks.json";
-		const mockFetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve(validRegistryData),
-		});
-
-		const result = await fetchPackageRegistry(mockFetch, customUrl);
-		expect(result.success).toBe(true);
-	});
-
-	test("fetches and converts store registry format", async () => {
-		const storeData = {
-			emu_paks: [
-				{
-					name: "Dreamcast",
-					repository: "https://github.com/josegonzalez/minui-dreamcast-pak",
-					version: "0.5.0",
-					pak_name: "DC",
-					rom_folder: "Roms/Sega Dreamcast (DC)",
-				},
-			],
-			tool_paks: [
-				{
-					name: "SSH Server",
-					repository:
-						"https://github.com/josegonzalez/minui-dropbear-server-pak",
-					version: "0.9.0",
-					pak_name: "SSH Server",
-				},
-				{
-					name: "Media Player",
-					repository:
-						"https://github.com/josegonzalez/trimui-brick-media-player-pak",
-					version: "0.2.1",
-					pak_name: "Media Player",
-					device: ["brick"],
-				},
-				{
-					name: "Grout",
-					repository: "https://github.com/rommapp/grout",
-					version: "4.8.1.0",
-					pak_name: "Grout",
-					download_url:
-						"https://github.com/rommapp/grout/releases/download/v4.8.1.0/Grout-MinUI.zip",
-				},
-			],
-		};
-		const mockFetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve(storeData),
-		});
-
-		const result = await fetchPackageRegistry(mockFetch);
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.packages).toHaveLength(4);
-			const emu = result.data.packages[0];
-			expect(emu.name).toBe("Dreamcast");
-			expect(emu.category).toBe("Emulators");
-			expect(emu.artifactUrl).toBe(
-				"https://github.com/josegonzalez/minui-dreamcast-pak/releases/download/0.5.0/DC.pak.zip",
-			);
-			expect(emu.checksum).toBeNull();
-
-			const tool = result.data.packages[1];
-			expect(tool.name).toBe("SSH Server");
-			expect(tool.category).toBe("Utilities");
-			expect(tool.supportedDevices).toEqual([]);
-
-			const deviceTool = result.data.packages[2];
-			expect(deviceTool.name).toBe("Media Player");
-			expect(deviceTool.supportedDevices).toEqual(["brick"]);
-
-			const dlTool = result.data.packages[3];
-			expect(dlTool.name).toBe("Grout");
-			expect(dlTool.artifactUrl).toBe(
-				"https://github.com/rommapp/grout/releases/download/v4.8.1.0/Grout-MinUI.zip",
-			);
-		}
+		// Verify device-filtered tools have supportedDevices
+		const mediaPlayer = result.data.packages.find(
+			(p) => p.name === "Media Player",
+		);
+		expect(mediaPlayer).toBeDefined();
+		expect(mediaPlayer!.supportedDevices).toEqual(["brick"]);
 	});
 });

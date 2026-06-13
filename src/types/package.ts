@@ -1,4 +1,5 @@
 import { classifyError } from "./install";
+import storeData from "./store.json";
 
 export interface PackageRegistryEntry {
 	name: string;
@@ -557,62 +558,23 @@ function convertStoreRegistry(data: StoreRegistry): PackageRegistry {
 }
 
 export async function fetchPackageRegistry(
-	fetchFn: typeof globalThis.fetch = globalThis.fetch,
-	registryUrl: string = REGISTRY_URL,
+	_fetchFn: typeof globalThis.fetch = globalThis.fetch,
+	_registryUrl: string = REGISTRY_URL,
 ): Promise<PackageRegistryFetchResult> {
 	try {
-		if (!isAllowedUrl(registryUrl)) {
-			return {
-				success: false,
-				error: {
-					message: "Registry URL must be https and from an allowed host",
-					code: "INVALID_ENTRY",
-				},
-			};
+		if (isStoreRegistry(storeData)) {
+			return { success: true, data: convertStoreRegistry(storeData) };
 		}
 
-		const response = await fetchFn(registryUrl, {
-			headers: { Accept: "application/json" },
-		});
-
-		if (!response.ok) {
-			if (response.status === 404) {
-				return {
-					success: false,
-					error: { message: "Registry not found", code: "NOT_FOUND" },
-				};
-			}
-			return {
-				success: false,
-				error: {
-					message: `Registry fetch error: ${response.status}`,
-					code: "NETWORK_ERROR",
-				},
-			};
-		}
-
-		const data = await response.json();
-
-		if (isStoreRegistry(data)) {
-			return { success: true, data: convertStoreRegistry(data) };
-		}
-
-		const result = parsePackageRegistry(data);
-
-		if (!result.registry) {
-			return {
-				success: false,
-				error: result.errors[0] || {
-					message: "Failed to parse registry",
-					code: "PARSE_ERROR",
-				},
-			};
-		}
-
-		return { success: true, data: result.registry };
+		return {
+			success: false,
+			error: {
+				message: "Invalid store data",
+				code: "PARSE_ERROR",
+			},
+		};
 	} catch (err) {
-		const message =
-			err instanceof Error ? err.message : "Unknown network error";
+		const message = err instanceof Error ? err.message : "Unknown error";
 		return {
 			success: false,
 			error: { message, code: "NETWORK_ERROR" },
