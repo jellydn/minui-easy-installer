@@ -6,6 +6,7 @@ import HealthCheck from "./HealthCheck";
 import InstallProgressUI from "./InstallProgress";
 import { getDeviceProfile } from "./types/device";
 import type { RemovableDrive } from "./types/drive";
+import { formatSize } from "./types/drive";
 import type { InstallPhase } from "./types/install";
 import { installMinui } from "./types/install";
 import type { PackageUpdateInfo } from "./types/package";
@@ -336,17 +337,37 @@ function Home({
 
 					{selectedDrive && (
 						<div className="card version-status">
-							<h2>Installation Status</h2>
+							<h2>Status Summary</h2>
+
+							<div className="status-device">
+								<strong>Device:</strong>{" "}
+								{selectedDevice
+									? getDeviceProfile(selectedDevice)?.name
+									: "Not selected"}
+							</div>
+
+							<div className="status-drive">
+								<strong>SD Card:</strong> {selectedDrive.name}
+								{selectedDrive.size_bytes && (
+									<span> ({formatSize(selectedDrive.size_bytes)})</span>
+								)}
+								{selectedDrive.filesystem && (
+									<span> - {selectedDrive.filesystem}</span>
+								)}
+							</div>
+
 							{isCheckingVersion ? (
 								<p className="checking">Checking version...</p>
 							) : versionCheck ? (
 								<div className="version-info">
 									{versionCheck.installed ? (
 										<p className="installed-version">
-											Installed: MinUI v{versionCheck.installed.version}
+											<strong>MinUI:</strong> v{versionCheck.installed.version}
 										</p>
 									) : (
-										<p className="no-version">MinUI not detected on SD card</p>
+										<p className="no-version">
+											<strong>MinUI:</strong> Not detected
+										</p>
 									)}
 									{versionCheck.update_available ? (
 										<p className="update-available">
@@ -358,7 +379,10 @@ function Home({
 
 									{packageUpdates.length > 0 && (
 										<div className="package-updates">
-											<h3>Package Updates Available</h3>
+											<h3>
+												{packageUpdates.length} Package Update
+												{packageUpdates.length > 1 ? "s" : ""} Available
+											</h3>
 											<ul>
 												{packageUpdates.map((update) => (
 													<li key={update.name}>

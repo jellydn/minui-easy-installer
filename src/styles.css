@@ -1040,3 +1040,16 @@ select option {
 .copy-report-btn:hover {
   background: #3a3a5a;
 }
+
+/* Status Summary */
+.status-device,
+.status-drive {
+  margin: 0.5rem 0;
+  color: #f6f6f6;
+}
+
+.status-device strong,
+.status-drive strong {
+  color: #a0a0a0;
+  font-weight: 500;
+}
