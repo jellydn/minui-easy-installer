@@ -23,6 +23,7 @@ export type PackageCategory =
 export interface PackageInstallPathRules {
 	targetDir: string;
 	extractToRoot: boolean;
+	pakName?: string;
 }
 
 export interface PackageRegistry {
@@ -352,6 +353,8 @@ export async function installPackage(options: {
 	sdMount: string;
 	targetDir: string;
 	extractToRoot: boolean;
+	pakName?: string;
+	platform: string;
 }): Promise<PackageInstallResultEither> {
 	try {
 		const { invoke } = await import("@tauri-apps/api/core");
@@ -361,6 +364,8 @@ export async function installPackage(options: {
 			sdMount: options.sdMount,
 			targetDir: options.targetDir,
 			extractToRoot: options.extractToRoot,
+			pakName: options.pakName,
+			platform: options.platform,
 		});
 
 		if (result.success) {
@@ -504,8 +509,9 @@ function convertPakmanRegistry(data: PakmanRegistry): PackageRegistry {
 			checksum: null,
 			supportedDevices: [],
 			installPathRules: {
-				targetDir: "/",
-				extractToRoot: true,
+				targetDir: "/Emus",
+				extractToRoot: false,
+				pakName: pak.pak_name,
 			},
 		});
 	}
@@ -527,8 +533,9 @@ function convertPakmanRegistry(data: PakmanRegistry): PackageRegistry {
 			checksum: null,
 			supportedDevices: [],
 			installPathRules: {
-				targetDir: "/",
-				extractToRoot: true,
+				targetDir: "/Tools",
+				extractToRoot: false,
+				pakName: pak.pak_name,
 			},
 		});
 	}

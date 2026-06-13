@@ -106,6 +106,8 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
 				sdMount: selectedDrive,
 				targetDir: pkg.installPathRules.targetDir,
 				extractToRoot: pkg.installPathRules.extractToRoot,
+				pakName: pkg.installPathRules.pakName || pkg.name.replace(/\s+/g, "."),
+				platform: selectedDevice,
 			});
 
 			setInstallStates((prev) => ({
@@ -268,6 +270,7 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
 								installState={installStates[pkg.name] || { status: "idle" }}
 								onInstall={handleInstall}
 								canInstall={!!selectedDrive}
+								selectedDevice={selectedDevice}
 							/>
 						))}
 					</div>
@@ -282,18 +285,17 @@ interface PackageCardProps {
 	installState: PackageInstallState;
 	onInstall: (pkg: PackageRegistryEntry) => void;
 	canInstall: boolean;
+	selectedDevice: string | null;
 }
 
-function installDestination(category: PackageCategory): {
-	label: string;
-	path: string;
-} {
-	switch (category) {
-		case "Emulators":
-			return { label: "Emus/<platform>/", path: "Emus" };
-		default:
-			return { label: "Tools/<platform>/", path: "Tools" };
-	}
+function installDestination(
+	pkg: PackageRegistryEntry,
+	selectedDevice: string | null,
+): string {
+	const baseDir = pkg.category === "Emulators" ? "Emus" : "Tools";
+	const device = selectedDevice || "{platform}";
+	const pakName = pkg.installPathRules.pakName || pkg.name.replace(/\s+/g, ".");
+	return `${baseDir}/${device}/${pakName}.pak/`;
 }
 
 function PackageCard({
@@ -301,8 +303,9 @@ function PackageCard({
 	installState,
 	onInstall,
 	canInstall,
+	selectedDevice,
 }: PackageCardProps) {
-	const { label: destLabel } = installDestination(pkg.category);
+	const destLabel = installDestination(pkg, selectedDevice);
 
 	return (
 		<div className="package-card">

@@ -101,12 +101,15 @@ async fn install_package(
     sd_mount: String,
     target_dir: String,
     extract_to_root: bool,
+    pak_name: String,
+    platform: String,
 ) -> Result<package::PackageInstallResult, String> {
     let rules = package::PackageInstallPathRules {
         target_dir,
         extract_to_root,
+        pak_name,
     };
-    package::install_package(&artifact_url, checksum.as_deref(), &sd_mount, &rules).await
+    package::install_package(&artifact_url, checksum.as_deref(), &sd_mount, &rules, &platform).await
 }
 
 #[tauri::command]
