@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#16213e"/>
+      <stop offset="100%" stop-color="#0f3460"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <rect width="512" height="512" rx="100" fill="url(#bg)"/>
+  <!-- SD Card body -->
+  <rect x="120" y="100" width="272" height="312" rx="24" fill="#e94560" opacity="0.12"/>
+  <rect x="140" y="120" width="232" height="272" rx="16" fill="#e94560" opacity="0.08"/>
+  <!-- SD card notch -->
+  <rect x="296" y="120" width="60" height="36" rx="4" fill="#16213e"/>
+  <!-- Circuit line accents -->
+  <rect x="175" y="180" width="90" height="4" rx="2" fill="#e94560"/>
+  <rect x="175" y="210" width="130" height="4" rx="2" fill="#e94560" opacity="0.7"/>
+  <rect x="175" y="240" width="110" height="4" rx="2" fill="#e94560" opacity="0.5"/>
+  <rect x="175" y="270" width="120" height="4" rx="2" fill="#e94560" opacity="0.3"/>
+  <!-- Text: mi (MinUI Easy Installer) -->
+  <text x="256" y="370" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="bold" font-size="80" fill="#ffffff" letter-spacing="-2">MI</text>
+  <!-- Small subtitle -->
+  <text x="256" y="395" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" fill="#e94560" letter-spacing="3">EASY INSTALLER</text>
+</svg>
