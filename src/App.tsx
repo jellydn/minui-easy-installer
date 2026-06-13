@@ -48,22 +48,48 @@ function App() {
 				/>
 			)}
 
-			{screen === "store" && (
+			{screen === "store" && selectedDevice && selectedDrive ? (
 				<PackageStore
 					selectedDevice={selectedDevice}
-					selectedDrive={selectedDrive?.mount_path || null}
+					selectedDrive={selectedDrive.mount_path}
 				/>
-			)}
+			) : screen === "store" ? (
+				<div className="screen">
+					<h1>Package Store</h1>
+					<p className="subtitle">
+						Browse and install add-on packages for your MinUI device.
+					</p>
+					<div className="prerequisite-message">
+						<p>Select a device and SD card on the Home screen first.</p>
+						<button type="button" onClick={() => setScreen("home")}>
+							Go to Home
+						</button>
+					</div>
+				</div>
+			) : null}
 
-			{screen === "wifi" && (
+			{screen === "wifi" && selectedDrive ? (
 				<div className="screen">
 					<WifiWizard
-						sdMount={selectedDrive?.mount_path || null}
+						sdMount={selectedDrive.mount_path}
 						onComplete={() => setScreen("home")}
 						onCancel={() => setScreen("home")}
 					/>
 				</div>
-			)}
+			) : screen === "wifi" ? (
+				<div className="screen">
+					<h1>WiFi Setup</h1>
+					<p className="subtitle">
+						Configure WiFi credentials for your device.
+					</p>
+					<div className="prerequisite-message">
+						<p>Select an SD card on the Home screen first.</p>
+						<button type="button" onClick={() => setScreen("home")}>
+							Go to Home
+						</button>
+					</div>
+				</div>
+			) : null}
 		</main>
 	);
 }
