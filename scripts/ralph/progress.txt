@@ -347,3 +347,22 @@
 - WiFi wizard accessible via navigation tab (not gated by Wifi.pak installation)
 - Password is never logged - only written to file
 ---
+
+## 2026-06-13 - US-020
+- Session: (local)
+- Added scan_wifi_networks Rust command to wifi module
+- macOS: uses airport command from Apple80211 framework
+- Linux: uses nmcli command
+- Windows: uses netsh wlan command
+- WifiWizard shows scanned SSIDs in dropdown with manual entry fallback
+- Added "Scan for networks" button for retry
+- Scan failures show hint but don't block manual entry
+- Added 6 Rust tests including output parsing tests
+- All quality checks pass: typecheck, lint, cargo test
+
+**Learnings for future iterations:**
+- WiFi scanning is platform-specific and optional
+- macOS airport path: /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport
+- Scanning failures are graceful - users can always enter SSID manually
+- Parsed output deduplicates and sorts SSIDs
+---

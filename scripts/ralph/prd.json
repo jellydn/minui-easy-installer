@@ -350,8 +350,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Added scan_wifi_networks Rust command using platform-specific tools (airport on macOS, nmcli on Linux, netsh on Windows). WifiWizard shows scanned SSIDs in dropdown or falls back to manual entry. Scan failures don't block manual setup. 6 Rust tests pass. Typecheck and lint pass."
     },
     {
       "id": "US-021",
