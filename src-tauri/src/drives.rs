@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::path::Path;
 use std::process::Command;
 
 #[derive(Debug, Serialize, Clone)]
@@ -12,80 +13,110 @@ pub struct RemovableDrive {
 
 #[cfg(target_os = "macos")]
 pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
-    let output = Command::new("diskutil")
-        .args(["list", "external"])
+    // Use df to find all volumes under /Volumes/
+    let output = Command::new("df")
+        .args(["-k"])
         .output()
-        .map_err(|e| format!("Failed to run diskutil: {}", e))?;
+        .map_err(|e| format!("Failed to run df: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("diskutil failed: {}", stderr));
+        return Err(format!("df failed: {}", stderr));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut drives = Vec::new();
 
-    let mut current_mount = String::new();
-    let mut current_fs = String::new();
-    let mut current_size: Option<u64> = None;
-
-    for line in stdout.lines() {
-        let trimmed = line.trim();
-
-        if let Some(mount) = trimmed.strip_prefix("*: ") {
-            if !current_mount.is_empty() {
-                drives.push(RemovableDrive {
-                    name: current_mount
-                        .rsplit('/')
-                        .next()
-                        .unwrap_or("Unknown")
-                        .to_string(),
-                    mount_path: current_mount.clone(),
-                    size_bytes: current_size,
-                    filesystem: if current_fs.is_empty() {
-                        None
-                    } else {
-                        Some(current_fs.clone())
-                    },
-                    available_bytes: None,
-                });
-            }
-            current_mount = mount.to_string();
-            current_fs.clear();
-            current_size = None;
-        } else if let Some(fs) = trimmed.strip_prefix("File System: ") {
-            current_fs = fs.to_string();
-        } else if let Some(size_str) = trimmed.strip_prefix("Volume Size: ") {
-            let size_str = size_str.trim();
-            if let Some(bytes) = parse_size_str(size_str) {
-                current_size = Some(bytes);
-            }
+    for line in stdout.lines().skip(1) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 6 {
+            continue;
         }
-    }
+        let mount_path = parts.last().unwrap_or(&"");
+        if !mount_path.starts_with("/Volumes/") {
+            continue;
+        }
 
-    if !current_mount.is_empty() {
+        // Get filesystem type from diskutil info
+        let filesystem = get_filesystem(mount_path);
+
+        let available = parts[3].parse::<u64>().ok().map(|k| k * 1024);
+
+        let size = get_disk_size(mount_path);
+
+        let name = Path::new(mount_path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Unknown".to_string());
+
         drives.push(RemovableDrive {
-            name: current_mount
-                .rsplit('/')
-                .next()
-                .unwrap_or("Unknown")
-                .to_string(),
-            mount_path: current_mount,
-            size_bytes: current_size,
-            filesystem: if current_fs.is_empty() {
-                None
-            } else {
-                Some(current_fs)
-            },
-            available_bytes: None,
+            name,
+            mount_path: mount_path.to_string(),
+            size_bytes: size,
+            filesystem,
+            available_bytes: available,
         });
     }
 
     if drives.is_empty() {
-        list_removable_drives_df()
-    } else {
-        Ok(drives)
+        return Err("No removable volumes found".to_string());
     }
+
+    Ok(drives)
+}
+
+#[cfg(target_os = "macos")]
+fn get_filesystem(mount_path: &str) -> Option<String> {
+    let output = Command::new("diskutil")
+        .args(["info", mount_path])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if line.contains("File System Personality:") {
+            return line.split(':').nth(1).map(|s| s.trim().to_string());
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn get_disk_size(mount_path: &str) -> Option<u64> {
+    use std::ffi::CString;
+    use std::mem;
+
+    let path = CString::new(mount_path).ok()?;
+    unsafe {
+        let mut stat: libc::statvfs = mem::zeroed();
+        if libc::statvfs(path.as_ptr(), &mut stat) == 0 {
+            let total = stat.f_blocks as u64 * stat.f_frsize as u64;
+            return Some(total);
+        }
+    }
+
+    // Fallback: parse from diskutil info
+    let output = Command::new("diskutil")
+        .args(["info", mount_path])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if line.contains("Total Size:") || line.contains("Disk Size:") {
+            let value = line.split(':').nth(1)?.trim();
+            return parse_size_str(value);
+        }
+    }
+    None
 }
 
 #[cfg(target_os = "macos")]
@@ -108,50 +139,6 @@ fn parse_size_str(s: &str) -> Option<u64> {
     };
 
     Some((num * multiplier) as u64)
-}
-
-#[cfg(target_os = "macos")]
-fn list_removable_drives_df() -> Result<Vec<RemovableDrive>, String> {
-    let output = Command::new("df")
-        .args(["-k"])
-        .output()
-        .map_err(|e| format!("Failed to run df: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("df failed: {}", stderr));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut drives = Vec::new();
-
-    for line in stdout.lines().skip(1) {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 6 {
-            let filesystem = parts[0].to_string();
-            let mount_path = parts[5].to_string();
-            let size_kb: u64 = parts[1].parse().unwrap_or(0);
-            let available_kb: u64 = parts[3].parse().unwrap_or(0);
-
-            if mount_path.starts_with("/Volumes/") {
-                let name = mount_path
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or("Unknown")
-                    .to_string();
-
-                drives.push(RemovableDrive {
-                    name,
-                    mount_path,
-                    size_bytes: Some(size_kb * 1024),
-                    filesystem: Some(filesystem),
-                    available_bytes: Some(available_kb * 1024),
-                });
-            }
-        }
-    }
-
-    Ok(drives)
 }
 
 #[cfg(target_os = "windows")]
