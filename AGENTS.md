@@ -46,11 +46,15 @@ npm test
 - Drive types and helpers: `src/types/drive.ts`
 - Drive detection backend: `src-tauri/src/drives.rs`
 - Archive download and verification: `src-tauri/src/download.rs`
+- Archive extraction: `src-tauri/src/extract.rs`
 - Archive types and helpers: `src/types/archive.ts`
 - Release metadata types: `src/types/release.ts`
+- Install flow backend: `src-tauri/src/install.rs`
+- Install types and frontend API: `src/types/install.ts`
 - Tests: `*.test.ts` files (vitest)
 - Rust backend: `src-tauri/src/`
 - Confirmation dialogs: `src/ConfirmDialog.tsx` (overlay modal for write operations)
+- Install progress UI: `src/InstallProgress.tsx`
 
 ## Ralph Agent Loop
 

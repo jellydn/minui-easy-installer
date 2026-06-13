@@ -8,6 +8,9 @@ import type { RemovableDrive } from "./types/drive";
 import type { InstallPhase } from "./types/install";
 import { installMinui } from "./types/install";
 import { fetchMinUIRelease } from "./types/release";
+import type { ValidationResult } from "./types/validate";
+import { validateInstallation } from "./types/validate";
+import ValidationReportUI from "./ValidationReport";
 
 interface HomeProps {
 	selectedDevice: string | null;
@@ -28,6 +31,8 @@ function Home({
 	const [installError, setInstallError] = useState<string | null>(null);
 	const [baseFilesCopied, setBaseFilesCopied] = useState(0);
 	const [extrasFilesCopied, setExtrasFilesCopied] = useState(0);
+	const [validationResult, setValidationResult] =
+		useState<ValidationResult | null>(null);
 
 	const handleInstallClick = () => {
 		setShowConfirmDialog(true);
@@ -87,6 +92,16 @@ function Home({
 				setExtrasFilesCopied(result.data.extras_files_copied);
 				setInstallPhase("complete");
 				setInstallMessage("Installation completed successfully!");
+
+				// Run validation after successful install
+				const valResult = await validateInstallation({
+					sdMount: selectedDrive.mount_path,
+					hasExtras: result.data.extras_files_copied > 0,
+					extrasDir: profile.installPathRules.extrasDir,
+				});
+				if (valResult.success) {
+					setValidationResult(valResult.data);
+				}
 			} else {
 				setInstallError(result.error.message);
 				setInstallPhase("error");
@@ -104,7 +119,27 @@ function Home({
 		setInstallError(null);
 		setBaseFilesCopied(0);
 		setExtrasFilesCopied(0);
+		setValidationResult(null);
 	};
+
+	const handleDismissValidation = () => {
+		setValidationResult(null);
+	};
+
+	const handleRetryValidation = useCallback(async () => {
+		if (!selectedDevice || !selectedDrive) return;
+		const profile = getDeviceProfile(selectedDevice);
+		if (!profile) return;
+
+		const valResult = await validateInstallation({
+			sdMount: selectedDrive.mount_path,
+			hasExtras: extrasFilesCopied > 0,
+			extrasDir: profile.installPathRules.extrasDir,
+		});
+		if (valResult.success) {
+			setValidationResult(valResult.data);
+		}
+	}, [selectedDevice, selectedDrive, extrasFilesCopied]);
 
 	const isInstalling =
 		installPhase !== "idle" &&
@@ -120,14 +155,22 @@ function Home({
 
 			{installPhase !== "idle" ? (
 				<div className="card">
-					<InstallProgressUI
-						phase={installPhase}
-						message={installMessage}
-						baseFilesCopied={baseFilesCopied}
-						extrasFilesCopied={extrasFilesCopied}
-						error={installError}
-						onDismiss={handleDismissInstall}
-					/>
+					{validationResult ? (
+						<ValidationReportUI
+							result={validationResult}
+							onDismiss={handleDismissValidation}
+							onRetry={handleRetryValidation}
+						/>
+					) : (
+						<InstallProgressUI
+							phase={installPhase}
+							message={installMessage}
+							baseFilesCopied={baseFilesCopied}
+							extrasFilesCopied={extrasFilesCopied}
+							error={installError}
+							onDismiss={handleDismissInstall}
+						/>
+					)}
 				</div>
 			) : (
 				<>

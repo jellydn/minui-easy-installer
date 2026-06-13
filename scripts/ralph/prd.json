@@ -154,8 +154,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Created Rust install.rs module with full installation flow: download, extract, copy base files by platform, copy extras to Tools. Preserves user ROM/Saves/BIOS folders. Frontend wires ConfirmDialog to trigger actual install with release metadata fetch. InstallProgress component shows phase/status/completion. All quality checks pass: typecheck, lint, cargo check, 46 tests pass."
     },
     {
       "id": "US-010",
@@ -173,8 +173,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Rust validation module with real free space checking (libc statvfs on Unix, windows-sys on Windows). Frontend ValidationReport component wired into install flow - runs validation automatically after successful install. Copy report to clipboard with fallback. Retry validation from UI. CSS styles for validation report. 6 frontend tests + 7 Rust tests pass. All quality checks pass."
     },
     {
       "id": "US-011",

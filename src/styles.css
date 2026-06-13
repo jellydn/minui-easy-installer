@@ -367,3 +367,155 @@ select option {
 .install-actions {
   margin-top: 1.5rem;
 }
+
+/* Validation Report */
+.validation-report {
+  text-align: left;
+  padding: 1rem 0;
+}
+
+.validation-report h2 {
+  margin-top: 0;
+  color: #ff6b35;
+  text-align: center;
+}
+
+.validation-status {
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.validation-status.success {
+  background: rgba(68, 255, 68, 0.1);
+  border: 1px solid rgba(68, 255, 68, 0.3);
+}
+
+.validation-status.failed {
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+}
+
+.validation-success {
+  color: #44ff44;
+  font-weight: 600;
+  margin: 0;
+}
+
+.validation-failed {
+  color: #ff4444;
+  font-weight: 600;
+  margin: 0;
+}
+
+.validation-summary {
+  text-align: center;
+  color: #a0a0a0;
+  margin: 0.5rem 0 1rem;
+}
+
+.validation-checks {
+  margin: 1rem 0;
+}
+
+.validation-checks h3 {
+  color: #ff6b35;
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.validation-checks ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin: 0.25rem 0;
+}
+
+.check-item.passed {
+  background: rgba(68, 255, 68, 0.05);
+}
+
+.check-item.failed {
+  background: rgba(255, 68, 68, 0.05);
+}
+
+.check-icon {
+  font-weight: bold;
+  min-width: 1.2em;
+}
+
+.check-item.passed .check-icon {
+  color: #44ff44;
+}
+
+.check-item.failed .check-icon {
+  color: #ff4444;
+}
+
+.check-message {
+  color: #f6f6f6;
+}
+
+.validation-space {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background: #2a2a4a;
+  border-radius: 8px;
+}
+
+.validation-space h3 {
+  color: #ff6b35;
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.validation-space p {
+  margin: 0;
+  color: #f6f6f6;
+}
+
+.validation-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+.copy-btn {
+  background: #2a2a4a;
+  border: 1px solid #3a3a5a;
+}
+
+.copy-btn:hover {
+  background: #3a3a5a;
+}
+
+.retry-btn {
+  background: #ff6b35;
+  border: 1px solid #ff8c5a;
+}
+
+.retry-btn:hover {
+  background: #ff8c5a;
+}
+
+.done-btn {
+  background: #2a2a4a;
+  border: 1px solid #3a3a5a;
+}
+
+.done-btn:hover {
+  background: #3a3a5a;
+}

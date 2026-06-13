@@ -2,6 +2,7 @@ mod download;
 mod drives;
 mod extract;
 mod install;
+mod validate;
 
 use tauri::Manager;
 
@@ -55,6 +56,20 @@ async fn install_minui(
     .await
 }
 
+#[tauri::command]
+fn validate_installation(
+    sd_mount: String,
+    has_extras: bool,
+    extras_dir: String,
+) -> Result<validate::ValidationResult, String> {
+    validate::validate_installation(&sd_mount, has_extras, &extras_dir)
+}
+
+#[tauri::command]
+fn format_validation_report(result: validate::ValidationResult) -> String {
+    validate::format_validation_report(&result)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -63,7 +78,9 @@ pub fn run() {
             download_and_verify_archive,
             verify_archive_checksum,
             extract_archive_to_directory,
-            install_minui
+            install_minui,
+            validate_installation,
+            format_validation_report
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

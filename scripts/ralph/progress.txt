@@ -12,6 +12,9 @@
 - Use discriminated unions for result types (success/error pattern)
 - TempDir is leaked to keep alive for caller (Rust backend pattern)
 - zip crate v0.6 uses `zip::write::FileOptions` not `SimpleFileOptions`
+- Use `libc::statvfs` for free space on Unix, `windows-sys::Win32_Storage_FileSystem::GetDiskFreeSpaceExA` on Windows
+- Validation types need `Deserialize` derive for Tauri command parameters
+- Validation runs automatically after install completes (not a separate user action)
 
 ## 2026-06-13 - US-001
 - Session: (local)
@@ -158,4 +161,45 @@
 - TempDir is leaked to keep alive for caller (same pattern as download.rs)
 - Error codes: PATH_TRAVERSAL, FILE_ERROR, ARCHIVE_ERROR, UNKNOWN_ERROR
 - File permissions are preserved on Unix via unix_mode()
+---
+
+## 2026-06-13 - US-009
+- Session: (local)
+- Created install.rs module for full MinUI installation flow
+- Rust backend: download → extract → copy base by platform → copy extras to Tools
+- Preserves user ROM/Saves/BIOS/Cheats folders during copy (never deleted or overwritten)
+- Added Tauri command install_minui exposed to frontend
+- Created TypeScript types in src/types/install.ts with error code classification
+- Created InstallProgress component with phase-based UI (downloading/copying/complete/error)
+- Updated Home.tsx to wire ConfirmDialog → release metadata fetch → install flow
+- Added CSS for install progress spinner and status panels
+- 7 new frontend tests + 5 new Rust tests for install module
+- All quality checks pass: typecheck, lint, cargo check, 46 tests pass
+
+**Learnings for future iterations:**
+- Install module lives in `src-tauri/src/install.rs`
+- download_archive() is async, must .await in install_minui()
+- Platform-specific files are in platform subdirectories within the extracted base archive
+- Preserved folders (ROMS, Saves, BIOS, CHEATS) are case-insensitive matched
+- Extras failure is non-fatal — base installation still completes
+- Frontend uses callback pattern for ConfirmDialog → async install flow
+---
+
+## 2026-06-13 - US-010
+- Session: (local)
+- Implemented real free space checking in Rust validation module (libc statvfs on Unix)
+- Added Deserialize derive to ValidationCheck and ValidationResult for Tauri command params
+- Wired ValidationReport component into install flow - auto-validates after successful install
+- Added validation retry and dismiss functionality
+- Created CSS styles for validation report with pass/fail indicators
+- Created 6 frontend tests for validation types and report formatting
+- Added libc (Unix) and windows-sys (Windows) dependencies for platform-specific free space
+- All quality checks pass: typecheck, lint, vitest (52 tests), cargo check
+- Pre-existing failure: drives::test_parse_size_str (unrelated)
+
+**Learnings for future iterations:**
+- Validation types in Tauri commands need both Serialize and Deserialize derives
+- libc::statvfs provides f_bavail (available to non-root) which is correct for user-facing free space
+- Validation runs as post-install step, not a separate user-initiated action
+- formatValidationReport falls back to client-side formatting when invoke fails (useful in tests)
 ---
