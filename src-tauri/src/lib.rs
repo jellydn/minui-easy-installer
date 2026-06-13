@@ -11,7 +11,7 @@ mod wifi;
 use tauri::Manager;
 
 #[tauri::command]
-fn get_removable_drives() -> Result<Vec<drives::RemovableDrive>, String> {
+async fn get_removable_drives() -> Result<Vec<drives::RemovableDrive>, String> {
     drives::list_removable_drives()
 }
 
@@ -37,7 +37,7 @@ fn verify_archive_checksum(file_path: String, expected_checksum: String) -> Resu
 }
 
 #[tauri::command]
-fn extract_archive_to_directory(
+async fn extract_archive_to_directory(
     archive_path: String,
     destination: Option<String>,
 ) -> Result<extract::ExtractionResult, String> {
@@ -73,7 +73,7 @@ async fn install_minui(
 }
 
 #[tauri::command]
-fn validate_installation(
+async fn validate_installation(
     sd_mount: String,
     has_extras: bool,
     extras_dir: String,
@@ -87,7 +87,7 @@ fn format_validation_report(result: validate::ValidationResult) -> String {
 }
 
 #[tauri::command]
-fn check_minui_version(
+async fn check_minui_version(
     sd_mount: String,
     latest_version: Option<String>,
 ) -> version::VersionCheckResult {
@@ -110,7 +110,7 @@ async fn install_package(
 }
 
 #[tauri::command]
-fn write_wifi_config(
+async fn write_wifi_config(
     sd_mount: String,
     ssid: String,
     password: String,
@@ -129,12 +129,12 @@ async fn get_current_wifi_ssid() -> Option<String> {
 }
 
 #[tauri::command]
-fn detect_installed_packages(sd_mount: String) -> Vec<package::InstalledPackage> {
+async fn detect_installed_packages(sd_mount: String) -> Vec<package::InstalledPackage> {
     package::detect_installed_packages(&sd_mount)
 }
 
 #[tauri::command]
-fn check_package_updates(
+async fn check_package_updates(
     sd_mount: String,
     registry_packages: Vec<(String, String)>,
 ) -> Vec<package::PackageUpdateInfo> {
@@ -142,7 +142,7 @@ fn check_package_updates(
 }
 
 #[tauri::command]
-fn check_sd_card_health(
+async fn check_sd_card_health(
     sd_mount: String,
     device_platform: Option<String>,
 ) -> Result<validate::HealthCheckResult, String> {

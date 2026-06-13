@@ -6,7 +6,7 @@ describe("getDeviceProfile", () => {
 		const profile = getDeviceProfile("trimui-brick");
 		expect(profile).toBeDefined();
 		expect(profile?.name).toBe("TrimUI Brick");
-		expect(profile?.platform).toBe("trimui-brick");
+		expect(profile?.platform).toBe("trimui");
 	});
 
 	it("returns undefined for unknown device id", () => {
@@ -14,9 +14,9 @@ describe("getDeviceProfile", () => {
 		expect(profile).toBeUndefined();
 	});
 
-	it("returns all 8 supported devices", () => {
+	it("returns all supported devices", () => {
 		const profiles = getAllDeviceProfiles();
-		expect(profiles).toHaveLength(8);
+		expect(profiles).toHaveLength(17);
 	});
 
 	it("each profile has required fields", () => {
