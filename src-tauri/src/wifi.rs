@@ -51,9 +51,10 @@ pub fn get_current_wifi_ssid() -> Option<String> {
 
 #[cfg(target_os = "macos")]
 fn get_current_wifi_ssid_macos() -> Option<String> {
-    // First find the WiFi interface
-    let output = Command::new("networksetup")
-        .args(["-listallhardwareports"])
+    // Use system_profiler — works on all macOS versions including 14.4+
+    // where airport was removed and networksetup -getairportnetwork is broken.
+    let output = Command::new("system_profiler")
+        .args(["SPAirPortDataType"])
         .output()
         .ok()?;
 
@@ -62,45 +63,24 @@ fn get_current_wifi_ssid_macos() -> Option<String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut wifi_interface: Option<String> = None;
 
-    // Parse hardware ports to find the Wi-Fi interface (e.g., "en0")
-    let mut current_port = String::new();
+    // Parse: find "Current Network Information:" then the next indented line
+    // is the SSID (e.g. "    AirTies4920_97Y9:")
+    let mut in_current = false;
     for line in stdout.lines() {
-        if let Some(port) = line.strip_prefix("Hardware Port: ") {
-            current_port = port.to_string();
-        } else if let Some(device) = line.strip_prefix("Device: ") {
-            if current_port.to_lowercase().contains("wi-fi")
-                || current_port.to_lowercase().contains("airport")
-                || current_port.to_lowercase().contains("wlan")
-            {
-                wifi_interface = Some(device.to_string());
-                break;
-            }
-            current_port.clear();
+        let trimmed = line.trim();
+        if trimmed == "Current Network Information:" {
+            in_current = true;
+            continue;
         }
-    }
-
-    let iface = wifi_interface?;
-
-    // Get the current network SSID
-    let output = Command::new("networksetup")
-        .args(["-getairportnetwork", &iface])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    // Output format: "Current Wi-Fi Network: MyNetwork"
-    for line in stdout.lines() {
-        if let Some(ssid) = line.strip_prefix("Current Wi-Fi Network: ") {
-            let ssid = ssid.trim();
+        if in_current && line.starts_with("          ") && trimmed.ends_with(':') && !trimmed.contains("PHY Mode") && !trimmed.contains("Network Type") {
+            let ssid = trimmed.trim_end_matches(':').trim();
             if !ssid.is_empty() {
                 return Some(ssid.to_string());
             }
+        }
+        if in_current && !line.starts_with("          ") {
+            break;
         }
     }
 
