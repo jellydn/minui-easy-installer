@@ -154,8 +154,11 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
 	}
 
 	return (
-		<div className="package-store">
-			<h2>Package Store</h2>
+		<div className="screen">
+			<h1>Package Store</h1>
+			<p className="subtitle">
+				Browse and install add-on packages for your MinUI device.
+			</p>
 
 			{installError && (
 				<div className="store-error">

@@ -73,13 +73,15 @@ components:
     backgroundColor: "transparent"
     textColor: "{colors.text-muted}"
     rounded: "{rounded.sm}"
-    padding: 8px 16px
+    padding: 8px 0
+    width: 120px
     typography: "{typography.body}"
   nav-btn-active:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
     rounded: "{rounded.sm}"
-    padding: 8px 16px
+    padding: 8px 0
+    width: 120px
     typography: "{typography.body}"
   button-primary:
     backgroundColor: "{colors.primary}"
@@ -264,9 +266,9 @@ A single typeface with weight variations provides all hierarchy:
 Centered single-column layout with tab navigation:
 
 - **Container:** Full viewport, centered, with 10vh top padding.
+- **Screen:** All tabs share a `.screen` container — 600px max-width, centered horizontally with 20px horizontal padding.
 - **Navigation:** Horizontal tab bar with three text buttons. Active tab inverts to white background with black text. Inactive tabs are muted gray.
 - **Cards:** Borderless containers with subtle 1px borders. Cards stack vertically with consistent spacing.
-- **Max Width:** Home screen content capped at 600px for readability.
 - **Device Grid:** Two-column responsive grid (auto-fill, minmax 200px) for device selection.
 - **Package Grid:** Three-column responsive grid (auto-fill, minmax 280px) for package cards.
 

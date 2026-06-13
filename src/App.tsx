@@ -56,7 +56,7 @@ function App() {
 			)}
 
 			{screen === "wifi" && (
-				<div className="card">
+				<div className="screen">
 					<WifiWizard
 						sdMount={selectedDrive?.mount_path || null}
 						onComplete={() => setScreen("home")}
