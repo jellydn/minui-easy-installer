@@ -50,8 +50,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Completed. Rust backend detects removable drives via diskutil/df on macOS and PowerShell on Windows. Frontend DriveSelector component displays drives in a selectable list. Handles missing filesystem info with null values. All quality checks pass."
+      "passes": false,
+      "notes": "Fixed 2026-06-13: parse_size_str changed rfind -> find (drives.rs:94). cargo test --lib 52/52 pass. DriveSelector component tests added."
     },
     {
       "id": "US-004",
@@ -427,5 +427,5 @@
       "notes": "Completed. Home screen status summary shows selected device, SD card size/filesystem, installed MinUI version, and available updates. Install and Update All buttons shown when relevant. Typecheck and lint pass."
     }
   ],
-  "notes": "Codebase review findings: US-010 is implemented (Validation checks base MinUI paths, extras PAK files presence, and available free space). US-011 through US-024 are incomplete (Lack of Store, Update flows, and WiFi Wizard implementation). Other concerns identified include heavy use of .unwrap() and unsafe blocks in Rust, hardcoded shell commands for drive detection, and missing test coverage for React components."
+  "notes": "REVIEW 2026-06-13 FIXES APPLIED:\n\n1. [FIXED] parse_size_str rfind -> find. cargo test --lib 52/52 pass. US-003 re-closed.\n\n2. [FIXED - MVP option b] Removed unused DownloadProgress/InstallProgress/DeviceInstallPaths structs (Rust + TS). Home.tsx now shows 'extracting' coarse phase during install_minui call.\n\n3. [FIXED] Added React Testing Library component tests for DriveSelector, Home, PackageStore, WifiWizard (21 new tests). vitest 100/100 pass. Browser verification ACs still not manually exercised.\n\n4. [FIXED] cargo clippy clean (0 warnings): match_result_ok fix, _sd_root prefix, dead struct removal.\n\nREMAINING: 'Verify in browser' ACs across multiple stories still unverified (no browser pass performed). Real per-step download progress events not wired (coarse phases only)."
 }
