@@ -54,11 +54,11 @@ pub fn detect_installed_version(sd_mount: &str) -> Option<InstalledVersion> {
 /// Parse version from minui.txt content.
 ///
 /// Expected format:
-/// ```
+/// ```text
 /// MinUI v2024.12.25
 /// ```
 /// or just:
-/// ```
+/// ```text
 /// 2024.12.25
 /// ```
 fn parse_minui_version(content: &str) -> Option<String> {

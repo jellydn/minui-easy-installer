@@ -91,7 +91,7 @@ pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
 #[cfg(target_os = "macos")]
 fn parse_size_str(s: &str) -> Option<u64> {
     let s = s.trim();
-    let (num_str, unit) = if let Some(pos) = s.rfind(char::is_alphabetic) {
+    let (num_str, unit) = if let Some(pos) = s.find(char::is_alphabetic) {
         s.split_at(pos)
     } else {
         (s, "")
