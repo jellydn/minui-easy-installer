@@ -921,3 +921,31 @@ select option {
   color: #f6f6f6;
   font-size: 0.9rem;
 }
+
+/* Update All */
+.update-all-status {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.update-all-status h2 {
+  margin-top: 0;
+  color: #ff6b35;
+}
+
+.update-all-btn {
+  background: #44ff44;
+  color: #000;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.update-all-btn:hover {
+  background: #66ff66;
+}
+
+.update-all-btn:disabled {
+  background: #3a3a5a;
+  color: #888;
+  cursor: not-allowed;
+}

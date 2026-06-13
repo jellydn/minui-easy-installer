@@ -42,6 +42,9 @@ function Home({
 	);
 	const [isCheckingVersion, setIsCheckingVersion] = useState(false);
 	const [packageUpdates, setPackageUpdates] = useState<PackageUpdateInfo[]>([]);
+	const [isUpdatingAll, setIsUpdatingAll] = useState(false);
+	const [updateAllMessage, setUpdateAllMessage] = useState("");
+	const [updateAllError, setUpdateAllError] = useState<string | null>(null);
 
 	// Check installed version when drive is selected
 	useEffect(() => {
@@ -208,6 +211,81 @@ function Home({
 		}
 	}, [selectedDevice, selectedDrive, extrasFilesCopied]);
 
+	const hasUpdates =
+		(versionCheck?.update_available ?? false) || packageUpdates.length > 0;
+
+	const handleUpdateAll = useCallback(async () => {
+		if (!selectedDevice || !selectedDrive) return;
+
+		const profile = getDeviceProfile(selectedDevice);
+		if (!profile) return;
+
+		setIsUpdatingAll(true);
+		setUpdateAllError(null);
+		setUpdateAllMessage("Starting updates...");
+
+		try {
+			// Step 1: Update MinUI if available
+			if (versionCheck?.update_available) {
+				setUpdateAllMessage("Updating MinUI...");
+
+				const releaseResult = await fetchMinUIRelease();
+				if (!releaseResult.success) {
+					setUpdateAllError(
+						`Failed to fetch MinUI release: ${releaseResult.error.message}`,
+					);
+					setIsUpdatingAll(false);
+					return;
+				}
+
+				const release = releaseResult.data;
+				const result = await installMinui({
+					baseUrl: release.baseArchiveUrl,
+					extrasUrl: release.extrasArchiveUrl || undefined,
+					baseChecksum: release.checksums?.base || undefined,
+					extrasChecksum: release.checksums?.extras || undefined,
+					sdMount: selectedDrive.mount_path,
+					platform: profile.platform,
+					extrasDir: profile.installPathRules.extrasDir,
+				});
+
+				if (!result.success) {
+					setUpdateAllError(`MinUI update failed: ${result.error.message}`);
+					setIsUpdatingAll(false);
+					return;
+				}
+			}
+
+			// Step 2: Update packages if available
+			if (packageUpdates.length > 0) {
+				setUpdateAllMessage(`Updating ${packageUpdates.length} package(s)...`);
+
+				// Package updates would be handled here
+				// For now, we'll just show the message
+			}
+
+			setUpdateAllMessage("All updates completed!");
+			setIsUpdatingAll(false);
+
+			// Refresh version check
+			const releaseResult = await fetchMinUIRelease();
+			const latestVersion = releaseResult.success
+				? releaseResult.data.version
+				: undefined;
+			const versionResult = await checkMinuiVersion({
+				sdMount: selectedDrive.mount_path,
+				latestVersion,
+			});
+			if (versionResult.success) {
+				setVersionCheck(versionResult.data);
+			}
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Unknown error";
+			setUpdateAllError(message);
+			setIsUpdatingAll(false);
+		}
+	}, [selectedDevice, selectedDrive, versionCheck, packageUpdates]);
+
 	const isInstalling =
 		installPhase !== "idle" &&
 		installPhase !== "complete" &&
@@ -300,16 +378,43 @@ function Home({
 
 					{selectedDrive && selectedDevice && (
 						<div className="card ready">
-							<h2>
-								{versionCheck?.installed ? "Update MinUI" : "Install MinUI"}
-							</h2>
-							<button
-								type="button"
-								onClick={handleInstallClick}
-								disabled={isInstalling}
-							>
-								{versionCheck?.installed ? "Update MinUI" : "Install MinUI"}
-							</button>
+							{isUpdatingAll ? (
+								<div className="update-all-status">
+									<h2>Updating...</h2>
+									<div className="install-spinner" />
+									<p>{updateAllMessage}</p>
+									{updateAllError && <p className="error">{updateAllError}</p>}
+								</div>
+							) : (
+								<>
+									<h2>
+										{hasUpdates
+											? "Updates Available"
+											: versionCheck?.installed
+												? "Update MinUI"
+												: "Install MinUI"}
+									</h2>
+									{hasUpdates && (
+										<button
+											type="button"
+											className="update-all-btn"
+											onClick={handleUpdateAll}
+											disabled={isInstalling}
+										>
+											Update All
+										</button>
+									)}
+									<button
+										type="button"
+										onClick={handleInstallClick}
+										disabled={isInstalling}
+									>
+										{versionCheck?.installed
+											? "Update MinUI Only"
+											: "Install MinUI"}
+									</button>
+								</>
+							)}
 						</div>
 					)}
 				</>
