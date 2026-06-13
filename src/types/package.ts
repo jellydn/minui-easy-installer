@@ -31,8 +31,7 @@ export interface PackageRegistry {
 	packages: PackageRegistryEntry[];
 }
 
-export const REGISTRY_URL =
-	"https://raw.githubusercontent.com/josegonzalez/pakman/refs/heads/main/paks.json";
+export const REGISTRY_URL = "/assets/store.json";
 
 export interface PackageRegistryError {
 	message: string;
@@ -463,7 +462,7 @@ function resolveArtifactUrl(
 	return `https://github.com/${repo}/releases/download/${version}/${fileName}`;
 }
 
-interface PakmanEmuPak {
+interface StoreEmuPak {
 	name: string;
 	repository: string;
 	version: string;
@@ -471,44 +470,40 @@ interface PakmanEmuPak {
 	rom_folder: string;
 }
 
-interface PakmanEmuPak {
+interface StoreToolPak {
 	name: string;
 	repository: string;
 	version: string;
 	pak_name: string;
-	rom_folder: string;
-	distributions?: string[];
+	device?: string[];
+	download_url?: string;
 }
 
-interface PakmanToolPak {
-	name: string;
-	repository: string;
-	version: string;
-	pak_name: string;
-	distributions?: string[];
+interface StoreRegistry {
+	emu_paks: StoreEmuPak[];
+	tool_paks: StoreToolPak[];
 }
 
-interface PakmanRegistry {
-	emu_paks: PakmanEmuPak[];
-	tool_paks: PakmanToolPak[];
-}
-
-function isPakmanRegistry(data: unknown): data is PakmanRegistry {
+function isStoreRegistry(data: unknown): data is StoreRegistry {
 	if (!data || typeof data !== "object") return false;
 	const d = data as Record<string, unknown>;
 	return Array.isArray(d.emu_paks) && Array.isArray(d.tool_paks);
 }
 
-function isForMinui(distributions?: string[]): boolean {
-	if (!distributions || distributions.length === 0) return true;
-	return distributions.includes("minui");
+function resolveDownloadUrl(
+	repository: string,
+	version: string,
+	pak_name: string,
+	download_url?: string,
+): string {
+	if (download_url) return download_url;
+	return resolveArtifactUrl(repository, version, pak_name);
 }
 
-function convertPakmanRegistry(data: PakmanRegistry): PackageRegistry {
+function convertStoreRegistry(data: StoreRegistry): PackageRegistry {
 	const packages: PackageRegistryEntry[] = [];
 
 	for (const pak of data.emu_paks) {
-		if (!isForMinui(pak.distributions)) continue;
 		packages.push({
 			name: pak.name,
 			version: pak.version,
@@ -517,7 +512,7 @@ function convertPakmanRegistry(data: PakmanRegistry): PackageRegistry {
 			description: `${pak.name} emulator for MinUI`,
 			downloads: null,
 			rating: null,
-			artifactUrl: resolveArtifactUrl(
+			artifactUrl: resolveDownloadUrl(
 				pak.repository,
 				pak.version,
 				pak.pak_name,
@@ -533,7 +528,6 @@ function convertPakmanRegistry(data: PakmanRegistry): PackageRegistry {
 	}
 
 	for (const pak of data.tool_paks) {
-		if (!isForMinui(pak.distributions)) continue;
 		packages.push({
 			name: pak.name,
 			version: pak.version,
@@ -542,13 +536,14 @@ function convertPakmanRegistry(data: PakmanRegistry): PackageRegistry {
 			description: `${pak.name} tool for MinUI`,
 			downloads: null,
 			rating: null,
-			artifactUrl: resolveArtifactUrl(
+			artifactUrl: resolveDownloadUrl(
 				pak.repository,
 				pak.version,
 				pak.pak_name,
+				pak.download_url,
 			),
 			checksum: null,
-			supportedDevices: [],
+			supportedDevices: pak.device || [],
 			installPathRules: {
 				targetDir: "/Tools",
 				extractToRoot: false,
@@ -597,9 +592,8 @@ export async function fetchPackageRegistry(
 
 		const data = await response.json();
 
-		// Auto-detect format: pakman vs our native schema
-		if (isPakmanRegistry(data)) {
-			return { success: true, data: convertPakmanRegistry(data) };
+		if (isStoreRegistry(data)) {
+			return { success: true, data: convertStoreRegistry(data) };
 		}
 
 		const result = parsePackageRegistry(data);
