@@ -423,8 +423,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Home screen status summary shows selected device, SD card size/filesystem, installed MinUI version, and available updates. Install and Update All buttons shown when relevant. Typecheck and lint pass."
     }
   ],
   "notes": "Codebase review findings: US-010 is implemented (Validation checks base MinUI paths, extras PAK files presence, and available free space). US-011 through US-024 are incomplete (Lack of Store, Update flows, and WiFi Wizard implementation). Other concerns identified include heavy use of .unwrap() and unsafe blocks in Rust, hardcoded shell commands for drive detection, and missing test coverage for React components."

@@ -421,3 +421,22 @@
 - Free space uses libc::statvfs on Unix
 - Missing optional PAKs are not flagged as failures
 ---
+
+## 2026-06-13 - US-024
+- Session: (local)
+- Polished Home screen status summary section
+- Shows selected device name
+- Shows SD card name, size, and filesystem
+- Shows installed MinUI version or "Not detected"
+- Shows update availability with version numbers
+- Shows package update count with details
+- Used formatSize helper from drive.ts for consistent formatting
+- CSS styles for status device and drive sections
+- All quality checks pass: typecheck, lint
+
+**Learnings for future iterations:**
+- Status summary uses existing formatSize() from drive.ts
+- Drive fields: name, size_bytes, filesystem, available_bytes
+- Version check runs automatically when drive is selected
+- Package updates shown only when updates available
+---
