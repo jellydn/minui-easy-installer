@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getDeviceProfile } from "./types/device";
 import type {
 	PackageCategory,
 	PackageRegistry,
 	PackageRegistryEntry,
 } from "./types/package";
-import { fetchPackageRegistry } from "./types/package";
+import { fetchPackageRegistry, installPackage } from "./types/package";
 
 interface PackageStoreProps {
 	selectedDevice: string | null;
+	selectedDrive: string | null;
 }
 
 const ALL_CATEGORIES: PackageCategory[] = [
@@ -17,7 +19,7 @@ const ALL_CATEGORIES: PackageCategory[] = [
 	"Community",
 ];
 
-function PackageStore({ selectedDevice }: PackageStoreProps) {
+function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
 	const [registry, setRegistry] = useState<PackageRegistry | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -25,6 +27,13 @@ function PackageStore({ selectedDevice }: PackageStoreProps) {
 	const [selectedCategory, setSelectedCategory] = useState<
 		PackageCategory | "All"
 	>("All");
+	const [installedPackages, setInstalledPackages] = useState<Set<string>>(
+		new Set(),
+	);
+	const [installingPackage, setInstallingPackage] = useState<string | null>(
+		null,
+	);
+	const [installError, setInstallError] = useState<string | null>(null);
 
 	const loadRegistry = useCallback(async () => {
 		setIsLoading(true);
@@ -81,6 +90,43 @@ function PackageStore({ selectedDevice }: PackageStoreProps) {
 		loadRegistry();
 	};
 
+	const handleInstall = useCallback(
+		async (pkg: PackageRegistryEntry) => {
+			if (!selectedDevice || !selectedDrive) {
+				setInstallError("Please select a device and drive first");
+				return;
+			}
+
+			const profile = getDeviceProfile(selectedDevice);
+			if (!profile) {
+				setInstallError("Unknown device profile");
+				return;
+			}
+
+			setInstallingPackage(pkg.name);
+			setInstallError(null);
+
+			const result = await installPackage({
+				artifactUrl: pkg.artifactUrl,
+				checksum: pkg.checksum || undefined,
+				sdMount: selectedDrive,
+				targetDir: pkg.installPathRules.targetDir,
+				extractToRoot: pkg.installPathRules.extractToRoot,
+			});
+
+			if (result.success) {
+				setInstalledPackages((prev) => new Set(prev).add(pkg.name));
+			} else {
+				setInstallError(
+					`Failed to install ${pkg.name}: ${result.error.message}`,
+				);
+			}
+
+			setInstallingPackage(null);
+		},
+		[selectedDevice, selectedDrive],
+	);
+
 	if (isLoading) {
 		return (
 			<div className="package-store">
@@ -110,6 +156,15 @@ function PackageStore({ selectedDevice }: PackageStoreProps) {
 	return (
 		<div className="package-store">
 			<h2>Package Store</h2>
+
+			{installError && (
+				<div className="store-error">
+					<p className="error">{installError}</p>
+					<button type="button" onClick={() => setInstallError(null)}>
+						Dismiss
+					</button>
+				</div>
+			)}
 
 			<div className="store-controls">
 				<input
@@ -152,7 +207,14 @@ function PackageStore({ selectedDevice }: PackageStoreProps) {
 			) : (
 				<div className="package-grid">
 					{filteredPackages.map((pkg) => (
-						<PackageCard key={pkg.name} package={pkg} />
+						<PackageCard
+							key={pkg.name}
+							package={pkg}
+							isInstalled={installedPackages.has(pkg.name)}
+							isInstalling={installingPackage === pkg.name}
+							onInstall={handleInstall}
+							canInstall={!!selectedDevice && !!selectedDrive}
+						/>
 					))}
 				</div>
 			)}
@@ -162,9 +224,19 @@ function PackageStore({ selectedDevice }: PackageStoreProps) {
 
 interface PackageCardProps {
 	package: PackageRegistryEntry;
+	isInstalled: boolean;
+	isInstalling: boolean;
+	onInstall: (pkg: PackageRegistryEntry) => void;
+	canInstall: boolean;
 }
 
-function PackageCard({ package: pkg }: PackageCardProps) {
+function PackageCard({
+	package: pkg,
+	isInstalled,
+	isInstalling,
+	onInstall,
+	canInstall,
+}: PackageCardProps) {
 	return (
 		<div className="package-card">
 			<div className="package-header">
@@ -186,9 +258,18 @@ function PackageCard({ package: pkg }: PackageCardProps) {
 					</span>
 				)}
 			</div>
-			<button type="button" className="install-btn">
-				Install
-			</button>
+			{isInstalled ? (
+				<span className="installed-badge">Installed</span>
+			) : (
+				<button
+					type="button"
+					className="install-btn"
+					onClick={() => onInstall(pkg)}
+					disabled={isInstalling || !canInstall}
+				>
+					{isInstalling ? "Installing..." : "Install"}
+				</button>
+			)}
 		</div>
 	);
 }

@@ -731,3 +731,21 @@ select option {
 .install-btn:hover {
   background: #ff8c5a;
 }
+
+.install-btn:disabled {
+  background: #3a3a5a;
+  border-color: #4a4a6a;
+  cursor: not-allowed;
+}
+
+.installed-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  background: rgba(68, 255, 68, 0.1);
+  border: 1px solid rgba(68, 255, 68, 0.3);
+  border-radius: 6px;
+  color: #44ff44;
+  text-align: center;
+  margin-top: 0.5rem;
+}

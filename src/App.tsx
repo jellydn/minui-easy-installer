@@ -40,7 +40,12 @@ function App() {
 				/>
 			)}
 
-			{screen === "store" && <PackageStore selectedDevice={selectedDevice} />}
+			{screen === "store" && (
+				<PackageStore
+					selectedDevice={selectedDevice}
+					selectedDrive={selectedDrive?.mount_path || null}
+				/>
+			)}
 		</main>
 	);
 }
