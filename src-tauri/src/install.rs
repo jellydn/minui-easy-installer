@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::download;
 use crate::extract;
@@ -75,68 +75,21 @@ fn copy_dir_recursive(src: &Path, dst: &Path, _sd_root: &Path) -> Result<u32, St
     Ok(files_copied)
 }
 
-/// Copies platform-specific files from extracted base directory to SD card.
+/// Copies all files from extracted MinUI base archive to SD card root.
 ///
-/// The MinUI base archive has platform folders at the root:
-///   trimui-brick/, miyoo-mini-plus/, etc.
-///
-/// Files from the matching platform folder are copied to the SD card root.
+/// The MinUI base archive has all platform folders at the root level
+/// (trimui/, miyoo/, rg35xxplus/, etc.) plus shared files (MinUI.zip,
+/// README.txt, em_ui.sh). Per MinUI docs: "Copy all the folders from
+/// this zip file to the root of your primary card." The device selects
+/// the appropriate platform folder on first boot.
 pub fn copy_base_files(
     extracted_base_path: &str,
     sd_mount: &str,
-    platform: &str,
+    _platform: &str,
 ) -> Result<u32, String> {
     let base_dir = Path::new(extracted_base_path);
     let sd_root = Path::new(sd_mount);
-
-    // Look for the platform-specific folder
-    let platform_dir = base_dir.join(platform);
-
-    if platform_dir.exists() && platform_dir.is_dir() {
-        return copy_dir_recursive(&platform_dir, sd_root, sd_root);
-    }
-
-    // Fallback: try to find any single top-level folder that matches
-    let entries = fs::read_dir(base_dir)
-        .map_err(|e| format!("Failed to read extracted base directory: {}", e))?;
-
-    let mut found_dirs: Vec<PathBuf> = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-        if entry.path().is_dir() {
-            found_dirs.push(entry.path());
-        }
-    }
-
-    if found_dirs.len() == 1 {
-        return copy_dir_recursive(&found_dirs[0], sd_root, sd_root);
-    }
-
-    // If no matching platform directory and multiple dirs, copy root contents
-    // but skip directories that look like other platforms
-    let mut files_copied = 0u32;
-    let root_entries =
-        fs::read_dir(base_dir).map_err(|e| format!("Failed to read base directory: {}", e))?;
-
-    for entry in root_entries {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-        let src_path = entry.path();
-
-        if src_path.is_file() {
-            let dst_path = sd_root.join(entry.file_name());
-            fs::copy(&src_path, &dst_path).map_err(|e| {
-                format!(
-                    "Failed to copy {} to {}: {}",
-                    src_path.display(),
-                    dst_path.display(),
-                    e
-                )
-            })?;
-            files_copied += 1;
-        }
-    }
-
-    Ok(files_copied)
+    copy_dir_recursive(base_dir, sd_root, sd_root)
 }
 
 /// Copies Extras files to the SD card extras directory.
@@ -348,16 +301,17 @@ mod tests {
         fs::write(platform_dir.join("minui.pak"), "base").unwrap();
         fs::write(platform_dir.join("boot.sh"), "boot").unwrap();
 
+        // copy_base_files now copies ALL contents of extracted to sd_root
         let copied = copy_base_files(
             extracted.to_str().unwrap(),
             sd_root.to_str().unwrap(),
-            "miyoo-mini-plus",
+            "any",
         )
         .unwrap();
 
         assert_eq!(copied, 2);
-        assert!(sd_root.join("minui.pak").exists());
-        assert!(sd_root.join("boot.sh").exists());
+        assert!(sd_root.join("miyoo-mini-plus/minui.pak").exists());
+        assert!(sd_root.join("miyoo-mini-plus/boot.sh").exists());
     }
 
     #[test]

@@ -4,13 +4,16 @@ use std::process::Command;
 
 /// Write WiFi configuration to SD card.
 ///
-/// Creates wifi.txt in the root of the SD card with the format:
+/// Creates wifi.txt in the root of the SD card with MinUI's expected format:
 /// ```text
-/// SSID: <network_name>
-/// PASS: <password>
+/// <network_name>
+/// <password>
 /// ```
 ///
-/// This format is compatible with MinUI's Wifi.pak.
+/// Per MinUI docs: "Open wifi.txt in a plain text editor and enter your
+/// network name and password on two separate lines and save, eg.
+///   minui
+///   lessismore"
 pub fn write_wifi_config(sd_mount: &str, ssid: &str, password: &str) -> Result<(), String> {
     let sd_root = Path::new(sd_mount);
 
@@ -23,7 +26,7 @@ pub fn write_wifi_config(sd_mount: &str, ssid: &str, password: &str) -> Result<(
     }
 
     let wifi_path = sd_root.join("wifi.txt");
-    let content = format!("SSID: {}\nPASS: {}\n", ssid.trim(), password);
+    let content = format!("{}\n{}\n", ssid.trim(), password);
 
     fs::write(&wifi_path, content).map_err(|e| format!("Failed to write wifi.txt: {}", e))?;
 
@@ -261,8 +264,12 @@ mod tests {
         assert!(wifi_path.exists());
 
         let content = fs::read_to_string(wifi_path).unwrap();
-        assert!(content.contains("SSID: MyNetwork"));
-        assert!(content.contains("PASS: MyPassword123"));
+        assert!(content.contains("MyNetwork"));
+        assert!(content.contains("MyPassword123"));
+        // MinUI format: SSID on first line, password on second
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines[0], "MyNetwork");
+        assert_eq!(lines[1], "MyPassword123");
     }
 
     #[test]
@@ -292,8 +299,8 @@ mod tests {
         write_wifi_config(sd_root.to_str().unwrap(), "NewSSID", "NewPass").unwrap();
 
         let content = fs::read_to_string(sd_root.join("wifi.txt")).unwrap();
-        assert!(content.contains("SSID: NewSSID"));
-        assert!(content.contains("PASS: NewPass"));
+        assert!(content.contains("NewSSID"));
+        assert!(content.contains("NewPass"));
         assert!(!content.contains("OldSSID"));
     }
 
