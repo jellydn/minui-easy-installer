@@ -31,7 +31,8 @@ export interface PackageRegistry {
 	packages: PackageRegistryEntry[];
 }
 
-export const REGISTRY_URL = "/assets/store.json";
+export const REGISTRY_URL =
+	"https://raw.githubusercontent.com/josegonzalez/pakman/refs/heads/main/paks.json";
 
 export interface PackageRegistryError {
 	message: string;

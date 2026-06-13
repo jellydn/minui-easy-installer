@@ -348,8 +348,8 @@ describe("fetchPackageRegistry", () => {
 		expect(result.success).toBe(true);
 	});
 
-	test("fetches and converts pakman registry format", async () => {
-		const pakmanData = {
+	test("fetches and converts store registry format", async () => {
+		const storeData = {
 			emu_paks: [
 				{
 					name: "Dreamcast",
@@ -367,17 +367,33 @@ describe("fetchPackageRegistry", () => {
 					version: "0.9.0",
 					pak_name: "SSH Server",
 				},
+				{
+					name: "Media Player",
+					repository:
+						"https://github.com/josegonzalez/trimui-brick-media-player-pak",
+					version: "0.2.1",
+					pak_name: "Media Player",
+					device: ["brick"],
+				},
+				{
+					name: "Grout",
+					repository: "https://github.com/rommapp/grout",
+					version: "4.8.1.0",
+					pak_name: "Grout",
+					download_url:
+						"https://github.com/rommapp/grout/releases/download/v4.8.1.0/Grout-MinUI.zip",
+				},
 			],
 		};
 		const mockFetch = vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve(pakmanData),
+			json: () => Promise.resolve(storeData),
 		});
 
 		const result = await fetchPackageRegistry(mockFetch);
 		expect(result.success).toBe(true);
 		if (result.success) {
-			expect(result.data.packages).toHaveLength(2);
+			expect(result.data.packages).toHaveLength(4);
 			const emu = result.data.packages[0];
 			expect(emu.name).toBe("Dreamcast");
 			expect(emu.category).toBe("Emulators");
@@ -385,9 +401,21 @@ describe("fetchPackageRegistry", () => {
 				"https://github.com/josegonzalez/minui-dreamcast-pak/releases/download/0.5.0/DC.pak.zip",
 			);
 			expect(emu.checksum).toBeNull();
+
 			const tool = result.data.packages[1];
 			expect(tool.name).toBe("SSH Server");
 			expect(tool.category).toBe("Utilities");
+			expect(tool.supportedDevices).toEqual([]);
+
+			const deviceTool = result.data.packages[2];
+			expect(deviceTool.name).toBe("Media Player");
+			expect(deviceTool.supportedDevices).toEqual(["brick"]);
+
+			const dlTool = result.data.packages[3];
+			expect(dlTool.name).toBe("Grout");
+			expect(dlTool.artifactUrl).toBe(
+				"https://github.com/rommapp/grout/releases/download/v4.8.1.0/Grout-MinUI.zip",
+			);
 		}
 	});
 });
