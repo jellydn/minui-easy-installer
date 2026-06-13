@@ -203,3 +203,58 @@
 - Validation runs as post-install step, not a separate user-initiated action
 - formatValidationReport falls back to client-side formatting when invoke fails (useful in tests)
 ---
+
+## 2026-06-13 - US-011
+- Session: (local)
+- Created Rust version module (src-tauri/src/version.rs) for detecting installed MinUI version
+- Version detection checks minui.txt and .minui/version files on SD card
+- Added version comparison logic for update detection
+- Created TypeScript types in src/types/version.ts
+- Updated Home.tsx to show installed version and update availability
+- Added CSS styles for version status display
+- Version check runs automatically when drive is selected
+- Added 11 Rust tests for version parsing, detection, and update checking
+- Added 4 frontend tests for version types
+- All quality checks pass: typecheck, lint, vitest (56 tests), cargo check
+
+**Learnings for future iterations:**
+- Version module lives in `src-tauri/src/version.rs`
+- MinUI stores version in `/minui.txt` on SD card root (format: "MinUI v2024.12.25")
+- Alternative version location: `.minui/version`
+- Version comparison uses string comparison (works for date-based versions)
+- Version check is non-fatal - doesn't block the UI if it fails
+- Version check fetches latest release metadata to compare versions
+---
+
+## 2026-06-13 - US-012
+- Session: (local)
+- Update flow already implemented via US-009 (install flow preserves user data)
+- US-011 added version detection showing "Update MinUI" when installed
+- Validation runs automatically after update completes
+- No additional code changes needed - functionality already exists
+
+**Learnings for future iterations:**
+- Update and install use the same `install_minui` Rust command
+- PRESERVED_FOLDERS constant in install.rs protects user data (ROMS, Saves, BIOS, CHEATS)
+- Home.tsx conditionally shows "Update MinUI" vs "Install MinUI" based on version check
+---
+
+## 2026-06-13 - US-013
+- Session: (local)
+- Created package registry types in src/types/package.ts
+- Added PackageRegistryEntry, PackageCategory, PackageInstallPathRules types
+- Implemented validatePackageEntry() for individual entry validation
+- Implemented validatePackageRegistry() for full registry validation
+- Implemented parsePackageRegistry() that filters out invalid entries
+- Categories: Utilities, Emulators, Network, Community
+- Invalid entries are skipped without breaking the whole store
+- Created 18 tests covering validation and parsing
+- All quality checks pass: typecheck, lint, vitest (74 tests)
+
+**Learnings for future iterations:**
+- Package types live in `src/types/package.ts`
+- parsePackageRegistry() filters invalid entries rather than failing entirely
+- Package categories are a fixed set: Utilities, Emulators, Network, Community
+- Optional fields (downloads, rating, checksum) can be null
+- supportedDevices is an array of device IDs from device.ts
+---
