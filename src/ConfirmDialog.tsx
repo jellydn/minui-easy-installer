@@ -58,6 +58,29 @@ function ConfirmDialog({
 					</div>
 				</div>
 
+				{deviceProfile && (
+					<div className="confirm-section">
+						<h3>Install Plan</h3>
+						<ul className="install-plan">
+							<li>
+								<strong>Base:</strong> All folders from base archive copied to
+								SD root (incl. <code>ROMS</code>)
+							</li>
+							<li>
+								<strong>Extras:</strong> Device emulators/tools to{" "}
+								<code>/Emus/{deviceProfile.extrasPlatform}/</code> and{" "}
+								<code>/Tools/{deviceProfile.extrasPlatform}/</code>, plus shared{" "}
+								<code>/Bios/</code>
+							</li>
+							<li>
+								<strong>Preserved:</strong> Existing <code>ROMS</code>,{" "}
+								<code>Saves</code>, <code>BIOS</code>, <code>CHEATS</code>{" "}
+								unchanged
+							</li>
+						</ul>
+					</div>
+				)}
+
 				<div className="confirm-actions">
 					<button className="confirm-cancel" onClick={onCancel} type="button">
 						Cancel
