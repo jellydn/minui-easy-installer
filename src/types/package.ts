@@ -28,9 +28,16 @@ export interface PackageRegistry {
 	packages: PackageRegistryEntry[];
 }
 
+export const REGISTRY_URL = "https://packages.minui.dev/registry/index.json";
+
 export interface PackageRegistryError {
 	message: string;
-	code: "INVALID_ENTRY" | "VALIDATION_ERROR" | "PARSE_ERROR";
+	code:
+		| "INVALID_ENTRY"
+		| "VALIDATION_ERROR"
+		| "PARSE_ERROR"
+		| "NETWORK_ERROR"
+		| "NOT_FOUND";
 }
 
 export interface PackageRegistryValidationResult {
@@ -297,4 +304,57 @@ export function parsePackageRegistry(data: unknown): {
 		},
 		errors: [],
 	};
+}
+
+export type PackageRegistryFetchResult =
+	| { success: true; data: PackageRegistry }
+	| { success: false; error: PackageRegistryError };
+
+export async function fetchPackageRegistry(
+	fetchFn: typeof globalThis.fetch = globalThis.fetch,
+	registryUrl: string = REGISTRY_URL,
+): Promise<PackageRegistryFetchResult> {
+	try {
+		const response = await fetchFn(registryUrl, {
+			headers: { Accept: "application/json" },
+		});
+
+		if (!response.ok) {
+			if (response.status === 404) {
+				return {
+					success: false,
+					error: { message: "Registry not found", code: "NOT_FOUND" },
+				};
+			}
+			return {
+				success: false,
+				error: {
+					message: `Registry fetch error: ${response.status}`,
+					code: "NETWORK_ERROR",
+				},
+			};
+		}
+
+		const data = await response.json();
+		const result = parsePackageRegistry(data);
+
+		if (!result.registry) {
+			return {
+				success: false,
+				error: result.errors[0] || {
+					message: "Failed to parse registry",
+					code: "PARSE_ERROR",
+				},
+			};
+		}
+
+		return { success: true, data: result.registry };
+	} catch (err) {
+		const message =
+			err instanceof Error ? err.message : "Unknown network error";
+		return {
+			success: false,
+			error: { message, code: "NETWORK_ERROR" },
+		};
+	}
 }

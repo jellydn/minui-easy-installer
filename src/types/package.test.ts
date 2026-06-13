@@ -1,7 +1,9 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { PackageRegistry, PackageRegistryEntry } from "./package";
 import {
+	fetchPackageRegistry,
 	parsePackageRegistry,
+	REGISTRY_URL,
 	validatePackageEntry,
 	validatePackageRegistry,
 } from "./package";
@@ -209,5 +211,91 @@ describe("parsePackageRegistry", () => {
 		expect(result.registry).not.toBeNull();
 		expect(result.registry?.packages).toHaveLength(1);
 		expect(result.registry?.packages[0].name).toBe("wifi.pak");
+	});
+});
+
+describe("fetchPackageRegistry", () => {
+	const validRegistryData = {
+		version: "1.0.0",
+		packages: [
+			{
+				name: "wifi.pak",
+				version: "1.0.0",
+				author: "MinUI",
+				category: "Network",
+				description: "WiFi support",
+				downloads: 100,
+				rating: 4.0,
+				artifactUrl: "https://example.com/wifi.pak.zip",
+				checksum: null,
+				supportedDevices: ["miyoo-mini-plus"],
+				installPathRules: {
+					targetDir: "/Tools",
+					extractToRoot: false,
+				},
+			},
+		],
+	};
+
+	test("fetches registry successfully", async () => {
+		const mockFetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(validRegistryData),
+		});
+
+		const result = await fetchPackageRegistry(mockFetch);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.version).toBe("1.0.0");
+			expect(result.data.packages).toHaveLength(1);
+		}
+		expect(mockFetch).toHaveBeenCalledWith(REGISTRY_URL, expect.any(Object));
+	});
+
+	test("handles 404 response", async () => {
+		const mockFetch = vi.fn().mockResolvedValue({
+			ok: false,
+			status: 404,
+		});
+
+		const result = await fetchPackageRegistry(mockFetch);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe("NOT_FOUND");
+		}
+	});
+
+	test("handles network error", async () => {
+		const mockFetch = vi.fn().mockRejectedValue(new Error("Network error"));
+
+		const result = await fetchPackageRegistry(mockFetch);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe("NETWORK_ERROR");
+		}
+	});
+
+	test("handles invalid registry data", async () => {
+		const mockFetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ invalid: true }),
+		});
+
+		const result = await fetchPackageRegistry(mockFetch);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe("VALIDATION_ERROR");
+		}
+	});
+
+	test("uses custom registry URL", async () => {
+		const customUrl = "https://custom.registry.com/packages.json";
+		const mockFetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(validRegistryData),
+		});
+
+		await fetchPackageRegistry(mockFetch, customUrl);
+		expect(mockFetch).toHaveBeenCalledWith(customUrl, expect.any(Object));
 	});
 });
