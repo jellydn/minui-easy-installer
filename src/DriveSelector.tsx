@@ -103,24 +103,31 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
 					<p>Mount: {selectedDrive.mount_path}</p>
 					<p>Free: {formatSize(selectedDrive.available_bytes)}</p>
 
-					<div className="format-section">
-						{isNotFat32 && (
-							<p className="format-warning">
-								This drive is not formatted as FAT32. MinUI requires a FAT32
-								filesystem.
-							</p>
-						)}
-						<button
-							type="button"
-							className="format-btn"
-							onClick={() => setShowFormatConfirm(true)}
-						>
-							Format to FAT32
-						</button>
-					</div>
-
-					{formatSuccess && (
-						<p className="success-message">Drive formatted successfully!</p>
+					{loading ? (
+						<div className="drive-refreshing">
+							<div className="install-spinner" />
+							<p>Refreshing drive info...</p>
+						</div>
+					) : (
+						<div className="format-section">
+							{isNotFat32 && (
+								<p className="format-warning">
+									This drive is not formatted as FAT32. MinUI requires a FAT32
+									filesystem.
+								</p>
+							)}
+							<button
+								type="button"
+								className="format-btn"
+								onClick={() => setShowFormatConfirm(true)}
+								disabled={isFormatting}
+							>
+								{isFormatting ? "Formatting..." : "Format to FAT32"}
+							</button>
+							{formatSuccess && (
+								<p className="success-message">Drive formatted successfully!</p>
+							)}
+						</div>
 					)}
 				</div>
 			)}
@@ -138,9 +145,12 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
 						{formatError && <p className="error">{formatError}</p>}
 
 						{isFormatting && (
-							<p className="formatting-hint">
-								Formatting drive, please wait...
-							</p>
+							<div className="format-progress">
+								<div className="install-spinner" />
+								<p className="formatting-hint">
+									Formatting drive, please wait...
+								</p>
+							</div>
 						)}
 
 						<div className="confirm-actions">
@@ -151,7 +161,7 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
 									setShowFormatConfirm(false);
 									setFormatError(null);
 								}}
-								disabled={isFormatting}
+								disabled={isFormatting || loading}
 							>
 								Cancel
 							</button>
