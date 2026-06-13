@@ -48,8 +48,19 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
 			setFormatSuccess(true);
 			setShowFormatConfirm(false);
 
-			// Refresh drives after format to show new filesystem
-			await fetchDrives();
+			// Refresh drives after format and propagate updated info to parent
+			const updatedDrives = await invoke<RemovableDrive[]>(
+				"get_removable_drives",
+			);
+			setDrives(updatedDrives);
+
+			// Find the updated drive and notify parent so Status Summary refreshes
+			const updatedDrive = updatedDrives.find(
+				(d) => d.mount_path === selectedDrive.mount_path,
+			);
+			if (updatedDrive) {
+				onSelectDrive(updatedDrive);
+			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			setFormatError(message);
