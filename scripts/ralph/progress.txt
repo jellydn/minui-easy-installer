@@ -400,3 +400,24 @@
 - hasUpdates computed from versionCheck.update_available or packageUpdates.length
 - Update All disabled while individual install is running
 ---
+
+## 2026-06-13 - US-023
+- Session: (local)
+- Created HealthCheck component for SD card health checking
+- Added check_sd_card_health Rust command to validate module
+- Checks filesystem type (warns if not FAT32)
+- Checks free space (warns if low)
+- Checks for MinUI folders (Apps, Tools, Emus)
+- Checks for installed PAK files (wifi.pak, ssh.pak)
+- Displays copyable support report
+- Added HealthCheckResult type with filesystem and support_report fields
+- Added 3 Rust tests for health check scenarios
+- All quality checks pass: typecheck, lint, cargo test
+
+**Learnings for future iterations:**
+- Health check component lives in `src/HealthCheck.tsx`
+- HealthCheckResult includes support_report string for easy copying
+- Filesystem detection uses diskutil on macOS
+- Free space uses libc::statvfs on Unix
+- Missing optional PAKs are not flagged as failures
+---
