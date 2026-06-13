@@ -258,3 +258,19 @@
 - Optional fields (downloads, rating, checksum) can be null
 - supportedDevices is an array of device IDs from device.ts
 ---
+
+## 2026-06-13 - US-014
+- Session: (local)
+- Added fetchPackageRegistry() function to package.ts
+- Fetches from configurable URL (default: https://packages.minui.dev/registry/index.json)
+- Validates registry data before returning
+- Handles 404, network errors, and parse failures
+- Added REGISTRY_URL constant
+- Created 5 tests for fetch scenarios
+- All quality checks pass: typecheck, lint, vitest (79 tests)
+
+**Learnings for future iterations:**
+- Registry URL is configurable via parameter (defaults to REGISTRY_URL constant)
+- fetchPackageRegistry() accepts optional fetchFn for testability (same pattern as release.ts)
+- Error codes: NETWORK_ERROR, NOT_FOUND, PARSE_ERROR, VALIDATION_ERROR
+---

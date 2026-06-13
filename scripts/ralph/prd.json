@@ -242,8 +242,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Added fetchPackageRegistry() function that fetches from https://packages.minui.dev/registry/index.json. Validates registry data before returning. Handles 404, network errors, and parse failures. 5 tests cover successful fetch, 404, network error, invalid data, and custom URL. All quality checks pass."
     },
     {
       "id": "US-015",
