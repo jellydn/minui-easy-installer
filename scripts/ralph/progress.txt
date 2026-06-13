@@ -274,3 +274,22 @@
 - fetchPackageRegistry() accepts optional fetchFn for testability (same pattern as release.ts)
 - Error codes: NETWORK_ERROR, NOT_FOUND, PARSE_ERROR, VALIDATION_ERROR
 ---
+
+## 2026-06-13 - US-015
+- Session: (local)
+- Created PackageStore component with browse and search functionality
+- Added category filtering (Utilities, Emulators, Network, Community, All)
+- Search filters by package name and description
+- Package cards show name, version, author, category, description, downloads, rating
+- Empty state shown when no packages match filters
+- Added navigation to App component (Home/Package Store tabs)
+- CSS styles for store UI with responsive grid layout
+- All quality checks pass: typecheck, lint
+
+**Learnings for future iterations:**
+- PackageStore component lives in `src/PackageStore.tsx`
+- Navigation uses simple state-based screen switching in App.tsx
+- Package cards follow same styling pattern as device/drive cards
+- Search is client-side filtering on loaded registry data
+- Category buttons use active state styling
+---
