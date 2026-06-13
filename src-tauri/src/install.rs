@@ -13,6 +13,7 @@ pub struct InstallResult {
     pub base_files_copied: u32,
     pub extras_files_copied: u32,
     pub extras_warning: Option<String>,
+    pub rom_dirs_created: u32,
 }
 
 /// Progress event emitted during the install flow.
@@ -24,6 +25,50 @@ pub struct InstallProgressEvent {
 
 /// Callback for reporting install progress. Passed through the install flow.
 pub type ProgressCallback = Arc<dyn Fn(InstallProgressEvent) + Send + Sync>;
+
+/// Standard ROM folders created on the SD card after install
+const ROM_DIRS: &[&str] = &[
+    "Arcade (FBN)",
+    "Game Boy (GB)",
+    "Game Boy Advance (GBA)",
+    "Game Boy Color (GBC)",
+    "Neo Geo (FBN)",
+    "Neo Geo Pocket (NGP)",
+    "Nintendo 64 (N64)",
+    "Nintendo DS (NDS)",
+    "Nintendo Entertainment System (FC)",
+    "Pico-8 (PICO)",
+    "Sega Dreamcast (DC)",
+    "Sega Genesis (MD)",
+    "Sony PlayStation (PS)",
+    "Sony PlayStation Portable (PSP)",
+    "Super Nintendo Entertainment System (SFC)",
+    "Ports (PORTS)",
+];
+
+/// Creates standard ROM directories on the SD card if they don't exist.
+/// Skips directories that already exist (e.g. from a previous install).
+pub fn create_rom_dirs(sd_mount: &str) -> Result<u32, String> {
+    let roms_root = Path::new(sd_mount).join("Roms");
+    let mut created = 0u32;
+
+    for dir in ROM_DIRS {
+        let path = roms_root.join(dir);
+        if !path.exists() {
+            fs::create_dir_all(&path)
+                .map_err(|e| format!("Failed to create Roms/{}: {}", dir, e))?;
+            created += 1;
+        }
+    }
+
+    // Create placeholder for Portmaster in the Ports directory
+    let ports_dst = roms_root.join("Ports (PORTS)").join("Portmaster.sh");
+    if !ports_dst.exists() {
+        let _ = fs::write(&ports_dst, "");
+    }
+
+    Ok(created)
+}
 
 /// Folders that must never be deleted or overwritten during install
 const PRESERVED_FOLDERS: &[&str] = &[
@@ -183,6 +228,7 @@ pub async fn install_minui(
             base_files_copied: 0,
             extras_files_copied: 0,
             extras_warning: None,
+            rom_dirs_created: 0,
         });
     }
 
@@ -207,6 +253,7 @@ pub async fn install_minui(
             base_files_copied: 0,
             extras_files_copied: 0,
             extras_warning: None,
+            rom_dirs_created: 0,
         });
     }
 
@@ -233,6 +280,13 @@ pub async fn install_minui(
         }
     }
 
+    // Step 5: Create standard ROM directories
+    progress(InstallProgressEvent {
+        step: "copy".to_string(),
+        details: "Creating standard ROM directories...".to_string(),
+    });
+    let rom_dirs_created = create_rom_dirs(sd_mount).unwrap_or(0);
+
     // Write version metadata after successful install
     progress(InstallProgressEvent {
         step: "finish".to_string(),
@@ -247,6 +301,7 @@ pub async fn install_minui(
         base_files_copied,
         extras_files_copied,
         extras_warning,
+        rom_dirs_created,
     })
 }
 
