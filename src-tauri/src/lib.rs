@@ -123,6 +123,14 @@ fn check_package_updates(
     package::check_package_updates(&sd_mount, &registry_packages)
 }
 
+#[tauri::command]
+fn check_sd_card_health(
+    sd_mount: String,
+    device_platform: Option<String>,
+) -> Result<validate::HealthCheckResult, String> {
+    validate::check_sd_card_health(&sd_mount, device_platform.as_deref())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -139,7 +147,8 @@ pub fn run() {
             write_wifi_config,
             scan_wifi_networks,
             detect_installed_packages,
-            check_package_updates
+            check_package_updates,
+            check_sd_card_health
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

@@ -949,3 +949,94 @@ select option {
   color: #888;
   cursor: not-allowed;
 }
+
+/* Health Check */
+.health-check {
+  margin-top: 1rem;
+}
+
+.health-check h3 {
+  margin-top: 0;
+  color: #ff6b35;
+}
+
+.health-check-btn {
+  background: #2a2a4a;
+  border: 1px solid #3a3a5a;
+  margin-bottom: 1rem;
+}
+
+.health-check-btn:hover {
+  background: #3a3a5a;
+}
+
+.health-results {
+  margin-top: 1rem;
+}
+
+.health-summary {
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+
+.health-passed {
+  color: #44ff44;
+}
+
+.health-failed {
+  color: #ffaa00;
+}
+
+.health-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.health-check-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+}
+
+.health-check-item.passed {
+  background: rgba(68, 255, 68, 0.05);
+}
+
+.health-check-item.warning {
+  background: rgba(255, 170, 0, 0.05);
+}
+
+.health-check-item .check-icon {
+  font-weight: bold;
+  min-width: 1.2em;
+}
+
+.health-check-item.passed .check-icon {
+  color: #44ff44;
+}
+
+.health-check-item.warning .check-icon {
+  color: #ffaa00;
+}
+
+.health-filesystem,
+.health-space {
+  margin: 0.5rem 0;
+  color: #a0a0a0;
+}
+
+.health-actions {
+  margin-top: 1rem;
+}
+
+.copy-report-btn {
+  background: #2a2a4a;
+  border: 1px solid #3a3a5a;
+}
+
+.copy-report-btn:hover {
+  background: #3a3a5a;
+}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import DeviceSelector from "./DeviceSelector";
 import DriveSelector from "./DriveSelector";
+import HealthCheck from "./HealthCheck";
 import InstallProgressUI from "./InstallProgress";
 import { getDeviceProfile } from "./types/device";
 import type { RemovableDrive } from "./types/drive";
@@ -418,6 +419,15 @@ function Home({
 						</div>
 					)}
 				</>
+			)}
+
+			{selectedDrive && selectedDevice && (
+				<div className="card">
+					<HealthCheck
+						sdMount={selectedDrive.mount_path}
+						devicePlatform={getDeviceProfile(selectedDevice)?.platform}
+					/>
+				</div>
 			)}
 
 			{showConfirmDialog && selectedDevice && selectedDrive && (

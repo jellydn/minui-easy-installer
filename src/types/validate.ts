@@ -12,6 +12,15 @@ export interface ValidationResult {
 	free_space_bytes: number | null;
 }
 
+export interface HealthCheckResult {
+	checks: ValidationCheck[];
+	passed_count: number;
+	failed_count: number;
+	free_space_bytes: number | null;
+	filesystem: string | null;
+	support_report: string;
+}
+
 export type ValidationError = {
 	message: string;
 	code: "VALIDATION_ERROR" | "UNKNOWN_ERROR";
@@ -97,4 +106,28 @@ function formatBytes(bytes: number): string {
 		return `${(bytes / KB).toFixed(2)} KB`;
 	}
 	return `${bytes} bytes`;
+}
+
+export async function checkSdCardHealth(options: {
+	sdMount: string;
+	devicePlatform?: string;
+}): Promise<
+	| { success: true; data: HealthCheckResult }
+	| { success: false; error: ValidationError }
+> {
+	try {
+		const { invoke } = await import("@tauri-apps/api/core");
+		const result = await invoke<HealthCheckResult>("check_sd_card_health", {
+			sdMount: options.sdMount,
+			devicePlatform: options.devicePlatform || null,
+		});
+
+		return { success: true, data: result };
+	} catch (err) {
+		const message = err instanceof Error ? err.message : "Unknown error";
+		return {
+			success: false,
+			error: { message, code: "VALIDATION_ERROR" },
+		};
+	}
 }
