@@ -1,0 +1,216 @@
+{
+  "$schema": "device-install-map.schema.json",
+  "sharedBios": ["gba_bios.bin", "syscard3.pce", "bios.min", "sgb.bios"],
+  "devices": {
+    "trimui-brick": {
+      "name": "TrimUI Brick",
+      "basePlatform": "trimui",
+      "extrasPlatform": "tg5040",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": [
+        {
+          "name": "Remove Loading.pak",
+          "type": "tool",
+          "description": "Removes the LOADING text between boot logo and main interface",
+          "warning": "Minimally invasive procedure"
+        }
+      ]
+    },
+    "trimui-smart-pro": {
+      "name": "TrimUI Smart Pro",
+      "basePlatform": "trimui",
+      "extrasPlatform": "tg5040",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": [
+        {
+          "name": "Remove Loading.pak",
+          "type": "tool",
+          "description": "Removes the LOADING text between boot logo and main interface",
+          "warning": "Minimally invasive procedure"
+        }
+      ]
+    },
+    "miyoo-mini": {
+      "name": "Miyoo Mini",
+      "basePlatform": "miyoo",
+      "extrasPlatform": "miyoomini",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "miyoo-mini-plus": {
+      "name": "Miyoo Mini+",
+      "basePlatform": "miyoo",
+      "extrasPlatform": "miyoomini",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "miyoo-a30": {
+      "name": "Miyoo A30",
+      "basePlatform": "miyoo285",
+      "extrasPlatform": "my282",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": [
+        {
+          "name": "Remove Loading.pak",
+          "type": "tool",
+          "description": "Removes the LOADING text between boot logo and main interface",
+          "warning": "Requires patching nand memory. Takes ~5 minutes. Connect to power."
+        }
+      ]
+    },
+    "miyoo-flip": {
+      "name": "Miyoo Flip",
+      "basePlatform": "miyoo354",
+      "extrasPlatform": "miyoo354",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "miyoo355": {
+      "name": "Miyoo 355",
+      "basePlatform": "miyoo355",
+      "extrasPlatform": "my355",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "rg35xx": {
+      "name": "RG35XX",
+      "basePlatform": "rg35xx",
+      "extrasPlatform": "rg35xx",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "rg35xx-plus": {
+      "name": "RG35XX Plus",
+      "basePlatform": "rg35xxplus",
+      "extrasPlatform": "rg35xxplus",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "rg35xx-h": {
+      "name": "RG35XX H",
+      "basePlatform": "rg35xxplus",
+      "extrasPlatform": "rg35xxplus",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "rg35xx-sp": {
+      "name": "RG35XX SP",
+      "basePlatform": "rg35xxplus",
+      "extrasPlatform": "rg35xxplus",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "m17": {
+      "name": "M17",
+      "basePlatform": "m17",
+      "extrasPlatform": "m17",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "gkdpixel": {
+      "name": "GKD Pixel",
+      "basePlatform": "gkdpixel",
+      "extrasPlatform": "gkdpixel",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "magicx": {
+      "name": "MagicX",
+      "basePlatform": "magicx",
+      "extrasPlatform": "magicmini",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "rgb30": {
+      "name": "RGB30",
+      "basePlatform": "rgb30",
+      "extrasPlatform": "rgb30",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": [
+        {
+          "name": "P8-NATIVE.pak",
+          "type": "emulator",
+          "description": "Native PICO-8 fantasy console",
+          "requires": "pico-8_0.2.5g_raspi.zip in /Tools/rgb30/Splore.pak/"
+        },
+        {
+          "name": "Splore.pak",
+          "type": "tool",
+          "description": "PICO-8 game browser and downloader"
+        },
+        {
+          "name": "Wi-Fi.pak",
+          "type": "tool",
+          "description": "WiFi connection management",
+          "configFile": "wifi.txt",
+          "configFormat": "SSID: <name>\\nPASS: <password>"
+        }
+      ]
+    },
+    "zero28": {
+      "name": "Zero 28",
+      "basePlatform": "zero28",
+      "extrasPlatform": "zero28",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    },
+    "my282": {
+      "name": "MY282",
+      "basePlatform": "my282",
+      "extrasPlatform": "my282",
+      "install": {
+        "base": { "action": "copy_to_root" },
+        "extras": { "action": "copy_platform_folders" }
+      },
+      "devicePaks": []
+    }
+  }
+}
