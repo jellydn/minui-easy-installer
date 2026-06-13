@@ -159,9 +159,29 @@ pub fn copy_extras_files(
     copy_dir_recursive(extras_src, &extras_dst, sd_root)
 }
 
+/// Runs extras download → extract → copy, returning the number of files copied.
+/// Errors are propagated via `Result` — the caller decides how to handle failures.
+async fn try_install_extras(
+    url: &str,
+    checksum: Option<&str>,
+    sd_mount: &str,
+    extras_dir: &str,
+) -> Result<u32, String> {
+    let (result, _temp) = download::download_archive(url, checksum)
+        .await
+        .map_err(|e| format!("Extras download failed: {}", e))?;
+    let path = result.file_path.ok_or("No extras download path")?;
+    let (extraction, _temp) = extract::extract_archive(&path, None)
+        .map_err(|e| format!("Extras extraction failed: {}", e))?;
+    let extracted = extraction.output_path.ok_or("No extras extraction path")?;
+    copy_extras_files(&extracted, sd_mount, extras_dir)
+        .map_err(|e| format!("Extras copy failed: {}", e))
+}
+
 /// Full installation flow: download, extract, copy base + extras.
 ///
 /// This is the main entry point that coordinates the entire install process.
+#[allow(clippy::too_many_arguments)]
 pub async fn install_minui(
     base_url: &str,
     extras_url: Option<&str>,
@@ -214,57 +234,14 @@ pub async fn install_minui(
     let base_files_copied =
         copy_base_files(&base_extracted, sd_mount, platform)?;
 
-    // Step 3: Download and extract extras (if available)
+    // Step 3: Download and extract extras (if available) — non-fatal on failure
     let mut extras_files_copied = 0u32;
     let mut extras_warning: Option<String> = None;
 
     if let Some(url) = extras_url {
-        match download::download_archive(url, extras_checksum).await {
-            Ok((extras_result, _extras_temp)) => {
-                if extras_result.success {
-                    if let Some(ref extras_path) = extras_result.file_path {
-                        let path_str = extras_path.clone();
-                        match extract::extract_archive(&path_str, None) {
-                            Ok((extras_extraction, _extras_extract_temp)) => {
-                                if extras_extraction.success {
-                                    if let Some(extras_extracted) = extras_extraction.output_path
-                                    {
-                                        match copy_extras_files(
-                                            &extras_extracted,
-                                            sd_mount,
-                                            extras_dir,
-                                        ) {
-                                            Ok(copied) => extras_files_copied = copied,
-                                            Err(e) => {
-                                                extras_warning =
-                                                    Some(format!("Extras copy failed: {}", e));
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    extras_warning = Some(
-                                        extras_extraction
-                                            .error
-                                            .unwrap_or("Extras extraction failed".to_string()),
-                                    );
-                                }
-                            }
-                            Err(e) => {
-                                extras_warning = Some(format!("Extras extraction failed: {}", e));
-                            }
-                        }
-                    }
-                } else {
-                    extras_warning = Some(
-                        extras_result
-                            .error
-                            .unwrap_or("Extras download failed".to_string()),
-                    );
-                }
-            }
-            Err(e) => {
-                extras_warning = Some(format!("Extras download failed: {}", e));
-            }
+        match try_install_extras(url, extras_checksum, sd_mount, extras_dir).await {
+            Ok(copied) => extras_files_copied = copied,
+            Err(e) => extras_warning = Some(e),
         }
     }
 

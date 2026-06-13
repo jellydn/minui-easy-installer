@@ -9,8 +9,6 @@ pub struct DownloadResult {
     pub file_path: Option<String>,
     pub checksum_verified: Option<bool>,
     pub error: Option<String>,
-    #[serde(skip)]
-    pub _temp_dir: Option<TempDir>,
 }
 
 pub fn verify_checksum(file_path: &str, expected_checksum: &str) -> Result<bool, String> {
@@ -77,7 +75,6 @@ pub async fn download_archive(
                     file_path: None,
                     checksum_verified: Some(false),
                     error: Some("Checksum mismatch".to_string()),
-                    _temp_dir: None,
                 },
                 temp_dir,
             ));
@@ -94,7 +91,6 @@ pub async fn download_archive(
             file_path: Some(file_path_str),
             checksum_verified,
             error: None,
-            _temp_dir: None,
         },
         temp_dir,
     ))

@@ -21,6 +21,7 @@ async fn download_and_verify_archive(
 ) -> Result<download::DownloadResult, String> {
     let checksum_ref = checksum.as_deref();
     let (result, _temp_dir) = download::download_archive(&url, checksum_ref).await?;
+    // _temp_dir drops here, cleaning up the downloaded file
     Ok(result)
 }
 
@@ -36,9 +37,11 @@ fn extract_archive_to_directory(
 ) -> Result<extract::ExtractionResult, String> {
     let dest_ref = destination.as_deref();
     let (result, _temp_dir) = extract::extract_archive(&archive_path, dest_ref)?;
+    // _temp_dir drops here, cleaning up extracted files if a temp dir was created
     Ok(result)
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn install_minui(
     base_url: String,
