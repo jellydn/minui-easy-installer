@@ -1,45 +1,42 @@
-# Tweak Report — Tweak Implementation Results
+# Per-Device Extras Install
 
-> Implementation of `tweak.md` tasks (2026-06-13).
+**Context**: MinUI extras archives contain Emus, Tools, and Bios folders for ALL supported platforms. The previous code copied the entire extras archive to SD root, dumping every platform's files instead of just the matching platform's.
 
-## Summary
+## Changes
 
-| ID  | Task                                            | Status                          | Notes                                                                                                                                                                                |
-| --- | ----------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| P0  | Parse checksums from GitHub release body/assets | Done                            | GitHub release doesn't include checksums in body or assets. Added note to `release.ts` — GitHub API returns `sha256` at asset level if set, but current releases don't publish them. |
-| P1  | WiFi scan deprecation on macOS 14.4+            | Done                            | Commented airport deprecation in `wifi.rs`. No viable replacement without Swift bridge. `networksetup` fallback already exists.                                                      |
-| P2  | Write version metadata after install            | Done                            | `install_minui` now writes `<sd_root>/minui.txt` after successful install. Version parameter added to `install_minui` command API and frontend.                                      |
-| P3  | Enforce checksums for store packages            | Already done in earlier session | `install_package` rejects `None` checksum. `validatePackageEntry` ignores missing checksum (optional schema).                                                                        |
-| P4  | Extras opt-out toggle                           | Deferred                        | Requires UI design and platform-specific extra handling. Out of scope for current session focus.                                                                                     |
+### `src/types/device.ts`
 
-## Verification
+- Added `extrasPlatform` field to `DeviceProfile` interface
+- Mapped extras folder names per device (some differ from base archive names):
+  - `trimui` (base) → `trimuismart` (extras) — TrimUI Brick/Smart Pro
+  - `miyoo`/`miyoo285` (base) → `miyoomini`/`my282` (extras) — Miyoo Mini/Mini+/A30
+  - Most others use the same name for both
 
-| Check                        | Result               |
-| ---------------------------- | -------------------- |
-| `cargo test`                 | 54 passed, 0 failed  |
-| `cargo clippy --all-targets` | 0 warnings           |
-| `npm run typecheck`          | PASS                 |
-| `npm run lint`               | 0 warnings           |
-| `npm test`                   | 104 passed, 12 files |
+### `src/types/install.ts`
 
-## Changes Made
+- Replaced `extrasDir` parameter with `extrasPlatform` in `installMinui()`
 
-### P0 — Checksum gap noted
+### `src/Home.tsx`
 
-- **`src/types/release.ts`**: `checksums` remains `null` — GitHub releases don't publish SHA-256 at asset level. This is a known limitation.
+- Passes `profile.extrasPlatform` to `installMinui()` in both install and update-all flows
 
-### P1 — macOS 14.4+ WiFi deprecation
+### `src-tauri/src/install.rs`
 
-- **`src-tauri/src/wifi.rs`**: Comment updated to note `airport` removed on macOS 14.4+. Removed unused `parse_system_profiler_wifi` function. `networksetup` fallback already handles this gracefully (returns empty list).
+- `copy_extras_files()` now filters extras by platform:
+  - Copies `Bios/` → SD `Bios/` (shared across devices)
+  - Copies `Emus/{extras_platform}/` → SD `Emus/{extras_platform}/`
+  - Copies `Tools/{extras_platform}/` → SD `Tools/{extras_platform}/`
+  - Ignores other platforms' folders entirely
+- Removed unused `extras_dir` parameter from `install_minui()` and `try_install_extras()`
+- Added `extras_platform` parameter throughout
 
-### P2 — Version metadata after install
+### `src-tauri/src/lib.rs`
 
-- **`src-tauri/src/install.rs`**: `install_minui` now accepts a `version` parameter and writes `<sd_root>/minui.txt` with `"MinUI {version}\n"` after successful base install.
-- **`src-tauri/src/lib.rs`**: Tauri command updated to accept and forward `version` parameter.
-- **`src/types/install.ts`**: `installMinui()` options updated to require `version`.
-- **`src/Home.tsx`**: Both install call sites (`handleConfirmInstall`, `handleUpdateAll`) pass `release.version`.
-- **`src/types/install.test.ts`**: All test call sites updated with `version` field and invoke assertions.
+- Added `extras_platform` parameter to `install_minui` Tauri command
+- Removed `extras_dir` parameter
 
-### P4 — Extras opt-out toggle
+## Validation
 
-- Deferred. `ConfirmDialog` currently shows drive/device info. Extras behavior is always-on for MVP.
+- All 49 Rust tests pass (including new `test_copy_extras_files_filters_by_platform`)
+- TypeScript typecheck passes
+- Lint passes (0 warnings, 0 errors)
