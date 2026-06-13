@@ -103,21 +103,21 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
 					<p>Mount: {selectedDrive.mount_path}</p>
 					<p>Free: {formatSize(selectedDrive.available_bytes)}</p>
 
-					{isNotFat32 && (
-						<div className="format-section">
+					<div className="format-section">
+						{isNotFat32 && (
 							<p className="format-warning">
 								This drive is not formatted as FAT32. MinUI requires a FAT32
 								filesystem.
 							</p>
-							<button
-								type="button"
-								className="format-btn"
-								onClick={() => setShowFormatConfirm(true)}
-							>
-								Format to FAT32
-							</button>
-						</div>
-					)}
+						)}
+						<button
+							type="button"
+							className="format-btn"
+							onClick={() => setShowFormatConfirm(true)}
+						>
+							Format to FAT32
+						</button>
+					</div>
 
 					{formatSuccess && (
 						<p className="success-message">Drive formatted successfully!</p>
