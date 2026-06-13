@@ -293,3 +293,21 @@
 - Search is client-side filtering on loaded registry data
 - Category buttons use active state styling
 ---
+
+## 2026-06-13 - US-016
+- Session: (local)
+- Created Rust package module (src-tauri/src/package.rs)
+- Added install_package Tauri command
+- Downloads artifact, verifies checksum, extracts, and copies files
+- Supports extract_to_root and target_dir install path rules
+- Created TypeScript types and installPackage() function in package.ts
+- Added 5 Rust tests for path resolution and file copying
+- All quality checks pass: typecheck, lint, vitest (79 tests), cargo check
+
+**Learnings for future iterations:**
+- Package module lives in `src-tauri/src/package.rs`
+- PackageInstallPathRules has target_dir and extract_to_root fields
+- extract_to_root=true copies files directly to SD card root
+- extract_to_root=false copies files to target_dir subdirectory
+- Uses same download and extract modules as MinUI installation
+---
