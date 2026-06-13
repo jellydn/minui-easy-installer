@@ -21,23 +21,33 @@ Target devices: TrimUI Brick, TrimUI Smart Pro, Miyoo Mini+, Miyoo A30, Miyoo Fl
 - Preserve user ROMs/saves/config during MinUI updates
 - Extract archives to temp dir before copying to SD card
 
+## Architecture
+
+- **MinUI releases**: GitHub API `api.github.com/repos/shauninman/MinUI/releases/latest` (parsed in `src/types/release.ts`). Checksums not yet parsed from release metadata.
+- **Package registry**: Static JSON at `packages.minui.dev/registry/index.json`
+- **Device platform mapping**: Device ID = folder name in archive (e.g. `trimui-brick` → `trimui-brick/`). All 8 devices share same `installPathRules`: `baseDir="/"`, `extrasDir="/"`, `toolsDir="/Tools"`.
+- **WiFi config**: Always `<sd_root>/wifi.txt` with format `SSID: <name>\nPASS: <password>\n`. Same for all devices.
+- **Version tracking**: MinUI base reads `minui.txt` or `.minui/version` (never written by installer). Packages read `Tools/*/version.txt` (included in archives). Installer does not write version metadata.
+- **Extras**: Always installed when release includes extras archive. No user opt-out UI exists.
+- **OS floor**: Windows 10+, macOS 10.15+ (Tauri v2 requirement). macOS 14.4+ has `airport` deprecation risk for WiFi scanning.
+
 ## Running Dev
 
 ```bash
 # Frontend dev
-npm run dev
+bun run dev
 
 # Full Tauri dev (Rust + React)
 cargo tauri dev
 
 # Typecheck
-npm run typecheck
+bun run typecheck
 
 # Lint
-npm run lint
+bun run lint
 
 # Test
-npm test
+bun test
 ```
 
 ## Code Organization
@@ -55,32 +65,3 @@ npm test
 - Rust backend: `src-tauri/src/`
 - Confirmation dialogs: `src/ConfirmDialog.tsx` (overlay modal for write operations)
 - Install progress UI: `src/InstallProgress.tsx`
-
-## Ralph Agent Loop
-
-The `scripts/ralph/ralph.sh` script runs autonomous coding iterations:
-
-```bash
-# Run with defaults (amp, 10 iterations)
-./scripts/ralph/ralph.sh
-
-# Run with opencode
-./scripts/ralph/ralph.sh 10 opencode
-
-# Run with mino (opencode fork)
-./scripts/ralph/ralph.sh 10 mino
-```
-
-PRD lives at `tasks/prd-minui-easy-installer-package-store.md`. Progress logged to `scripts/ralph/progress.txt`.
-
-## Open Questions (from PRD)
-
-1. Authoritative source for MinUI release metadata/checksums?
-2. Exact platform folder mapping per device?
-3. Canonical `wifi.txt` location/format per device?
-4. MVP: choose Extras install or always default?
-5. How to record installed package versions?
-6. Registry: mirror under packages.minui.dev or point to GitHub releases?
-7. Minimum Windows/macOS versions?
-
-Resolve these before implementing affected stories.
