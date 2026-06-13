@@ -96,40 +96,7 @@ fn check_pak_files(sd_root: &Path, tools_dir: &str) -> Vec<ValidationCheck> {
 }
 
 fn check_free_space(sd_root: &Path) -> Option<u64> {
-    #[cfg(unix)]
-    {
-        use std::ffi::CString;
-        let path = CString::new(sd_root.to_str()?).ok()?;
-        unsafe {
-            let mut stat: libc::statvfs = std::mem::zeroed();
-            if libc::statvfs(path.as_ptr(), &mut stat) == 0 {
-                let available = stat.f_bavail as u64 * stat.f_frsize as u64;
-                return Some(available);
-            }
-        }
-        None
-    }
-    #[cfg(windows)]
-    {
-        use std::ffi::CString;
-        let path_str = sd_root.to_str()?;
-        let path_cstr = CString::new(path_str).ok()?;
-        unsafe {
-            let mut free_bytes_available: u64 = 0;
-            let mut _total_bytes: u64 = 0;
-            let mut _total_free_bytes: u64 = 0;
-            if windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExA(
-                path_cstr.as_ptr(),
-                &mut free_bytes_available,
-                &mut _total_bytes,
-                &mut _total_free_bytes,
-            ) != 0
-            {
-                return Some(free_bytes_available);
-            }
-        }
-        None
-    }
+    get_free_space(sd_root.to_str()?)
 }
 
 fn format_bytes(bytes: u64) -> String {

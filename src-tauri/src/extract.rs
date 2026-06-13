@@ -37,6 +37,20 @@ fn validate_entry_path(entry_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+// Determines output directory and returns (ExtractionResult, TempDir if one was created)
+fn determine_output(
+    destination: Option<&str>,
+) -> Result<(PathBuf, Option<tempfile::TempDir>), String> {
+    if let Some(dest) = destination {
+        Ok((PathBuf::from(dest), None))
+    } else {
+        let temp_dir =
+            tempfile::TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        let path = temp_dir.path().to_path_buf();
+        Ok((path, Some(temp_dir)))
+    }
+}
+
 /// Extracts a ZIP archive to a destination directory
 ///
 /// # Arguments
@@ -45,10 +59,11 @@ fn validate_entry_path(entry_path: &str) -> Result<(), String> {
 ///
 /// # Returns
 /// * `ExtractionResult` with success status and output path
+/// * `Option<TempDir>` — the temp dir handle, if one was created. Keep it alive until extraction is consumed.
 pub fn extract_archive(
     archive_path: &str,
     destination: Option<&str>,
-) -> Result<ExtractionResult, String> {
+) -> Result<(ExtractionResult, Option<tempfile::TempDir>), String> {
     let archive_file =
         fs::File::open(archive_path).map_err(|e| format!("Failed to open archive: {}", e))?;
 
@@ -56,16 +71,7 @@ pub fn extract_archive(
         ZipArchive::new(archive_file).map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
 
     // Determine output directory
-    let output_path = if let Some(dest) = destination {
-        PathBuf::from(dest)
-    } else {
-        let temp_dir =
-            tempfile::TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-        let path = temp_dir.path().to_path_buf();
-        // Leak the temp dir to keep it alive
-        std::mem::forget(temp_dir);
-        path
-    };
+    let (output_path, _temp_dir) = determine_output(destination)?;
 
     // Create destination if it doesn't exist
     fs::create_dir_all(&output_path)
@@ -155,12 +161,15 @@ pub fn extract_archive(
         }
     }
 
-    Ok(ExtractionResult {
-        success: true,
-        output_path: Some(output_path.to_str().unwrap_or("").to_string()),
-        files_extracted: Some(files_extracted),
-        error: None,
-    })
+    Ok((
+        ExtractionResult {
+            success: true,
+            output_path: Some(output_path.to_str().unwrap_or("").to_string()),
+            files_extracted: Some(files_extracted),
+            error: None,
+        },
+        _temp_dir,
+    ))
 }
 
 #[cfg(test)]
@@ -210,7 +219,7 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        let result = result.unwrap();
+        let (result, _temp) = result.unwrap();
         assert!(result.success);
         assert_eq!(result.files_extracted, Some(1));
         assert!(output_dir.join("test.txt").exists());

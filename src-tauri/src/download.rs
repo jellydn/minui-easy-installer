@@ -3,19 +3,14 @@ use std::fs;
 use std::io::Read;
 use tempfile::TempDir;
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, serde::Serialize)]
 pub struct DownloadResult {
     pub success: bool,
     pub file_path: Option<String>,
     pub checksum_verified: Option<bool>,
     pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct DownloadProgress {
-    pub bytes_downloaded: u64,
-    pub total_bytes: Option<u64>,
-    pub percentage: Option<f64>,
+    #[serde(skip)]
+    pub _temp_dir: Option<TempDir>,
 }
 
 pub fn verify_checksum(file_path: &str, expected_checksum: &str) -> Result<bool, String> {
@@ -44,7 +39,7 @@ pub fn verify_checksum(file_path: &str, expected_checksum: &str) -> Result<bool,
 pub async fn download_archive(
     url: &str,
     expected_checksum: Option<&str>,
-) -> Result<DownloadResult, String> {
+) -> Result<(DownloadResult, TempDir), String> {
     let temp_dir =
         TempDir::new().map_err(|e| format!("Failed to create temporary directory: {}", e))?;
 
@@ -70,17 +65,22 @@ pub async fn download_archive(
 
     fs::write(&file_path, &bytes).map_err(|e| format!("Failed to write archive to disk: {}", e))?;
 
+    let file_path_str = file_path.to_str().ok_or("Non-UTF-8 path")?.to_string();
+
     let checksum_verified = if let Some(expected) = expected_checksum {
-        let verified = verify_checksum(file_path.to_str().unwrap(), expected)
-            .map_err(|e| format!("Checksum verification failed: {}", e))?;
+        let verified = verify_checksum(&file_path_str, expected)?;
 
         if !verified {
-            return Ok(DownloadResult {
-                success: false,
-                file_path: None,
-                checksum_verified: Some(false),
-                error: Some("Checksum mismatch".to_string()),
-            });
+            return Ok((
+                DownloadResult {
+                    success: false,
+                    file_path: None,
+                    checksum_verified: Some(false),
+                    error: Some("Checksum mismatch".to_string()),
+                    _temp_dir: None,
+                },
+                temp_dir,
+            ));
         }
 
         Some(true)
@@ -88,17 +88,16 @@ pub async fn download_archive(
         None
     };
 
-    // Keep the temp directory alive by leaking it
-    // In a real implementation, we'd manage this more carefully
-    let path = file_path.to_str().unwrap().to_string();
-    std::mem::forget(temp_dir);
-
-    Ok(DownloadResult {
-        success: true,
-        file_path: Some(path),
-        checksum_verified,
-        error: None,
-    })
+    Ok((
+        DownloadResult {
+            success: true,
+            file_path: Some(file_path_str),
+            checksum_verified,
+            error: None,
+            _temp_dir: None,
+        },
+        temp_dir,
+    ))
 }
 
 #[cfg(test)]

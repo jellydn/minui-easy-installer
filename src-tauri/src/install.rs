@@ -5,25 +5,12 @@ use crate::download;
 use crate::extract;
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct InstallProgress {
-    pub phase: String,
-    pub message: String,
-    pub percent: Option<f64>,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallResult {
     pub success: bool,
     pub error: Option<String>,
     pub base_files_copied: u32,
     pub extras_files_copied: u32,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct DeviceInstallPaths {
-    pub base_dir: String,
-    pub extras_dir: String,
-    pub tools_dir: String,
+    pub extras_warning: Option<String>,
 }
 
 /// Folders that must never be deleted or overwritten during install
@@ -32,7 +19,7 @@ const PRESERVED_FOLDERS: &[&str] = &[
 ];
 
 fn is_preserved_path(path: &Path, sd_root: &Path) -> bool {
-    if let Some(relative) = path.strip_prefix(sd_root).ok() {
+    if let Ok(relative) = path.strip_prefix(sd_root) {
         let first_component = relative.iter().next();
         if let Some(name) = first_component {
             let name_str = name.to_string_lossy();
@@ -48,7 +35,7 @@ fn is_preserved_path(path: &Path, sd_root: &Path) -> bool {
 
 /// Copies a directory tree from src to dst, skipping preserved folders.
 /// Returns the number of files copied.
-fn copy_dir_recursive(src: &Path, dst: &Path, sd_root: &Path) -> Result<u32, String> {
+fn copy_dir_recursive(src: &Path, dst: &Path, _sd_root: &Path) -> Result<u32, String> {
     let mut files_copied = 0u32;
 
     let entries = fs::read_dir(src)
@@ -67,7 +54,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path, sd_root: &Path) -> Result<u32, Str
         if src_path.is_dir() {
             fs::create_dir_all(&dst_path)
                 .map_err(|e| format!("Failed to create directory {}: {}", dst_path.display(), e))?;
-            files_copied += copy_dir_recursive(&src_path, &dst_path, sd_root)?;
+            files_copied += copy_dir_recursive(&src_path, &dst_path, _sd_root)?;
         } else {
             if let Some(parent) = dst_path.parent() {
                 fs::create_dir_all(parent)
@@ -183,9 +170,10 @@ pub async fn install_minui(
     sd_mount: &str,
     platform: &str,
     extras_dir: &str,
+    version: &str,
 ) -> Result<InstallResult, String> {
     // Step 1: Download and extract base
-    let base_result = download::download_archive(base_url, base_checksum)
+    let (base_result, _base_temp) = download::download_archive(base_url, base_checksum)
         .await
         .map_err(|e| format!("Base download failed: {}", e))?;
 
@@ -195,12 +183,13 @@ pub async fn install_minui(
             error: Some(base_result.error.unwrap_or("Base download failed".to_string())),
             base_files_copied: 0,
             extras_files_copied: 0,
+            extras_warning: None,
         });
     }
 
     let base_path = base_result.file_path.ok_or("No base file path returned")?;
 
-    let base_extraction =
+    let (base_extraction, _base_extract_temp) =
         extract::extract_archive(&base_path, None).map_err(|e| format!("Base extraction failed: {}", e))?;
 
     if !base_extraction.success {
@@ -213,6 +202,7 @@ pub async fn install_minui(
             ),
             base_files_copied: 0,
             extras_files_copied: 0,
+            extras_warning: None,
         });
     }
 
@@ -226,35 +216,68 @@ pub async fn install_minui(
 
     // Step 3: Download and extract extras (if available)
     let mut extras_files_copied = 0u32;
+    let mut extras_warning: Option<String> = None;
 
     if let Some(url) = extras_url {
-        let extras_result = download::download_archive(url, extras_checksum)
-            .await
-            .map_err(|e| format!("Extras download failed: {}", e))?;
-
-        if extras_result.success {
-            if let Some(ref extras_path) = extras_result.file_path {
-                let path_str = extras_path.clone();
-                let extras_extraction = extract::extract_archive(&path_str, None)
-                    .map_err(|e| format!("Extras extraction failed: {}", e))?;
-
-                if extras_extraction.success {
-                    if let Some(extras_extracted) = extras_extraction.output_path {
-                        extras_files_copied =
-                            copy_extras_files(&extras_extracted, sd_mount, extras_dir)?;
+        match download::download_archive(url, extras_checksum).await {
+            Ok((extras_result, _extras_temp)) => {
+                if extras_result.success {
+                    if let Some(ref extras_path) = extras_result.file_path {
+                        let path_str = extras_path.clone();
+                        match extract::extract_archive(&path_str, None) {
+                            Ok((extras_extraction, _extras_extract_temp)) => {
+                                if extras_extraction.success {
+                                    if let Some(extras_extracted) = extras_extraction.output_path
+                                    {
+                                        match copy_extras_files(
+                                            &extras_extracted,
+                                            sd_mount,
+                                            extras_dir,
+                                        ) {
+                                            Ok(copied) => extras_files_copied = copied,
+                                            Err(e) => {
+                                                extras_warning =
+                                                    Some(format!("Extras copy failed: {}", e));
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    extras_warning = Some(
+                                        extras_extraction
+                                            .error
+                                            .unwrap_or("Extras extraction failed".to_string()),
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                extras_warning = Some(format!("Extras extraction failed: {}", e));
+                            }
+                        }
                     }
+                } else {
+                    extras_warning = Some(
+                        extras_result
+                            .error
+                            .unwrap_or("Extras download failed".to_string()),
+                    );
                 }
-                // Extras failure is non-fatal; base is already installed
+            }
+            Err(e) => {
+                extras_warning = Some(format!("Extras download failed: {}", e));
             }
         }
-        // Extras download failure is non-fatal
     }
+
+    // Write version metadata after successful install
+    let minui_txt_path = Path::new(sd_mount).join("minui.txt");
+    let _ = fs::write(&minui_txt_path, format!("MinUI {}\n", version));
 
     Ok(InstallResult {
         success: true,
         error: None,
         base_files_copied,
         extras_files_copied,
+        extras_warning,
     })
 }
 
@@ -268,27 +291,27 @@ mod tests {
         let sd_root = Path::new("/Volumes/SDCARD");
 
         assert!(is_preserved_path(
-            &Path::new("/Volumes/SDCARD/ROMS/game.nes"),
+            Path::new("/Volumes/SDCARD/ROMS/game.nes"),
             sd_root
         ));
         assert!(is_preserved_path(
-            &Path::new("/Volumes/SDCARD/roms/game.nes"),
+            Path::new("/Volumes/SDCARD/roms/game.nes"),
             sd_root
         ));
         assert!(is_preserved_path(
-            &Path::new("/Volumes/SDCARD/Saves/save.sav"),
+            Path::new("/Volumes/SDCARD/Saves/save.sav"),
             sd_root
         ));
         assert!(is_preserved_path(
-            &Path::new("/Volumes/SDCARD/saves/save.sav"),
+            Path::new("/Volumes/SDCARD/saves/save.sav"),
             sd_root
         ));
         assert!(!is_preserved_path(
-            &Path::new("/Volumes/SDCARD/Apps/minui.pak"),
+            Path::new("/Volumes/SDCARD/Apps/minui.pak"),
             sd_root
         ));
         assert!(!is_preserved_path(
-            &Path::new("/Volumes/SDCARD/Tools/wifi.pak"),
+            Path::new("/Volumes/SDCARD/Tools/wifi.pak"),
             sd_root
         ));
     }

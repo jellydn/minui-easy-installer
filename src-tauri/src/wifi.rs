@@ -5,7 +5,7 @@ use std::process::Command;
 /// Write WiFi configuration to SD card.
 ///
 /// Creates wifi.txt in the root of the SD card with the format:
-/// ```
+/// ```text
 /// SSID: <network_name>
 /// PASS: <password>
 /// ```
@@ -76,14 +76,13 @@ fn scan_wifi_macos() -> Vec<String> {
         }
     }
 
-    // Fallback to networksetup
+    // Fallback to networksetup (less reliable on macOS 14.4+ where airport is removed)
     let output = Command::new("networksetup")
         .arg("-listallhardwareports")
         .output();
 
     if let Ok(output) = output {
         if output.status.success() {
-            // Try to get SSID from networksetup
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(ssid) = parse_networksetup_output(&stdout) {
                 return vec![ssid];
@@ -244,9 +243,9 @@ mod tests {
     #[test]
     fn test_scan_wifi_networks_returns_vec() {
         // This test just verifies the function returns without panicking
-        let networks = scan_wifi_networks();
+        let _networks = scan_wifi_networks();
         // We can't assert specific networks since it depends on the environment
-        assert!(networks.len() >= 0);
+        // Just check it runs without panic
     }
 
     #[test]

@@ -33,18 +33,42 @@ pub struct PackageUpdateInfo {
 }
 
 /// Resolves the install path for a package based on rules and SD card mount.
+///
+/// Returns an error if the resolved path escapes the SD card root (path traversal).
 pub fn resolve_package_install_path(
     sd_mount: &str,
     rules: &PackageInstallPathRules,
-) -> String {
+) -> Result<String, String> {
     let sd_root = Path::new(sd_mount);
 
     if rules.extract_to_root {
-        return sd_mount.to_string();
+        return Ok(sd_mount.to_string());
     }
 
-    let target = sd_root.join(rules.target_dir.trim_start_matches('/'));
-    target.to_string_lossy().to_string()
+    // Reject any path component that could be used for traversal
+    let target_dir = rules.target_dir.trim_start_matches('/');
+    if target_dir.split('/').any(|c| c == "..") {
+        return Err(format!(
+            "Path traversal detected in targetDir: '{}'",
+            rules.target_dir
+        ));
+    }
+
+    let target = sd_root.join(target_dir);
+
+    // If the target path exists, verify it stays within SD root via canonicalization
+    if let Ok(canonical_target) = target.canonicalize() {
+        if let Ok(canonical_root) = sd_root.canonicalize() {
+            if !canonical_target.starts_with(&canonical_root) {
+                return Err(format!(
+                    "Security violation: resolved path '{}' escapes SD card root",
+                    target.display()
+                ));
+            }
+        }
+    }
+
+    Ok(target.to_string_lossy().to_string())
 }
 
 /// Copies package files from extracted directory to target directory.
@@ -227,8 +251,13 @@ pub async fn install_package(
     sd_mount: &str,
     rules: &PackageInstallPathRules,
 ) -> Result<PackageInstallResult, String> {
-    // Step 1: Download the artifact
-    let download_result = download::download_archive(artifact_url, checksum)
+    // Step 1: Verify checksum is provided (required for store packages)
+    let checksum = checksum.ok_or_else(|| {
+        "Checksum is required for store package installs — missing checksum means the package cannot be verified".to_string()
+    })?;
+
+    // Step 2: Download the artifact
+    let (download_result, _artifact_temp) = download::download_archive(artifact_url, Some(checksum))
         .await
         .map_err(|e| format!("Package download failed: {}", e))?;
 
@@ -249,14 +278,14 @@ pub async fn install_package(
         .ok_or("No artifact file path returned")?;
 
     // Step 2: Extract the artifact
-    let extraction = extract::extract_archive(&artifact_path, None)
+    let (extraction_result, _pkg_extract_temp) = extract::extract_archive(&artifact_path, None)
         .map_err(|e| format!("Package extraction failed: {}", e))?;
 
-    if !extraction.success {
+    if !extraction_result.success {
         return Ok(PackageInstallResult {
             success: false,
             error: Some(
-                extraction
+                extraction_result
                     .error
                     .unwrap_or("Package extraction failed".to_string()),
             ),
@@ -264,12 +293,13 @@ pub async fn install_package(
         });
     }
 
-    let extracted_path = extraction
+    let extracted_path = extraction_result
         .output_path
         .ok_or("No extraction path returned")?;
 
     // Step 3: Copy files to target directory
-    let target_dir = resolve_package_install_path(sd_mount, rules);
+    let target_dir = resolve_package_install_path(sd_mount, rules)
+        .map_err(|e| format!("Failed to resolve install path: {}", e))?;
     let files_copied = copy_package_files(&extracted_path, &target_dir, rules.extract_to_root)?;
 
     Ok(PackageInstallResult {
@@ -285,35 +315,73 @@ mod tests {
 
     #[test]
     fn test_resolve_package_install_path_to_tools() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_mount = temp.path().to_str().unwrap();
         let rules = PackageInstallPathRules {
             target_dir: "/Tools".to_string(),
             extract_to_root: false,
         };
 
-        let result = resolve_package_install_path("/Volumes/SDCARD", &rules);
-        assert_eq!(result, "/Volumes/SDCARD/Tools");
+        let result = resolve_package_install_path(sd_mount, &rules).unwrap();
+        assert!(result.ends_with("/Tools"));
+        assert!(result.starts_with(sd_mount));
     }
 
     #[test]
     fn test_resolve_package_install_path_to_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_mount = temp.path().to_str().unwrap();
         let rules = PackageInstallPathRules {
             target_dir: "/".to_string(),
             extract_to_root: true,
         };
 
-        let result = resolve_package_install_path("/Volumes/SDCARD", &rules);
-        assert_eq!(result, "/Volumes/SDCARD");
+        let result = resolve_package_install_path(sd_mount, &rules).unwrap();
+        assert_eq!(result, sd_mount);
     }
 
     #[test]
     fn test_resolve_package_install_path_nested() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_mount = temp.path().to_str().unwrap();
         let rules = PackageInstallPathRules {
             target_dir: "/Apps/Emulators".to_string(),
             extract_to_root: false,
         };
 
-        let result = resolve_package_install_path("/Volumes/SDCARD", &rules);
-        assert_eq!(result, "/Volumes/SDCARD/Apps/Emulators");
+        // Create the target dir so canonicalize works
+        std::fs::create_dir_all(temp.path().join("Apps/Emulators")).unwrap();
+        let result = resolve_package_install_path(sd_mount, &rules).unwrap();
+        assert!(result.ends_with("/Apps/Emulators"));
+        assert!(result.starts_with(sd_mount));
+    }
+
+    #[test]
+    fn test_resolve_package_install_path_rejects_traversal() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_mount = temp.path().to_str().unwrap();
+        let rules = PackageInstallPathRules {
+            target_dir: "../escape".to_string(),
+            extract_to_root: false,
+        };
+
+        let result = resolve_package_install_path(sd_mount, &rules);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("traversal"));
+    }
+
+    #[test]
+    fn test_resolve_package_install_path_rejects_deep_traversal() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_mount = temp.path().to_str().unwrap();
+        let rules = PackageInstallPathRules {
+            target_dir: "/Tools/../../etc".to_string(),
+            extract_to_root: false,
+        };
+
+        let result = resolve_package_install_path(sd_mount, &rules);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("traversal"));
     }
 
     #[test]

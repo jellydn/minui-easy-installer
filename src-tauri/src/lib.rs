@@ -20,7 +20,8 @@ async fn download_and_verify_archive(
     checksum: Option<String>,
 ) -> Result<download::DownloadResult, String> {
     let checksum_ref = checksum.as_deref();
-    download::download_archive(&url, checksum_ref).await
+    let (result, _temp_dir) = download::download_archive(&url, checksum_ref).await?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -34,7 +35,8 @@ fn extract_archive_to_directory(
     destination: Option<String>,
 ) -> Result<extract::ExtractionResult, String> {
     let dest_ref = destination.as_deref();
-    extract::extract_archive(&archive_path, dest_ref)
+    let (result, _temp_dir) = extract::extract_archive(&archive_path, dest_ref)?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -46,6 +48,7 @@ async fn install_minui(
     sd_mount: String,
     platform: String,
     extras_dir: String,
+    version: String,
 ) -> Result<install::InstallResult, String> {
     install::install_minui(
         &base_url,
@@ -55,6 +58,7 @@ async fn install_minui(
         &sd_mount,
         &platform,
         &extras_dir,
+        &version,
     )
     .await
 }
