@@ -92,8 +92,8 @@ function WifiWizard({ sdMount, onComplete, onCancel }: WifiWizardProps) {
 
 	return (
 		<div className="wifi-wizard">
-			<h2>WiFi Setup</h2>
-			<p className="wifi-description">
+			<h1>WiFi Setup</h1>
+			<p className="subtitle">
 				Configure WiFi credentials for your device. The password will be stored
 				in wifi.txt on your SD card.
 			</p>
@@ -139,7 +139,10 @@ function WifiWizard({ sdMount, onComplete, onCancel }: WifiWizardProps) {
 								disabled={isSaving}
 							/>
 							{isScanning && (
-								<p className="scanning-hint">Scanning for networks...</p>
+								<div className="scanning-progress">
+									<div className="install-spinner" />
+									<p className="scanning-hint">Scanning for networks...</p>
+								</div>
 							)}
 							{scanFailed && (
 								<p className="scan-failed-hint">

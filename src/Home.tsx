@@ -218,7 +218,8 @@ function Home({
 	}, [selectedDevice, selectedDrive, extrasFilesCopied]);
 
 	const hasUpdates =
-		(versionCheck?.update_available ?? false) || packageUpdates.length > 0;
+		(versionCheck?.update_available && versionCheck?.installed != null) ||
+		packageUpdates.length > 0;
 
 	const handleUpdateAll = useCallback(async () => {
 		if (!selectedDevice || !selectedDrive) return;
@@ -299,7 +300,7 @@ function Home({
 		installPhase !== "error";
 
 	return (
-		<div className="home">
+		<div className="screen">
 			<h1>MinUI Easy Installer</h1>
 			<p className="subtitle">
 				The easiest way to install and manage MinUI on retro handheld devices.
