@@ -295,8 +295,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Package store UI integrated with install_package command. Install button on package cards triggers installation. Installed packages tracked in state and shown with 'Installed' badge. Requires device and drive selection before installing. Typecheck and lint pass."
     },
     {
       "id": "US-018",

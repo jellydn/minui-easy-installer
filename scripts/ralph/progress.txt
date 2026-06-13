@@ -311,3 +311,21 @@
 - extract_to_root=false copies files to target_dir subdirectory
 - Uses same download and extract modules as MinUI installation
 ---
+
+## 2026-06-13 - US-017
+- Session: (local)
+- Integrated PackageStore with install_package command
+- Added handleInstall callback to PackageStore component
+- Install button triggers package installation via Rust backend
+- Installed packages tracked in state and shown with "Installed" badge
+- Requires device and drive selection before installing
+- Passes selectedDrive mount path to PackageStore from App
+- CSS styles for installed badge and disabled install button
+- All quality checks pass: typecheck, lint
+
+**Learnings for future iterations:**
+- PackageStore now accepts selectedDrive prop for installation
+- Installed packages tracked with Set<string> in component state
+- Install button disabled when device/drive not selected
+- Error handling shows install failures in store UI
+---
