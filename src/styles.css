@@ -836,3 +836,61 @@ select option {
   color: #44ff44;
   font-size: 1.1rem;
 }
+
+.ssid-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ssid-selector select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #f6f6f6;
+  background-color: #2a2a4a;
+  border: 1px solid #3a3a5a;
+  border-radius: 8px;
+}
+
+.ssid-selector select option {
+  background-color: #1a1a2e;
+  color: #f6f6f6;
+}
+
+.manual-or {
+  color: #a0a0a0;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.scanning-hint {
+  color: #a0a0a0;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+.scan-failed-hint {
+  color: #ffaa00;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+.rescan-btn {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  background: #2a2a4a;
+  border: 1px solid #3a3a5a;
+}
+
+.rescan-btn:hover {
+  background: #3a3a5a;
+}
+
+.rescan-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

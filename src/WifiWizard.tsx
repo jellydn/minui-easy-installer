@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface WifiWizardProps {
 	sdMount: string | null;
@@ -12,6 +12,29 @@ function WifiWizard({ sdMount, onComplete, onCancel }: WifiWizardProps) {
 	const [isSaving, setIsSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState(false);
+	const [scannedNetworks, setScannedNetworks] = useState<string[]>([]);
+	const [isScanning, setIsScanning] = useState(false);
+	const [scanFailed, setScanFailed] = useState(false);
+
+	const scanNetworks = useCallback(async () => {
+		setIsScanning(true);
+		setScanFailed(false);
+
+		try {
+			const { invoke } = await import("@tauri-apps/api/core");
+			const networks = await invoke<string[]>("scan_wifi_networks");
+			setScannedNetworks(networks);
+		} catch {
+			// Scanning is optional - fall back to manual entry
+			setScanFailed(true);
+		} finally {
+			setIsScanning(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		scanNetworks();
+	}, [scanNetworks]);
 
 	const handleSave = async () => {
 		if (!ssid.trim()) {
@@ -70,14 +93,59 @@ function WifiWizard({ sdMount, onComplete, onCancel }: WifiWizardProps) {
 			<div className="wifi-form">
 				<div className="form-group">
 					<label htmlFor="ssid">Network Name (SSID)</label>
-					<input
-						id="ssid"
-						type="text"
-						value={ssid}
-						onChange={(e) => setSsid(e.target.value)}
-						placeholder="Enter WiFi network name"
-						disabled={isSaving}
-					/>
+
+					{scannedNetworks.length > 0 ? (
+						<div className="ssid-selector">
+							<select
+								id="ssid"
+								value={ssid}
+								onChange={(e) => setSsid(e.target.value)}
+								disabled={isSaving}
+							>
+								<option value="">Select a network...</option>
+								{scannedNetworks.map((network) => (
+									<option key={network} value={network}>
+										{network}
+									</option>
+								))}
+							</select>
+							<span className="manual-or">or</span>
+							<input
+								type="text"
+								value={ssid}
+								onChange={(e) => setSsid(e.target.value)}
+								placeholder="Enter manually"
+								disabled={isSaving}
+							/>
+						</div>
+					) : (
+						<div>
+							<input
+								id="ssid"
+								type="text"
+								value={ssid}
+								onChange={(e) => setSsid(e.target.value)}
+								placeholder="Enter WiFi network name"
+								disabled={isSaving}
+							/>
+							{isScanning && (
+								<p className="scanning-hint">Scanning for networks...</p>
+							)}
+							{scanFailed && (
+								<p className="scan-failed-hint">
+									Could not scan for networks. Enter SSID manually.
+								</p>
+							)}
+							<button
+								type="button"
+								className="rescan-btn"
+								onClick={scanNetworks}
+								disabled={isScanning}
+							>
+								{isScanning ? "Scanning..." : "Scan for networks"}
+							</button>
+						</div>
+					)}
 				</div>
 
 				<div className="form-group">
