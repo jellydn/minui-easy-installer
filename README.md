@@ -25,12 +25,13 @@ Think "Balena Etcher for MinUI" — insert an SD card, select your device, click
 
 - [Tauri v2](https://v2.tauri.app/) — Rust backend + React frontend
 - [oxlint](https://oxc-project.github.io/) + [oxfmt](https://oxc-project.github.io/) — Fast Rust-based linting and formatting
+- [Bun](https://bun.sh/) — JavaScript runtime & package manager
 - Windows + macOS (MVP)
 
 ## Install
 
 ```sh
-npm install
+bun install
 ```
 
 ## Usage
@@ -38,7 +39,7 @@ npm install
 ### Development
 
 ```sh
-npm run dev
+bun run dev
 ```
 
 ### Full Tauri dev (Rust + React)

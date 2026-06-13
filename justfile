@@ -7,11 +7,11 @@ run: tauri-dev
 
 # Frontend dev server
 dev:
-    npm run dev
+    bun run dev
 
 # Build frontend
 build:
-    npm run build
+    bun run build
 
 # Run Tauri dev (Rust + React)
 tauri-dev:
@@ -23,20 +23,20 @@ tauri-build:
 
 # Typecheck TypeScript
 typecheck:
-    npm run typecheck
+    bun run typecheck
 
 # Lint TypeScript with oxlint
 lint:
-    npm run lint
+    bun run lint
 
 # Format TypeScript with oxfmt
 fmt-ts:
-    npm run fmt
+    bun run fmt
 
 # Run all checks (lint + typecheck + Rust fmt/clippy)
 check:
-    npm run lint
-    npm run typecheck
+    bun run lint
+    bun run typecheck
     cd src-tauri && cargo fmt --check
     cd src-tauri && cargo clippy -- -D warnings
 
