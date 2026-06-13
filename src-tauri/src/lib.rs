@@ -105,6 +105,24 @@ fn write_wifi_config(
     wifi::write_wifi_config(&sd_mount, &ssid, &password)
 }
 
+#[tauri::command]
+fn scan_wifi_networks() -> Vec<String> {
+    wifi::scan_wifi_networks()
+}
+
+#[tauri::command]
+fn detect_installed_packages(sd_mount: String) -> Vec<package::InstalledPackage> {
+    package::detect_installed_packages(&sd_mount)
+}
+
+#[tauri::command]
+fn check_package_updates(
+    sd_mount: String,
+    registry_packages: Vec<(String, String)>,
+) -> Vec<package::PackageUpdateInfo> {
+    package::check_package_updates(&sd_mount, &registry_packages)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -118,7 +136,10 @@ pub fn run() {
             format_validation_report,
             check_minui_version,
             install_package,
-            write_wifi_config
+            write_wifi_config,
+            scan_wifi_networks,
+            detect_installed_packages,
+            check_package_updates
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

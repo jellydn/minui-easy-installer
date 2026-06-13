@@ -354,6 +354,34 @@ export async function installPackage(options: {
 	}
 }
 
+export async function detectInstalledPackages(
+	sdMount: string,
+): Promise<InstalledPackage[]> {
+	try {
+		const { invoke } = await import("@tauri-apps/api/core");
+		return await invoke<InstalledPackage[]>("detect_installed_packages", {
+			sdMount,
+		});
+	} catch {
+		return [];
+	}
+}
+
+export async function checkPackageUpdates(
+	sdMount: string,
+	registryPackages: [string, string][],
+): Promise<PackageUpdateInfo[]> {
+	try {
+		const { invoke } = await import("@tauri-apps/api/core");
+		return await invoke<PackageUpdateInfo[]>("check_package_updates", {
+			sdMount,
+			registryPackages,
+		});
+	} catch {
+		return [];
+	}
+}
+
 export type PackageRegistryFetchResult =
 	| { success: true; data: PackageRegistry }
 	| { success: false; error: PackageRegistryError };
@@ -377,6 +405,19 @@ export type PackageInstallError = {
 export type PackageInstallResultEither =
 	| { success: true; data: PackageInstallResult }
 	| { success: false; error: PackageInstallError };
+
+export interface InstalledPackage {
+	name: string;
+	version: string | null;
+	source: string;
+}
+
+export interface PackageUpdateInfo {
+	name: string;
+	installed_version: string | null;
+	latest_version: string;
+	update_available: boolean;
+}
 
 export async function fetchPackageRegistry(
 	fetchFn: typeof globalThis.fetch = globalThis.fetch,

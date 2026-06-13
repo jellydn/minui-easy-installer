@@ -894,3 +894,30 @@ select option {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Package Updates */
+.package-updates {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(255, 170, 0, 0.1);
+  border: 1px solid rgba(255, 170, 0, 0.3);
+  border-radius: 8px;
+}
+
+.package-updates h3 {
+  margin: 0 0 0.5rem;
+  color: #ffaa00;
+  font-size: 0.9rem;
+}
+
+.package-updates ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.package-updates li {
+  padding: 0.25rem 0;
+  color: #f6f6f6;
+  font-size: 0.9rem;
+}

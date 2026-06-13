@@ -7,6 +7,8 @@ import { getDeviceProfile } from "./types/device";
 import type { RemovableDrive } from "./types/drive";
 import type { InstallPhase } from "./types/install";
 import { installMinui } from "./types/install";
+import type { PackageUpdateInfo } from "./types/package";
+import { checkPackageUpdates, fetchPackageRegistry } from "./types/package";
 import { fetchMinUIRelease } from "./types/release";
 import type { ValidationResult } from "./types/validate";
 import { validateInstallation } from "./types/validate";
@@ -39,11 +41,13 @@ function Home({
 		null,
 	);
 	const [isCheckingVersion, setIsCheckingVersion] = useState(false);
+	const [packageUpdates, setPackageUpdates] = useState<PackageUpdateInfo[]>([]);
 
 	// Check installed version when drive is selected
 	useEffect(() => {
 		if (!selectedDrive) {
 			setVersionCheck(null);
+			setPackageUpdates([]);
 			return;
 		}
 
@@ -66,6 +70,20 @@ function Home({
 
 				if (!cancelled && result.success) {
 					setVersionCheck(result.data);
+				}
+
+				// Check for package updates
+				const registryResult = await fetchPackageRegistry();
+				if (!cancelled && registryResult.success) {
+					const registryPackages: [string, string][] =
+						registryResult.data.packages.map((p) => [p.name, p.version]);
+					const updates = await checkPackageUpdates(
+						selectedDrive!.mount_path,
+						registryPackages,
+					);
+					if (!cancelled) {
+						setPackageUpdates(updates.filter((u) => u.update_available));
+					}
 				}
 			} catch {
 				// Version check failure is non-fatal
@@ -258,6 +276,21 @@ function Home({
 									) : versionCheck.installed ? (
 										<p className="up-to-date">MinUI is up to date</p>
 									) : null}
+
+									{packageUpdates.length > 0 && (
+										<div className="package-updates">
+											<h3>Package Updates Available</h3>
+											<ul>
+												{packageUpdates.map((update) => (
+													<li key={update.name}>
+														{update.name}:{" "}
+														{update.installed_version || "unknown"} &rarr;{" "}
+														{update.latest_version}
+													</li>
+												))}
+											</ul>
+										</div>
+									)}
 								</div>
 							) : (
 								<p className="no-version">Select a drive to check version</p>
