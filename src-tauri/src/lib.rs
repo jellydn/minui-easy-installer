@@ -118,6 +118,11 @@ fn scan_wifi_networks() -> Vec<String> {
 }
 
 #[tauri::command]
+fn get_current_wifi_ssid() -> Option<String> {
+    wifi::get_current_wifi_ssid()
+}
+
+#[tauri::command]
 fn detect_installed_packages(sd_mount: String) -> Vec<package::InstalledPackage> {
     package::detect_installed_packages(&sd_mount)
 }
@@ -153,6 +158,7 @@ pub fn run() {
             install_package,
             write_wifi_config,
             scan_wifi_networks,
+            get_current_wifi_ssid,
             detect_installed_packages,
             check_package_updates,
             check_sd_card_health

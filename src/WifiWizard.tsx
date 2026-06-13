@@ -24,6 +24,16 @@ function WifiWizard({ sdMount, onComplete, onCancel }: WifiWizardProps) {
 			const { invoke } = await import("@tauri-apps/api/core");
 			const networks = await invoke<string[]>("scan_wifi_networks");
 			setScannedNetworks(networks);
+
+			// If scanning returned nothing, try to grab the currently connected SSID
+			if (networks.length === 0) {
+				const currentSsid = await invoke<string | null>(
+					"get_current_wifi_ssid",
+				);
+				if (currentSsid && typeof currentSsid === "string") {
+					setSsid(currentSsid);
+				}
+			}
 		} catch {
 			// Scanning is optional - fall back to manual entry
 			setScanFailed(true);

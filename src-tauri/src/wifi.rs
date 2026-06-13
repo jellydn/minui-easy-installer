@@ -30,14 +30,84 @@ pub fn write_wifi_config(sd_mount: &str, ssid: &str, password: &str) -> Result<(
     Ok(())
 }
 
+/// Get the currently connected WiFi SSID.
+///
+/// Returns the SSID of the network currently connected, or None if not
+/// connected to WiFi or if the platform doesn't support detection.
+pub fn get_current_wifi_ssid() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        get_current_wifi_ssid_macos()
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn get_current_wifi_ssid_macos() -> Option<String> {
+    // First find the WiFi interface
+    let output = Command::new("networksetup")
+        .args(["-listallhardwareports"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut wifi_interface: Option<String> = None;
+
+    // Parse hardware ports to find the Wi-Fi interface (e.g., "en0")
+    let mut current_port = String::new();
+    for line in stdout.lines() {
+        if let Some(port) = line.strip_prefix("Hardware Port: ") {
+            current_port = port.to_string();
+        } else if let Some(device) = line.strip_prefix("Device: ") {
+            if current_port.to_lowercase().contains("wi-fi")
+                || current_port.to_lowercase().contains("airport")
+                || current_port.to_lowercase().contains("wlan")
+            {
+                wifi_interface = Some(device.to_string());
+                break;
+            }
+            current_port.clear();
+        }
+    }
+
+    let iface = wifi_interface?;
+
+    // Get the current network SSID
+    let output = Command::new("networksetup")
+        .args(["-getairportnetwork", &iface])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Output format: "Current Wi-Fi Network: MyNetwork"
+    for line in stdout.lines() {
+        if let Some(ssid) = line.strip_prefix("Current Wi-Fi Network: ") {
+            let ssid = ssid.trim();
+            if !ssid.is_empty() {
+                return Some(ssid.to_string());
+            }
+        }
+    }
+
+    None
+}
+
 /// Scan for available WiFi networks.
 ///
-/// Returns a list of SSIDs found nearby. Uses platform-specific commands:
-/// - macOS: `airport -s`
-/// - Linux: `nmcli -t -f SSID dev wifi`
-/// - Windows: `netsh wlan show networks mode=bssid`
-///
-/// Returns an empty list if scanning is not supported or fails.
+/// Returns a list of SSIDs found nearby. Uses platform-specific commands.
+/// Falls back to the currently connected SSID if scanning is unavailable.
 pub fn scan_wifi_networks() -> Vec<String> {
     #[cfg(target_os = "macos")]
     {
@@ -72,22 +142,16 @@ fn scan_wifi_macos() -> Vec<String> {
     if let Ok(output) = output {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            return parse_airport_output(&stdout);
+            let ssids = parse_airport_output(&stdout);
+            if !ssids.is_empty() {
+                return ssids;
+            }
         }
     }
 
-    // Fallback to networksetup (less reliable on macOS 14.4+ where airport is removed)
-    let output = Command::new("networksetup")
-        .arg("-listallhardwareports")
-        .output();
-
-    if let Ok(output) = output {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if let Some(ssid) = parse_networksetup_output(&stdout) {
-                return vec![ssid];
-            }
-        }
+    // Fallback: detect the currently connected network (works on macOS 14.4+)
+    if let Some(ssid) = get_current_wifi_ssid_macos() {
+        return vec![ssid];
     }
 
     Vec::new()
@@ -112,13 +176,6 @@ fn parse_airport_output(output: &str) -> Vec<String> {
     ssids.sort();
     ssids.dedup();
     ssids
-}
-
-#[cfg(target_os = "macos")]
-fn parse_networksetup_output(_output: &str) -> Option<String> {
-    // This is a simplified parser - in reality we'd need to find WiFi interface
-    // and get its SSID
-    None
 }
 
 #[cfg(target_os = "linux")]

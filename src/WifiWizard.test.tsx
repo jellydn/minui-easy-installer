@@ -7,6 +7,17 @@ vi.mock("@tauri-apps/api/core", () => ({
 	invoke: vi.fn(),
 }));
 
+function mockInvoke(
+	invoke: ReturnType<typeof vi.fn>,
+	overrides: Record<string, unknown> = {},
+) {
+	invoke.mockImplementation((cmd: string) => {
+		if (cmd === "get_current_wifi_ssid") return Promise.resolve(null);
+		if (cmd in overrides) return Promise.resolve(overrides[cmd]);
+		return Promise.resolve([]);
+	});
+}
+
 describe("WifiWizard", () => {
 	afterEach(() => {
 		cleanup();
@@ -18,7 +29,7 @@ describe("WifiWizard", () => {
 
 	it("renders SSID and password fields", async () => {
 		const { invoke } = await import("@tauri-apps/api/core");
-		vi.mocked(invoke).mockResolvedValue([]);
+		mockInvoke(vi.mocked(invoke));
 
 		render(
 			<WifiWizard
@@ -57,7 +68,9 @@ describe("WifiWizard", () => {
 
 	it("shows scanned networks in dropdown when scan succeeds", async () => {
 		const { invoke } = await import("@tauri-apps/api/core");
-		vi.mocked(invoke).mockResolvedValue(["HomeNetwork", "GuestWiFi"]);
+		mockInvoke(vi.mocked(invoke), {
+			scan_wifi_networks: ["HomeNetwork", "GuestWiFi"],
+		});
 
 		render(
 			<WifiWizard
@@ -75,7 +88,7 @@ describe("WifiWizard", () => {
 
 	it("disables save button when SSID is empty", async () => {
 		const { invoke } = await import("@tauri-apps/api/core");
-		vi.mocked(invoke).mockResolvedValue([]);
+		mockInvoke(vi.mocked(invoke));
 
 		render(
 			<WifiWizard
@@ -101,7 +114,7 @@ describe("WifiWizard", () => {
 
 	it("calls onCancel when cancel is clicked", async () => {
 		const { invoke } = await import("@tauri-apps/api/core");
-		vi.mocked(invoke).mockResolvedValue([]);
+		mockInvoke(vi.mocked(invoke));
 		const onCancel = vi.fn();
 
 		render(
@@ -124,7 +137,7 @@ describe("WifiWizard", () => {
 
 	it("writes wifi config on save", async () => {
 		const { invoke } = await import("@tauri-apps/api/core");
-		vi.mocked(invoke).mockResolvedValue([]);
+		mockInvoke(vi.mocked(invoke));
 
 		render(
 			<WifiWizard
