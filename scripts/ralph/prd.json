@@ -313,8 +313,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Package store infrastructure from US-017 handles installing any package including SSH.pak. Install button triggers installation, installed packages tracked in state."
     },
     {
       "id": "US-019",
