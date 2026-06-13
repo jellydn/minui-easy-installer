@@ -368,8 +368,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Added detect_installed_packages and check_package_updates Rust commands. Home screen shows package updates with version comparison. Unknown versions treated as needing update. 4 Rust tests pass. Typecheck and lint pass."
     },
     {
       "id": "US-022",

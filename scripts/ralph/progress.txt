@@ -366,3 +366,20 @@
 - Scanning failures are graceful - users can always enter SSID manually
 - Parsed output deduplicates and sorts SSIDs
 ---
+
+## 2026-06-13 - US-021
+- Session: (local)
+- Added detect_installed_packages Rust command to package module
+- Added check_package_updates Rust command for version comparison
+- Detects packages from Tools/*.pak directories with version.txt files
+- Home screen shows package updates with version arrows
+- Unknown versions treated as needing update
+- Added 4 Rust tests for package detection and update checking
+- All quality checks pass: typecheck, lint, cargo test
+
+**Learnings for future iterations:**
+- Package detection looks in Tools/ directory for .pak folders
+- Version stored in Tools/<name>.pak/version.txt
+- PackageUpdateInfo shows installed_version vs latest_version
+- Updates filtered to only show packages with updates available
+---
