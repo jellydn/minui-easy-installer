@@ -167,6 +167,7 @@ interface StoreEmuPak {
   pak_name: string;
   rom_folder: string;
   description?: string;
+  checksum?: string;
 }
 
 interface StoreToolPak {
@@ -337,7 +338,7 @@ function convertStoreRegistry(data: StoreRegistry): PackageRegistry {
         pak.pak_name,
         pak.download_url,
       ),
-      checksum: (pak as StoreToolPak).checksum || null,
+      checksum: pak.checksum || null,
       supportedDevices: pak.device || [],
       installPathRules: {
         targetDir: "/Tools",
