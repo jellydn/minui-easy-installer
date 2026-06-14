@@ -4,9 +4,9 @@ import storeData from "./store.json";
 export interface PackageRegistryEntry {
 	name: string;
 	version: string;
-	author: string;
 	category: PackageCategory;
 	description: string;
+	repository: string;
 	downloads: number | null;
 	rating: number | null;
 	artifactUrl: string;
@@ -164,6 +164,7 @@ interface StoreEmuPak {
 	version: string;
 	pak_name: string;
 	rom_folder: string;
+	description?: string;
 }
 
 interface StoreToolPak {
@@ -173,6 +174,7 @@ interface StoreToolPak {
 	pak_name: string;
 	device?: string[];
 	download_url?: string;
+	description?: string;
 }
 
 interface StoreRegistry {
@@ -203,9 +205,11 @@ function convertStoreRegistry(data: StoreRegistry): PackageRegistry {
 		packages.push({
 			name: pak.name,
 			version: pak.version,
-			author: "Community",
 			category: "Emulators",
-			description: `${pak.name} emulator for MinUI`,
+			description:
+				pak.description ||
+				`Emulates ${pak.rom_folder.replace("Roms/", "")} games`,
+			repository: pak.repository,
 			downloads: null,
 			rating: null,
 			artifactUrl: resolveDownloadUrl(
@@ -227,9 +231,9 @@ function convertStoreRegistry(data: StoreRegistry): PackageRegistry {
 		packages.push({
 			name: pak.name,
 			version: pak.version,
-			author: "Community",
 			category: "Utilities",
-			description: `${pak.name} tool for MinUI`,
+			description: pak.description || `${pak.name} utility`,
+			repository: pak.repository,
 			downloads: null,
 			rating: null,
 			artifactUrl: resolveDownloadUrl(

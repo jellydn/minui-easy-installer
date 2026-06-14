@@ -317,7 +317,16 @@ function PackageCard({
 				<h3 className="package-name">{pkg.name}</h3>
 				<span className="package-version">v{pkg.version}</span>
 			</div>
-			<p className="package-author">by {pkg.author}</p>
+			{pkg.repository && (
+				<a
+					href={pkg.repository}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="package-link"
+				>
+					{pkg.repository.replace("https://github.com/", "")}
+				</a>
+			)}
 			<span
 				className={`package-category category-${pkg.category.toLowerCase()}`}
 			>

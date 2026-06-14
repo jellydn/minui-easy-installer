@@ -845,6 +845,22 @@ select option {
 	flex-grow: 1;
 }
 
+.package-link {
+	display: inline-block;
+	margin-bottom: 0.5rem;
+	font-size: 0.8125rem;
+	color: #666666;
+	text-decoration: none;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+.package-link:hover {
+	color: #cccccc;
+}
+
 .package-meta {
 	display: flex;
 	gap: 1rem;

@@ -19,9 +19,9 @@ const mockRegistry: PackageRegistry = {
 		{
 			name: "Wifi.pak",
 			version: "1.0.0",
-			author: "MinUI",
-			category: "Network",
+			category: "Emulators",
 			description: "WiFi connectivity tool",
+			repository: "https://github.com/example/wifi",
 			downloads: 1000,
 			rating: 4.5,
 			artifactUrl: "https://example.com/wifi.pak",
@@ -32,9 +32,9 @@ const mockRegistry: PackageRegistry = {
 		{
 			name: "SSH.pak",
 			version: "2.0.0",
-			author: "MinUI",
 			category: "Utilities",
 			description: "SSH remote access",
+			repository: "https://github.com/example/ssh",
 			downloads: 500,
 			rating: null,
 			artifactUrl: "https://example.com/ssh.pak",
