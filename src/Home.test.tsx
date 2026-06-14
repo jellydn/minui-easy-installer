@@ -1,6 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import Home from "./Home";
 import type { RemovableDrive } from "./types/drive";
 
@@ -16,8 +17,8 @@ vi.mock("./types/version", () => ({
   checkMinuiVersion: vi.fn(),
 }));
 
-vi.mock("./types/package", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./types/package")>();
+vi.mock("./types/package", async () => {
+  const actual = await import("./types/package");
   return {
     ...actual,
     fetchPackageRegistry: vi.fn(),
@@ -25,8 +26,8 @@ vi.mock("./types/package", async (importOriginal) => {
   };
 });
 
-vi.mock("./types/install", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./types/install")>();
+vi.mock("./types/install", async () => {
+  const actual = await import("./types/install");
   return {
     ...actual,
     installMinui: vi.fn(),
@@ -61,7 +62,7 @@ describe("Home", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue([]);
+    (invoke as Mock).mockResolvedValue([]);
   });
 
   it("renders the home screen title and device selector", () => {
@@ -73,10 +74,10 @@ describe("Home", () => {
 
   it("shows install button when device and drive are selected", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue([mockDrive]);
+    (invoke as Mock).mockResolvedValue([mockDrive]);
 
     const { fetchMinUIRelease } = await import("./types/release");
-    vi.mocked(fetchMinUIRelease).mockResolvedValue({
+    (fetchMinUIRelease as Mock).mockResolvedValue({
       success: true,
       data: {
         version: "2025.01.01",
@@ -87,7 +88,7 @@ describe("Home", () => {
     });
 
     const { checkMinuiVersion } = await import("./types/version");
-    vi.mocked(checkMinuiVersion).mockResolvedValue({
+    (checkMinuiVersion as Mock).mockResolvedValue({
       success: true,
       data: {
         installed: null,
@@ -98,11 +99,11 @@ describe("Home", () => {
 
     const { fetchPackageRegistry, checkPackageUpdates } =
       await import("./types/package");
-    vi.mocked(fetchPackageRegistry).mockResolvedValue({
+    (fetchPackageRegistry as Mock).mockResolvedValue({
       success: true,
       data: { version: "1.0", packages: [] },
     });
-    vi.mocked(checkPackageUpdates).mockResolvedValue([]);
+    (checkPackageUpdates as Mock).mockResolvedValue([]);
 
     render(
       <Home
@@ -121,7 +122,7 @@ describe("Home", () => {
 
   it("shows status summary when drive is selected", async () => {
     const { fetchMinUIRelease } = await import("./types/release");
-    vi.mocked(fetchMinUIRelease).mockResolvedValue({
+    (fetchMinUIRelease as Mock).mockResolvedValue({
       success: true,
       data: {
         version: "2025.01.01",
@@ -132,7 +133,7 @@ describe("Home", () => {
     });
 
     const { checkMinuiVersion } = await import("./types/version");
-    vi.mocked(checkMinuiVersion).mockResolvedValue({
+    (checkMinuiVersion as Mock).mockResolvedValue({
       success: true,
       data: {
         installed: { version: "2024.12.25", source: "minui.txt" },
@@ -143,11 +144,11 @@ describe("Home", () => {
 
     const { fetchPackageRegistry, checkPackageUpdates } =
       await import("./types/package");
-    vi.mocked(fetchPackageRegistry).mockResolvedValue({
+    (fetchPackageRegistry as Mock).mockResolvedValue({
       success: true,
       data: { version: "1.0", packages: [] },
     });
-    vi.mocked(checkPackageUpdates).mockResolvedValue([]);
+    (checkPackageUpdates as Mock).mockResolvedValue([]);
 
     render(
       <Home
@@ -166,7 +167,7 @@ describe("Home", () => {
 
   it("shows confirmation dialog before install", async () => {
     const { fetchMinUIRelease } = await import("./types/release");
-    vi.mocked(fetchMinUIRelease).mockResolvedValue({
+    (fetchMinUIRelease as Mock).mockResolvedValue({
       success: true,
       data: {
         version: "2025.01.01",
@@ -177,7 +178,7 @@ describe("Home", () => {
     });
 
     const { checkMinuiVersion } = await import("./types/version");
-    vi.mocked(checkMinuiVersion).mockResolvedValue({
+    (checkMinuiVersion as Mock).mockResolvedValue({
       success: true,
       data: {
         installed: null,
@@ -188,11 +189,11 @@ describe("Home", () => {
 
     const { fetchPackageRegistry, checkPackageUpdates } =
       await import("./types/package");
-    vi.mocked(fetchPackageRegistry).mockResolvedValue({
+    (fetchPackageRegistry as Mock).mockResolvedValue({
       success: true,
       data: { version: "1.0", packages: [] },
     });
-    vi.mocked(checkPackageUpdates).mockResolvedValue([]);
+    (checkPackageUpdates as Mock).mockResolvedValue([]);
 
     render(
       <Home

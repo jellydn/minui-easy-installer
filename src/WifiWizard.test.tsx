@@ -1,6 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import WifiWizard from "./WifiWizard";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -29,7 +30,7 @@ describe("WifiWizard", () => {
 
   it("renders SSID and password fields", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    mockInvoke(vi.mocked(invoke));
+    mockInvoke(invoke as Mock);
 
     render(
       <WifiWizard
@@ -49,7 +50,7 @@ describe("WifiWizard", () => {
 
   it("falls back to manual SSID entry when scan fails", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockRejectedValue(new Error("scan unavailable"));
+    (invoke as Mock).mockRejectedValue(new Error("scan unavailable"));
 
     render(
       <WifiWizard
@@ -68,7 +69,7 @@ describe("WifiWizard", () => {
 
   it("shows scanned networks in dropdown when scan succeeds", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    mockInvoke(vi.mocked(invoke), {
+    mockInvoke(invoke as Mock, {
       scan_wifi_networks: ["HomeNetwork", "GuestWiFi"],
     });
 
@@ -88,7 +89,7 @@ describe("WifiWizard", () => {
 
   it("disables save button when SSID is empty", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    mockInvoke(vi.mocked(invoke));
+    mockInvoke(invoke as Mock);
 
     render(
       <WifiWizard
@@ -114,7 +115,7 @@ describe("WifiWizard", () => {
 
   it("calls onCancel when cancel is clicked", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    mockInvoke(vi.mocked(invoke));
+    mockInvoke(invoke as Mock);
     const onCancel = vi.fn();
 
     render(
@@ -137,7 +138,7 @@ describe("WifiWizard", () => {
 
   it("writes wifi config on save", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    mockInvoke(vi.mocked(invoke));
+    mockInvoke(invoke as Mock);
 
     render(
       <WifiWizard

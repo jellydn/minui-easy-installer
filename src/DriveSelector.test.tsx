@@ -1,6 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import DriveSelector from "./DriveSelector";
 import type { RemovableDrive } from "./types/drive";
 
@@ -27,7 +28,7 @@ describe("DriveSelector", () => {
 
   it("shows empty state when no drives are detected", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue([]);
+    (invoke as Mock).mockResolvedValue([]);
 
     render(<DriveSelector selectedDrive={null} onSelectDrive={vi.fn()} />);
 
@@ -40,7 +41,7 @@ describe("DriveSelector", () => {
 
   it("lists detected drives and calls onSelectDrive when clicked", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue([mockDrive]);
+    (invoke as Mock).mockResolvedValue([mockDrive]);
     const onSelectDrive = vi.fn();
 
     render(
@@ -57,7 +58,7 @@ describe("DriveSelector", () => {
 
   it("shows selected drive details", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue([mockDrive]);
+    (invoke as Mock).mockResolvedValue([mockDrive]);
 
     render(<DriveSelector selectedDrive={mockDrive} onSelectDrive={vi.fn()} />);
 
@@ -69,7 +70,7 @@ describe("DriveSelector", () => {
 
   it("shows error when drive detection fails", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockRejectedValue(new Error("diskutil failed"));
+    (invoke as Mock).mockRejectedValue(new Error("diskutil failed"));
 
     render(<DriveSelector selectedDrive={null} onSelectDrive={vi.fn()} />);
 
@@ -85,7 +86,7 @@ describe("DriveSelector", () => {
       filesystem: null,
       size_bytes: null,
     };
-    vi.mocked(invoke).mockResolvedValue([driveNoFs]);
+    (invoke as Mock).mockResolvedValue([driveNoFs]);
 
     render(<DriveSelector selectedDrive={null} onSelectDrive={vi.fn()} />);
 

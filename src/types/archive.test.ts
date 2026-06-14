@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { DownloadResult, ExtractionResult } from "./archive";
 import { downloadArchive, extractArchive, verifyChecksum } from "./archive";
 
@@ -21,7 +21,7 @@ describe("downloadArchive", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await downloadArchive("https://example.com/archive.zip");
 
@@ -45,7 +45,7 @@ describe("downloadArchive", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await downloadArchive(
       "https://example.com/archive.zip",
@@ -71,7 +71,7 @@ describe("downloadArchive", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await downloadArchive(
       "https://example.com/archive.zip",
@@ -87,7 +87,7 @@ describe("downloadArchive", () => {
 
   it("handles network errors", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockRejectedValue(new Error("Network failure"));
+    (invoke as Mock).mockRejectedValue(new Error("Network failure"));
 
     const result = await downloadArchive("https://example.com/archive.zip");
 
@@ -107,7 +107,7 @@ describe("downloadArchive", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await downloadArchive("https://example.com/archive.zip");
 
@@ -126,7 +126,7 @@ describe("verifyChecksum", () => {
 
   it("verifies checksum successfully", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(true);
+    (invoke as Mock).mockResolvedValue(true);
 
     const result = await verifyChecksum("/tmp/test.zip", "abc123");
 
@@ -140,7 +140,7 @@ describe("verifyChecksum", () => {
 
   it("handles checksum mismatch", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(false);
+    (invoke as Mock).mockResolvedValue(false);
 
     const result = await verifyChecksum("/tmp/test.zip", "abc123");
 
@@ -150,7 +150,7 @@ describe("verifyChecksum", () => {
 
   it("handles verification errors", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockRejectedValue(new Error("File not found"));
+    (invoke as Mock).mockRejectedValue(new Error("File not found"));
 
     const result = await verifyChecksum("/tmp/test.zip", "abc123");
 
@@ -174,7 +174,7 @@ describe("extractArchive", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await extractArchive("/tmp/archive.zip", "/tmp/extracted");
 
@@ -198,7 +198,7 @@ describe("extractArchive", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await extractArchive("/tmp/archive.zip");
 
@@ -218,7 +218,7 @@ describe("extractArchive", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await extractArchive("/tmp/malicious.zip");
 
@@ -238,7 +238,7 @@ describe("extractArchive", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await extractArchive("/tmp/malicious.zip");
 
@@ -257,7 +257,7 @@ describe("extractArchive", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await extractArchive("/nonexistent/archive.zip");
 
@@ -276,7 +276,7 @@ describe("extractArchive", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await extractArchive("/tmp/corrupt.zip");
 
@@ -288,7 +288,7 @@ describe("extractArchive", () => {
 
   it("handles unknown errors", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockRejectedValue(new Error("Unexpected failure"));
+    (invoke as Mock).mockRejectedValue(new Error("Unexpected failure"));
 
     const result = await extractArchive("/tmp/archive.zip");
 

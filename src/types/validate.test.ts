@@ -1,5 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ValidationResult } from "./validate";
+
+// `formatValidationReport` dynamically imports `@tauri-apps/api/core` and
+// calls `invoke`. In the jsdom test env there is no Tauri runtime, so the
+// `invoke` call throws and the function falls back to `formatReportLocally`.
+// Mock the module to make that fallback deterministic and to keep the
+// dynamic import from touching the real `@tauri-apps/api/core` package.
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockRejectedValue(new Error("no tauri in test env")),
+}));
 
 describe("ValidationResult types", () => {
   it("should define ValidationCheck interface correctly", () => {
@@ -69,11 +78,11 @@ describe("formatReportLocally", () => {
     // formatValidationReport calls invoke which will fail in test env,
     // so it falls back to formatReportLocally
     const report = await formatValidationReport(result);
-    expect(report).toContain("MinUI Installation Validation Report");
-    expect(report).toContain("PASSED");
-    expect(report).toContain("Found: minui.pak");
-    expect(report).toContain("1 passed, 0 failed");
-    expect(report).toContain("100.00 MB");
+    expect(report).toMatch(/MinUI Installation Validation Report/);
+    expect(report).toMatch(/PASSED/);
+    expect(report).toMatch(/Found: minui\.pak/);
+    expect(report).toMatch(/1 passed, 0 failed/);
+    expect(report).toMatch(/100\.00 MB/);
   });
 
   it("should format a failing result", async () => {
@@ -94,9 +103,9 @@ describe("formatReportLocally", () => {
     };
 
     const report = await formatValidationReport(result);
-    expect(report).toContain("FAILED");
-    expect(report).toContain("Missing: boot.sh");
-    expect(report).toContain("0 passed, 1 failed");
+    expect(report).toMatch(/FAILED/);
+    expect(report).toMatch(/Missing: boot\.sh/);
+    expect(report).toMatch(/0 passed, 1 failed/);
   });
 
   it("should format free space in GB", async () => {
@@ -111,6 +120,6 @@ describe("formatReportLocally", () => {
     };
 
     const report = await formatValidationReport(result);
-    expect(report).toContain("2.50 GB");
+    expect(report).toMatch(/2\.50 GB/);
   });
 });

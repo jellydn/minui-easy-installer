@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MinUIRelease, ReleaseFetchError } from "./release";
 import {
+  clearReleaseCache,
   fetchMinUIRelease,
   GITHUB_API_URL,
   parseGitHubRelease,
@@ -99,6 +100,15 @@ describe("parseGitHubRelease", () => {
 });
 
 describe("fetchMinUIRelease", () => {
+  // `release.ts` keeps a module-level `cachedRelease` that is populated
+  // on the first successful fetch and short-circuits later calls when
+  // the default `globalThis.fetch` is used. Clear the cache and any
+  // mock state between tests so each test exercises its own mock.
+  beforeEach(() => {
+    clearReleaseCache();
+    vi.clearAllMocks();
+  });
+
   it("fetches and parses release successfully", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

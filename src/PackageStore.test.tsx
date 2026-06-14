@@ -1,11 +1,12 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import PackageStore from "./PackageStore";
 import type { PackageRegistry } from "./types/package";
 
-vi.mock("./types/package", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./types/package")>();
+vi.mock("./types/package", async () => {
+  const actual = await import("./types/package");
   return {
     ...actual,
     fetchPackageRegistry: vi.fn(),
@@ -56,7 +57,7 @@ describe("PackageStore", () => {
 
   it("shows loading state while fetching registry", async () => {
     const { fetchPackageRegistry } = await import("./types/package");
-    vi.mocked(fetchPackageRegistry).mockReturnValue(new Promise(() => {}));
+    (fetchPackageRegistry as Mock).mockReturnValue(new Promise(() => {}));
 
     render(
       <PackageStore
@@ -70,7 +71,7 @@ describe("PackageStore", () => {
 
   it("displays package cards after loading", async () => {
     const { fetchPackageRegistry } = await import("./types/package");
-    vi.mocked(fetchPackageRegistry).mockResolvedValue({
+    (fetchPackageRegistry as Mock).mockResolvedValue({
       success: true,
       data: mockRegistry,
     });
@@ -91,7 +92,7 @@ describe("PackageStore", () => {
 
   it("shows error state with retry on fetch failure", async () => {
     const { fetchPackageRegistry } = await import("./types/package");
-    vi.mocked(fetchPackageRegistry).mockResolvedValue({
+    (fetchPackageRegistry as Mock).mockResolvedValue({
       success: false,
       error: { message: "Network error", code: "NETWORK_ERROR" },
     });
@@ -106,7 +107,7 @@ describe("PackageStore", () => {
 
   it("filters packages by search query", async () => {
     const { fetchPackageRegistry } = await import("./types/package");
-    vi.mocked(fetchPackageRegistry).mockResolvedValue({
+    (fetchPackageRegistry as Mock).mockResolvedValue({
       success: true,
       data: mockRegistry,
     });
@@ -131,7 +132,7 @@ describe("PackageStore", () => {
 
   it("shows empty state when search has no results", async () => {
     const { fetchPackageRegistry } = await import("./types/package");
-    vi.mocked(fetchPackageRegistry).mockResolvedValue({
+    (fetchPackageRegistry as Mock).mockResolvedValue({
       success: true,
       data: mockRegistry,
     });
@@ -157,7 +158,7 @@ describe("PackageStore", () => {
 
   it("filters by category", async () => {
     const { fetchPackageRegistry } = await import("./types/package");
-    vi.mocked(fetchPackageRegistry).mockResolvedValue({
+    (fetchPackageRegistry as Mock).mockResolvedValue({
       success: true,
       data: mockRegistry,
     });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { InstallResult } from "./install";
 import { installMinui } from "./install";
 
@@ -22,7 +22,7 @@ describe("installMinui", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await installMinui({
       baseUrl: "https://example.com/base.zip",
@@ -60,7 +60,7 @@ describe("installMinui", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await installMinui({
       baseUrl: "https://example.com/base.zip",
@@ -88,7 +88,7 @@ describe("installMinui", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await installMinui({
       baseUrl: "https://example.com/base.zip",
@@ -115,7 +115,7 @@ describe("installMinui", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await installMinui({
       baseUrl: "https://example.com/base.zip",
@@ -133,7 +133,7 @@ describe("installMinui", () => {
 
   it("returns unknown error on invoke exception", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockRejectedValue(new Error("IPC error"));
+    (invoke as Mock).mockRejectedValue(new Error("IPC error"));
 
     const result = await installMinui({
       baseUrl: "https://example.com/base.zip",
@@ -161,7 +161,7 @@ describe("installMinui", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await installMinui({
       baseUrl: "https://example.com/base.zip",
@@ -189,7 +189,7 @@ describe("installMinui", () => {
     };
 
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
+    (invoke as Mock).mockResolvedValue(mockResult);
 
     const result = await installMinui({
       baseUrl: "https://example.com/base.zip",
