@@ -5,16 +5,19 @@
 ## Test Framework
 
 **Runner:**
+
 - Vitest 4.1.8 (frontend TypeScript tests)
 - Config: `vitest.config.ts`
 - Environment: `jsdom` (simulates browser DOM for React component testing)
 - Setup file: `vitest.setup.ts` — imports `@testing-library/jest-dom/vitest` for DOM matchers
 
 **Assertion Library:**
+
 - Vitest built-in `expect` (compatible with Jest API)
 - Extended with `@testing-library/jest-dom` matchers — `toBeInTheDocument()`, `toBeDisabled()`, `toHaveAttribute()`, etc.
 
 **Run Commands:**
+
 ```bash
 bun test                    # Run all tests once (vitest run)
 vitest                      # Watch mode
@@ -24,15 +27,18 @@ bun run test                # Same as vitest run
 ## Test File Organization
 
 **Location:**
+
 - Co-located with source files — test files live alongside the modules they test
 - Frontend: `src/types/*.test.ts` for type/utility modules, `src/*.test.tsx` for React components
 - Backend: `#[cfg(test)] mod tests` blocks at the bottom of each `.rs` source file
 
 **Naming:**
+
 - TypeScript: `<module-name>.test.ts` or `<module-name>.test.tsx`
 - Rust: inline `mod tests` with `test_` prefixed functions
 
 **Structure:**
+
 ```
 src/
 ├── types/
@@ -73,6 +79,7 @@ src-tauri/src/
 ## Test Structure
 
 **Suite Organization:**
+
 ```typescript
 import { describe, expect, it, vi } from "vitest";
 
@@ -96,6 +103,7 @@ describe("parseGitHubRelease", () => {
 ```
 
 **Patterns:**
+
 - Top-level `describe()` groups tests by function or component name
 - Nested `describe()` for sub-groups when testing multiple related functions (e.g., `describe("downloadArchive")`, `describe("verifyChecksum")`, `describe("extractArchive")` in `archive.test.ts`)
 - `it()` for individual test cases with descriptive names
@@ -109,6 +117,7 @@ describe("parseGitHubRelease", () => {
 **Framework:** Vitest built-in `vi.mock()` and `vi.fn()`
 
 **Patterns:**
+
 ```typescript
 // Mock Tauri invoke (most common — appears in every Tauri-connected test file)
 vi.mock("@tauri-apps/api/core", () => ({
@@ -152,11 +161,13 @@ function mockInvoke(
 ```
 
 **What to Mock:**
+
 - `@tauri-apps/api/core` — always mocked (no Tauri runtime in test environment)
 - Backend-bound type modules (`./types/release`, `./types/version`, `./types/package`, `./types/install`, `./types/validate`) — mocked in component tests to isolate UI logic
 - `globalThis.fetch` — injected as parameter (not mocked globally) in `fetchMinUIRelease()`
 
 **What NOT to Mock:**
+
 - Pure utility functions (`formatSize`, `getDriveDisplayName`, `classifyError`) — tested directly
 - Type-only modules (`./types/drive`, `./types/version`) — type shape tests run without mocks
 - React hooks from `react` — never mocked
@@ -164,50 +175,53 @@ function mockInvoke(
 ## Fixtures and Factories
 
 **Test Data:**
+
 ```typescript
 // Inline mock objects (most common pattern)
 const mockDrive: RemovableDrive = {
-	name: "SD_CARD",
-	mount_path: "/Volumes/SD_CARD",
-	size_bytes: 32_000_000_000,
-	filesystem: "FAT32",
-	available_bytes: 28_000_000_000,
+  name: "SD_CARD",
+  mount_path: "/Volumes/SD_CARD",
+  size_bytes: 32_000_000_000,
+  filesystem: "FAT32",
+  available_bytes: 28_000_000_000,
 };
 
 // Inline mock result objects
 const mockResult: InstallResult = {
-	success: true,
-	error: null,
-	base_files_copied: 15,
-	extras_files_copied: 3,
-	extras_warning: null,
-	rom_dirs_created: 0,
+  success: true,
+  error: null,
+  base_files_copied: 15,
+  extras_files_copied: 3,
+  extras_warning: null,
+  rom_dirs_created: 0,
 };
 
 // Mock registry data (PackageStore.test.tsx)
 const mockRegistry: PackageRegistry = {
-	version: "1.0",
-	packages: [
-		{
-			name: "Wifi.pak",
-			version: "1.0.0",
-			category: "Emulators",
-			// ...
-		},
-	],
+  version: "1.0",
+  packages: [
+    {
+      name: "Wifi.pak",
+      version: "1.0.0",
+      category: "Emulators",
+      // ...
+    },
+  ],
 };
 
 // GitHub release API mock data (inline in test)
 const mockFetch = vi.fn().mockResolvedValue({
-	ok: true,
-	json: () => Promise.resolve({
-		tag_name: "v25.06.12",
-		assets: [{ browser_download_url: "..." }],
-	}),
+  ok: true,
+  json: () =>
+    Promise.resolve({
+      tag_name: "v25.06.12",
+      assets: [{ browser_download_url: "..." }],
+    }),
 });
 ```
 
 **Location:**
+
 - No separate fixture files — all test data is defined inline within test functions or at `describe` scope
 - Mock objects are typed with their corresponding interface (`RemovableDrive`, `InstallResult`, `PackageRegistry`, etc.)
 
@@ -218,6 +232,7 @@ const mockFetch = vi.fn().mockResolvedValue({
 **Dependencies:** `@vitest/coverage-v8` is installed as a devDependency
 
 **View Coverage:**
+
 ```bash
 npx vitest --coverage        # Generate coverage report
 ```
@@ -225,11 +240,13 @@ npx vitest --coverage        # Generate coverage report
 ## Test Types
 
 **Unit Tests:**
+
 - TypeScript: 9 type/utility test files covering pure functions and type shapes (`drive.test.ts`, `install.test.ts`, `release.test.ts`, `version.test.ts`, `package.test.ts`, `validate.test.ts`, `archive.test.ts`, `device.test.ts`, `device-install-map.test.ts`)
 - Focus on: parsing logic, error classification, type validation, function return shapes, edge cases (null inputs, empty arrays, missing data)
 - No network calls — fetch functions use dependency injection or mocked modules
 
 **Integration Tests:**
+
 - React component tests: 4 files (`DriveSelector.test.tsx`, `Home.test.tsx`, `PackageStore.test.tsx`, `WifiWizard.test.tsx`)
 - Test component rendering, user interactions (`userEvent.click`, `userEvent.type`), async state updates (`waitFor`), and Tauri IPC flow (mocked)
 - Verify UI states: loading, error, empty, populated, confirmation dialogs
@@ -237,6 +254,7 @@ npx vitest --coverage        # Generate coverage report
 **E2E Tests:** Not used. No Playwright, Cypress, or other E2E framework observed.
 
 **Rust Tests:**
+
 - 8 Rust modules with `#[cfg(test)] mod tests` blocks
 - Total Rust test functions: ~40 tests across `download.rs` (3), `extract.rs` (5), `install.rs` (4), `version.rs` (9), `drives.rs` (3), `wifi.rs` (9), `validate.rs` (7), `package.rs` (5)
 - Use `tempfile::tempdir()` for filesystem isolation
@@ -246,6 +264,7 @@ npx vitest --coverage        # Generate coverage report
 ## Common Patterns
 
 **Async Testing:**
+
 ```typescript
 // waitFor for async state updates in React components
 it("displays package cards after loading", async () => {
@@ -271,6 +290,7 @@ it("returns success with file counts on successful install", async () => {
 ```
 
 **Error Testing:**
+
 ```typescript
 // Testing error responses from mocked IPC
 it("returns error with copy code on failed install", async () => {
@@ -306,6 +326,7 @@ it("shows error state with retry on fetch failure", async () => {
 ```
 
 **Rust Test Pattern:**
+
 ```rust
 #[cfg(test)]
 mod tests {
