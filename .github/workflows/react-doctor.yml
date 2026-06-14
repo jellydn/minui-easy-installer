@@ -29,7 +29,13 @@ jobs:
   react-doctor:
     runs-on: ubuntu-latest
     steps:
+      # `fetch-depth: 0` is required so the action can run an accurate
+      # `git diff` against the PR's merge base. Without it, on PRs the
+      # action sees only the single merge commit and reports the full
+      # project as "new," which produces noisy / wrong scan results.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: millionco/react-doctor@v2
         # Advisory by default: React Doctor reports findings on every PR — a
