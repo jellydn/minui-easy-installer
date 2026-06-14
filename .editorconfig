@@ -1,0 +1,68 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# Top-most EditorConfig file
+root = true
+
+# Defaults for everything: 2-space indent, LF line endings,
+# UTF-8, trim trailing whitespace, ensure files end with a newline.
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# TypeScript / TSX / JavaScript / JSX
+[*.{ts,tsx,js,jsx,mjs,cjs}]
+indent_size = 2
+
+# JSON / JSONC — keep 2-space indent
+[*.{json,jsonc}]
+indent_size = 2
+
+# YAML
+[*.{yml,yaml}]
+indent_size = 2
+
+# TOML
+[*.toml]
+indent_size = 2
+
+# CSS / SCSS
+[*.{css,scss,sass}]
+indent_size = 2
+
+# HTML
+[*.{html,htm}]
+indent_size = 2
+
+# Shell
+[*.{sh,bash,zsh}]
+indent_size = 2
+
+# Markdown: trailing whitespace often carries meaning (hard line breaks),
+# and many files indent list items / nested blocks with 2 spaces.
+[*.{md,mdx}]
+indent_size = 2
+trim_trailing_whitespace = false
+
+# Rust uses 4-space indent by convention.
+[*.rs]
+indent_size = 4
+
+# Makefiles require hard tabs for recipe lines.
+[Makefile]
+indent_style = tab
+
+# `just` recipes also require hard tabs.
+[justfile]
+indent_style = tab
+
+# Lockfiles and generated vendor files: do not modify.
+[{bun.lock,Cargo.lock,package-lock.json,yarn.lock,pnpm-lock.yaml}]
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
