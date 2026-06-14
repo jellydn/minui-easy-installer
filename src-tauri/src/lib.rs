@@ -65,8 +65,9 @@ async fn install_minui(
 ) -> Result<install::InstallResult, String> {
     let handle = app_handle.clone();
     let progress = Arc::new(move |event: install::InstallProgressEvent| {
-        // Non-critical: progress event emission failure should not abort the install
-        let _ = handle.emit("install-progress", event);
+        if let Err(e) = handle.emit("install-progress", event) {
+            eprintln!("Warning: failed to emit install progress event: {}", e);
+        }
     });
     let options = install::InstallOptions {
         base_url,
@@ -161,6 +162,29 @@ async fn check_sd_card_health(
     health::check_sd_card_health(&sd_mount, device_platform.as_deref())
 }
 
+#[tauri::command]
+async fn fetch_url(url: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch URL: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status()));
+    }
+
+    response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -180,7 +204,8 @@ pub fn run() {
             get_current_wifi_ssid,
             detect_installed_packages,
             check_package_updates,
-            check_sd_card_health
+            check_sd_card_health,
+            fetch_url
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]
