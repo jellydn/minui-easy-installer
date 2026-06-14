@@ -1,4 +1,5 @@
-import { classifyError } from "./install";
+import type { AppError } from "./errors";
+import { classifyError } from "./errors";
 import storeData from "./store.json";
 
 export interface PackageRegistryEntry {
@@ -121,15 +122,7 @@ export interface PackageInstallResult {
 	files_copied: number;
 }
 
-export type PackageInstallError = {
-	message: string;
-	code:
-		| "DOWNLOAD_ERROR"
-		| "EXTRACTION_ERROR"
-		| "COPY_ERROR"
-		| "CHECKSUM_ERROR"
-		| "UNKNOWN_ERROR";
-};
+export type PackageInstallError = AppError;
 
 export type PackageInstallResultEither =
 	| { success: true; data: PackageInstallResult }

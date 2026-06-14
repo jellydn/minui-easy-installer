@@ -1,3 +1,6 @@
+import type { AppError, AppErrorCode } from "./errors";
+import { classifyError } from "./errors";
+
 export interface InstallResult {
 	success: boolean;
 	error: string | null;
@@ -7,29 +10,8 @@ export interface InstallResult {
 	rom_dirs_created: number;
 }
 
-export type InstallError = {
-	message: string;
-	code:
-		| "DOWNLOAD_ERROR"
-		| "EXTRACTION_ERROR"
-		| "COPY_ERROR"
-		| "CHECKSUM_ERROR"
-		| "UNKNOWN_ERROR";
-};
-
-export type InstallErrorCode = InstallError["code"];
-
-/** Infers error code from a Rust error message string */
-export function classifyError(
-	errorMsg: string,
-	defaultCode: InstallErrorCode = "COPY_ERROR",
-): InstallErrorCode {
-	if (errorMsg.includes("download")) return "DOWNLOAD_ERROR";
-	if (errorMsg.includes("extraction") || errorMsg.includes("extract"))
-		return "EXTRACTION_ERROR";
-	if (errorMsg.includes("checksum")) return "CHECKSUM_ERROR";
-	return defaultCode;
-}
+export type InstallError = AppError;
+export type InstallErrorCode = AppErrorCode;
 
 export type InstallResultEither =
 	| { success: true; data: InstallResult }

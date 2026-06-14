@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useMountEffect } from "./hooks/useMountEffect";
 
 interface WifiWizardProps {
 	sdMount: string | null;
@@ -42,9 +43,9 @@ function WifiWizard({ sdMount, onComplete, onCancel }: WifiWizardProps) {
 		}
 	}, []);
 
-	useEffect(() => {
+	useMountEffect(() => {
 		scanNetworks();
-	}, [scanNetworks]);
+	});
 
 	const handleSave = async () => {
 		if (!ssid.trim()) {
@@ -170,6 +171,10 @@ function WifiWizard({ sdMount, onComplete, onCancel }: WifiWizardProps) {
 						placeholder="Enter WiFi password"
 						disabled={isSaving}
 					/>
+					<p className="wifi-warning">
+						Note: Your WiFi password will be stored in plain text on the SD card
+						(wifi.txt). This is required for MinUI WiFi functionality.
+					</p>
 				</div>
 			</div>
 
