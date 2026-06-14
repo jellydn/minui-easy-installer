@@ -30,6 +30,19 @@ export interface InstallProgressEvent {
   details: string;
 }
 
+/**
+ * UI install state for a single package. Shared between PackageStore
+ * (which owns the map of states) and PackageCard (which renders one).
+ * Kept here as the single source of truth so the store and the card
+ * stay in lock-step.
+ */
+export type InstallStatus = "idle" | "installing" | "done" | "error";
+
+export interface PackageInstallState {
+  status: InstallStatus;
+  error?: string;
+}
+
 export async function installMinui(options: {
   baseUrl: string;
   extrasUrl?: string;

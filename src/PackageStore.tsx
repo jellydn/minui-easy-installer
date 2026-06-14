@@ -8,6 +8,7 @@ import type {
   PackageRegistryEntry,
 } from "./types/package";
 import { fetchPackageRegistry, installPackage } from "./types/package";
+import type { PackageInstallState } from "./types/install";
 
 interface PackageStoreProps {
   selectedDevice: string | null;
@@ -20,13 +21,6 @@ const ALL_CATEGORIES: PackageCategory[] = [
   "Network",
   "Community",
 ];
-
-type InstallStatus = "idle" | "installing" | "done" | "error";
-
-interface PackageInstallState {
-  status: InstallStatus;
-  error?: string;
-}
 
 function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
   const profile = selectedDevice ? getDeviceProfile(selectedDevice) : null;

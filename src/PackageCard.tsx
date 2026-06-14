@@ -1,4 +1,5 @@
 import type { PackageRegistryEntry } from "./types/package";
+import type { PackageInstallState } from "./types/install";
 
 interface PackageCardProps {
   package: PackageRegistryEntry;
@@ -8,16 +9,16 @@ interface PackageCardProps {
   extrasPlatform: string;
 }
 
-interface PackageInstallState {
-  status: "idle" | "installing" | "done" | "error";
-  error?: string;
-}
-
 function installDestination(
   pkg: PackageRegistryEntry,
   platform: string,
 ): string {
-  const baseDir = pkg.category === "Emulators" ? "Emus" : "Tools";
+  // Use the package's declared installPathRules.targetDir as the source of
+  // truth so the UI display matches what the backend actually installs to.
+  // The backend (create_target_within in src-tauri/src/pipeline.rs) calls
+  // trim_start_matches('/') on targetDir, so we do the same here to keep
+  // the displayed path consistent with the on-disk location.
+  const baseDir = pkg.installPathRules.targetDir.replace(/^\/+/, "");
   const pakName = pkg.installPathRules.pakName || pkg.name.replace(/\s+/g, ".");
   return `${baseDir}/${platform}/${pakName}.pak/`;
 }
