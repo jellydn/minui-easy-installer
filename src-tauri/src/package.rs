@@ -1,9 +1,9 @@
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
-use crate::download;
-use crate::extract;
 use crate::fs_utils;
+use crate::pipeline::{create_target_within, InstallSession, Pipeline};
 use crate::version;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -120,82 +120,27 @@ pub async fn install_package(
     rules: &PackageInstallPathRules,
     platform: &str,
 ) -> Result<PackageInstallResult, String> {
-    // Step 1: Download the artifact (checksum verification is optional)
-    let (download_result, _artifact_temp) = download::download_archive(artifact_url, checksum)
-        .await
-        .map_err(|e| format!("Package download failed: {}", e))?;
+    let mut session = InstallSession::new();
 
-    if !download_result.success {
-        return Ok(PackageInstallResult {
-            success: false,
-            error: Some(
-                download_result
-                    .error
-                    .unwrap_or("Package download failed".to_string()),
-            ),
-            files_copied: 0,
-        });
-    }
+    // Pipeline handles download + extract, returns extracted path
+    let extracted = Pipeline::run_to_extracted(
+        "package",
+        artifact_url,
+        checksum,
+        Arc::new(|_| {}),
+        &mut session,
+    )
+    .await?;
 
-    let artifact_path = download_result
-        .file_path
-        .ok_or("No artifact file path returned")?;
+    // Copy files to target directory with path-traversal protection
+    let pak_root = create_target_within(
+        Path::new(sd_mount),
+        &rules.target_dir,
+        platform,
+        &rules.pak_name,
+    )?;
 
-    // Step 2: Extract the artifact
-    let (extraction_result, _pkg_extract_temp) = extract::extract_archive(&artifact_path, None)
-        .map_err(|e| format!("Package extraction failed: {}", e))?;
-
-    if !extraction_result.success {
-        return Ok(PackageInstallResult {
-            success: false,
-            error: Some(
-                extraction_result
-                    .error
-                    .unwrap_or("Package extraction failed".to_string()),
-            ),
-            files_copied: 0,
-        });
-    }
-
-    let extracted_path = extraction_result
-        .output_path
-        .ok_or("No extraction path returned")?;
-
-    // Step 3: Copy files to target directory
-    // PAK zips contain the .pak directory's contents (launch.sh, bin/, etc.)
-    // They must land in {Tools|Emus}/{platform}/{pakName}.pak/
-    let pak_root = Path::new(sd_mount)
-        .join(rules.target_dir.trim_start_matches('/'))
-        .join(platform)
-        .join(format!("{}.pak", rules.pak_name));
-
-    // Security: reject path components that escape the SD card before creating anything
-    if pak_root.components().any(|c| c.as_os_str() == "..") {
-        return Err(format!(
-            "Security violation: target directory contains parent traversal: {}",
-            rules.target_dir
-        ));
-    }
-
-    let canonical_sd = Path::new(sd_mount).canonicalize()
-        .map_err(|e| format!("Failed to resolve SD card path: {}", e))?;
-
-    // Create directory so canonicalize can resolve it
-    fs::create_dir_all(&pak_root)
-        .map_err(|e| format!("Failed to create package directory: {}", e))?;
-
-    let canonical_pak = pak_root.canonicalize()
-        .map_err(|e| format!("Failed to resolve package path: {}", e))?;
-    if !canonical_pak.starts_with(&canonical_sd) {
-        // The early `..` check prevents creation outside the SD card, so
-        // any leftover directory at `pak_root` is inside the SD card and
-        // safe to leave (e.g. a symlink-based container escape is extremely
-        // unlikely and not worth a manual cleanup that could itself be unsafe).
-        return Err(format!("Security violation: target directory escapes SD card: {}", rules.target_dir));
-    }
-
-    let extracted = Path::new(&extracted_path);
-    let files_copied = fs_utils::copy_dir_recursive(extracted, &pak_root, &|_s, _d| false)?;
+    let files_copied = fs_utils::copy_dir_recursive(&extracted, &pak_root, &|_s, _d| false)?;
 
     Ok(PackageInstallResult {
         success: true,
@@ -207,22 +152,6 @@ pub async fn install_package(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_copy_dir_recursive_copies_files() {
-        let temp = tempfile::tempdir().unwrap();
-        let src = temp.path().join("src");
-        let dst = temp.path().join("dst");
-
-        fs::create_dir_all(&src).unwrap();
-        fs::write(src.join("file1.txt"), "content1").unwrap();
-        fs::write(src.join("file2.txt"), "content2").unwrap();
-
-        let copied = fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false).unwrap();
-        assert_eq!(copied, 2);
-        assert!(dst.join("file1.txt").exists());
-        assert!(dst.join("file2.txt").exists());
-    }
 
     #[test]
     fn test_copy_dir_recursive_with_subdirs() {

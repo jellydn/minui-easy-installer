@@ -2,9 +2,8 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::download;
-use crate::extract;
 use crate::fs_utils;
+use crate::pipeline::{InstallSession, Pipeline};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallResult {
@@ -94,7 +93,6 @@ fn is_preserved_path(path: &Path, sd_root: &Path) -> bool {
 pub fn copy_base_files(
     extracted_base_path: &str,
     sd_mount: &str,
-    _platform: &str,
 ) -> Result<u32, String> {
     let base_dir = Path::new(extracted_base_path);
     let sd_root = Path::new(sd_mount);
@@ -176,38 +174,22 @@ pub struct InstallOptions {
 async fn try_install_extras(
     options: &InstallOptions,
     progress: ProgressCallback,
+    session: &mut InstallSession,
 ) -> Result<u32, String> {
     let extras_url = options
         .extras_url
         .as_deref()
         .ok_or("No extras URL provided")?;
 
-    progress(InstallProgressEvent {
-        step: "download".to_string(),
-        details: "Downloading extras archive...".to_string(),
-    });
-    let (result, _temp) = download::download_archive(extras_url, options.extras_checksum.as_deref())
-        .await
-        .map_err(|e| format!("Extras download failed: {}", e))?;
-    let path = result.file_path.ok_or("No extras download path")?;
-
-    progress(InstallProgressEvent {
-        step: "extract".to_string(),
-        details: "Extracting extras archive...".to_string(),
-    });
-    let (extraction, _temp) = extract::extract_archive(&path, None)
-        .map_err(|e| format!("Extras extraction failed: {}", e))?;
-    let extracted = extraction.output_path.ok_or("No extras extraction path")?;
-
-    progress(InstallProgressEvent {
-        step: "copy".to_string(),
-        details: format!(
-            "Copying device extras to /Emus/{}/ and /Tools/{}/...",
-            options.extras_platform, options.extras_platform
-        ),
-    });
-    copy_extras_files(&extracted, &options.sd_mount, &options.extras_platform)
-        .map_err(|e| format!("Extras copy failed: {}", e))
+    Pipeline::run(
+        "extras",
+        extras_url,
+        options.extras_checksum.as_deref(),
+        |p| copy_extras_files(p.to_str().unwrap(), &options.sd_mount, &options.extras_platform),
+        progress,
+        session,
+    )
+    .await
 }
 
 /// Full installation flow: download, extract, copy base + extras.
@@ -217,77 +199,36 @@ pub async fn install_minui(
     options: &InstallOptions,
     progress: ProgressCallback,
 ) -> Result<InstallResult, String> {
-    // Step 1: Download base archive
+    let mut session = InstallSession::new();
+
+    // Step 1: Download, extract, and copy base
     let file_name = options.base_url.rsplit('/').next().unwrap_or("MinUI.zip");
     progress(InstallProgressEvent {
         step: "download".to_string(),
         details: format!("Downloading {}", file_name),
     });
-    let (base_result, _base_temp) =
-        download::download_archive(&options.base_url, options.base_checksum.as_deref())
-            .await
-            .map_err(|e| format!("Base download failed: {}", e))?;
+    let base_files_copied = Pipeline::run(
+        "base",
+        &options.base_url,
+        options.base_checksum.as_deref(),
+        |p| copy_base_files(p.to_str().unwrap(), &options.sd_mount),
+        progress.clone(),
+        &mut session,
+    )
+    .await?;
 
-    if !base_result.success {
-        return Ok(InstallResult {
-            success: false,
-            error: Some(base_result.error.unwrap_or("Base download failed".to_string())),
-            base_files_copied: 0,
-            extras_files_copied: 0,
-            extras_warning: None,
-            rom_dirs_created: 0,
-        });
-    }
-
-    let base_path = base_result.file_path.ok_or("No base file path returned")?;
-
-    // Step 2: Extract base archive
-    progress(InstallProgressEvent {
-        step: "extract".to_string(),
-        details: "Extracting MinUI base archive...".to_string(),
-    });
-    let (base_extraction, _base_extract_temp) =
-        extract::extract_archive(&base_path, None).map_err(|e| format!("Base extraction failed: {}", e))?;
-
-    if !base_extraction.success {
-        return Ok(InstallResult {
-            success: false,
-            error: Some(
-                base_extraction
-                    .error
-                    .unwrap_or("Base extraction failed".to_string()),
-            ),
-            base_files_copied: 0,
-            extras_files_copied: 0,
-            extras_warning: None,
-            rom_dirs_created: 0,
-        });
-    }
-
-    let base_extracted = base_extraction
-        .output_path
-        .ok_or("No base extraction path returned")?;
-
-    // Step 3: Copy base files to SD card
-    progress(InstallProgressEvent {
-        step: "copy".to_string(),
-        details: "Copying base files to SD card...".to_string(),
-    });
-    let base_files_copied =
-        copy_base_files(&base_extracted, &options.sd_mount, &options.platform)?;
-
-    // Step 4: Download and extract extras (if available) — non-fatal on failure
+    // Step 2: Download, extract, and copy extras (if available) — non-fatal
     let mut extras_files_copied = 0u32;
     let mut extras_warning: Option<String> = None;
 
     if options.extras_url.is_some() {
-        match try_install_extras(options, progress.clone()).await {
+        match try_install_extras(options, progress.clone(), &mut session).await {
             Ok(copied) => extras_files_copied = copied,
             Err(e) => extras_warning = Some(e),
         }
     }
 
-    // Step 5: Create standard ROM directories
+    // Step 3: Create standard ROM directories
     progress(InstallProgressEvent {
         step: "copy".to_string(),
         details: "Creating standard ROM directories...".to_string(),
@@ -301,10 +242,10 @@ pub async fn install_minui(
     });
     let minui_txt_path = Path::new(&options.sd_mount).join("minui.txt");
     if let Err(e) = fs::write(&minui_txt_path, format!("MinUI {}\n", options.version)) {
-        // Non-fatal: install succeeded but version metadata couldn't be written
         eprintln!("Warning: Failed to write version metadata: {}", e);
     }
 
+    // session drops here — temp dirs cleaned up after all operations complete
     Ok(InstallResult {
         success: true,
         error: None,
@@ -409,7 +350,6 @@ mod tests {
         let copied = copy_base_files(
             extracted.to_str().unwrap(),
             sd_root.to_str().unwrap(),
-            "any",
         )
         .unwrap();
 
@@ -421,6 +361,11 @@ mod tests {
     #[test]
     fn test_is_preserved_path_nested() {
         let sd_root = Path::new("/Volumes/SDCARD");
+        // Case-insensitivity is by design: is_preserved_path uses
+        // eq_ignore_ascii_case to match FAT32's case-preserving but
+        // case-insensitive filesystem semantics.
+        // Nested paths under a preserved top-level folder are preserved;
+        // preserved folder names at non-top-level paths are not.
 
         // Deep nesting under preserved folder should be preserved
         assert!(is_preserved_path(

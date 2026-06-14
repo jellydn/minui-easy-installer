@@ -1,79 +1,47 @@
-# Tweak Report
+# Tweak Report — Pipeline Refactor
 
-Executed the fix plan from `plan.md` against the codebase on branch `refactor/thermonuclear-code-quality`.
+## Validated findings from fix.md
 
-## Completed
+13 valid, 2 stale (#10, #13), 2 already fixed (#14, #15)
 
-### Phase 0 — Prune stale concerns
+## Changes made
 
-- Removed 6 resolved items from `.planning/codebase/CONCERNS.md` (download timeout, reqwest blocking, time crate, windows-sys gating, WiFi plaintext warning, version comparison documentation)
-- Updated remaining concerns to reflect current code reality (removed stale line numbers, adjusted descriptions)
+### #1, #3 — InstallSession + pipeline.rs (new module)
 
-### Phase 1-1 — Version comparison (semver)
+- Created `src-tauri/src/pipeline.rs` with `InstallSession` that owns all `TempDir` slots
+- Added `Pipeline::run` (download → extract → copy, returns file count) and `Pipeline::run_to_extracted` (download → extract, returns path)
+- Added `create_target_within` helper for validated SD-card-scoped path creation
+- Added `download::download_archive_into` and `extract::extract_archive_into` that take `&mut Option<TempDir>` slots
 
-- Added `semver = "1"` to `src-tauri/Cargo.toml`
-- Implemented `compare_versions(installed, latest)` in `version.rs` that:
-  - Tries semver parsing with leading-zero normalization (so `2025.01.01` → `2025.1.1`)
-  - Falls back to string comparison when both fail semver
-  - Routes both `is_update_available` and `check_package_updates` through it
-- Added 3 test cases: semver, date-based, and garbage fallback
+### #2, #8 — Refactored install.rs and package.rs
 
-### Phase 1-2 — Suppressed error handling
+- `install_minui` uses `Pipeline::run` — no more `let (_, _temp) = …` boilerplate
+- `try_install_extras` delegates to `Pipeline::run`
+- `install_package` uses `Pipeline::run_to_extracted` + `create_target_within`
+- Deleted 1 duplicated `test_copy_dir_recursive_copies_files` from `package.rs` (55 tests instead of 56)
 
-- `extract.rs:141` — Unix `set_permissions` now logs via `eprintln!`
-- `install.rs:67` — Portmaster placeholder write now logs via `eprintln!`
-- `lib.rs:69` — Progress event emission now logs via `eprintln!`
+### #5 — Simplified path-traversal security
 
-### Phase 1-3 — "Update All" for packages
+- `install_package` no longer has the ad-hoc `..` string check — `create_target_within` handles it with single `canonicalize` + `starts_with`
 
-- `Home.tsx` Step 2 now fetches registry and iterates `packageUpdates`, calling `installPackage` for each
-- Aggregates errors into `updateAllError`, returns early if any step fails
+### #7 — Removed unused `_platform` parameter
 
-### Phase 1-4 — Preserved-path edge case tests
+- `copy_base_files` signature simplified from 3 params to 2
 
-- Added `test_is_preserved_path_nested`: deep nesting, non-top-level preserved names, case insensitivity
-- Added `test_copy_dir_recursive_preserves_user_data`: regression test asserting user ROMs/saves survive update
+### #18 — Added case-folding comment
 
-### Phase 2 — Package store integrity
+- `test_is_preserved_path_nested` now documents the `eq_ignore_ascii_case` + FAT32 reasoning
 
-- Added `fetch_url` Tauri command (Rust backend) for remote registry fetch
-- Rewrote `package.ts` to try remote registry first (`https://packages.minui.dev/registry/index.json`), fall back to bundled `store.json`
-- Session-scoped cache for registry (avoids re-fetching)
-- Strengthened schema validation: each entry's `repository` must be `https://github.com/...`, validates `version`, `name`, `pak_name` are present, `checksum` if present must be 64-char hex
-- Threaded `checksum` field through `convertStoreRegistry` from `tool_pak.checksum`
+## Not changed (intentionally)
 
-### Phase 3 — Platform robustness
+- #6, #11, #16 (React reducer) — larger frontend refactor, out of scope
+- #9 (Arc → Box) — minor, doesn't affect correctness
+- #10 (validate/health) — not in diff scope
+- #12 (vitest setup) — per-file mocks have different shapes, hoisting would break tests
+- #13 (WiFi warning) — already sufficiently visible
+- #14, #15 — already fixed in previous commits
 
-- **Item 9**: Rewrote macOS drive detection — uses `diskutil info` to check `Internal:`, `Removable Media:`, `Virtual:`/`Disk Image:`/`Network Volume:` before including a volume; excludes `Macintosh HD` by name as last resort
-- **Item 10**: Added validation guard in `copy_extras_files` — rejects `extras_platform` containing anything other than `[a-zA-Z0-9-]`
+## Test results
 
-### Phase 4 — Performance
-
-- Added session-scoped in-memory cache for `fetchMinUIRelease` and `fetchPackageRegistry`
-- Cache is bypassed when tests provide a mock `fetchFn`
-
-### Phase 5 — Maintainability
-
-- Added sync test in `device.test.ts` validating `device.ts` and `device-install-map.json` have matching device IDs and platform/extrasPlatform values
-
-## Test Results
-
-- Rust: **56/56 pass** (3 new tests)
-- Frontend (affected): **18/18 pass** (1 new test, 0 regressions)
-- Pre-existing failures in other tests (`archive.test.ts`, `install.test.ts`, `validate.test.ts`, `WifiWizard.test.tsx`) — unrelated to this change set
-
-## Files Modified
-
-- `.planning/codebase/CONCERNS.md` — pruned stale items, updated descriptions
-- `src-tauri/Cargo.toml` — added `semver`
-- `src-tauri/src/version.rs` — `compare_versions` with semver + leading-zero normalization
-- `src-tauri/src/package.rs` — routes through `version::compare_versions`
-- `src-tauri/src/install.rs` — eprintln! warnings, extras_platform validation, new tests
-- `src-tauri/src/extract.rs` — eprintln! on set_permissions failure
-- `src-tauri/src/lib.rs` — eprintln! on progress emit, added `fetch_url` command
-- `src-tauri/src/drives.rs` — filtered drive detection via diskutil info
-- `src/types/package.ts` — remote fetch + fallback, schema validation, checksum threading
-- `src/types/release.ts` — session cache
-- `src/types/release.test.ts` — added `clearReleaseCache` import
-- `src/types/device.test.ts` — added sync test
-- `src/Home.tsx` — implemented package update loop in handleUpdateAll
+- Rust: **55/55 pass** (no regressions, net -1 test from dedup)
+- Frontend (affected): **31/31 pass**

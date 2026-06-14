@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -161,6 +161,49 @@ pub fn extract_archive(
         },
         _temp_dir,
     ))
+}
+
+/// Extract an archive into a session-owned temp slot, returning just the path.
+///
+/// The owning InstallSession keeps the TempDir alive for the lifetime of
+/// the install pipeline, preventing the extracted files from being deleted.
+/// If a destination is provided, files are extracted there directly (no slot needed).
+///
+/// Returns the output directory path as a PathBuf.
+pub fn extract_archive_into(
+    slot: &mut Option<tempfile::TempDir>,
+    archive_path: &Path,
+    destination: Option<&Path>,
+) -> Result<PathBuf, String> {
+    if let Some(dest) = destination {
+        // Extract directly to a caller-specified directory
+        let (result, _) = extract_archive(
+            archive_path
+                .to_str()
+                .ok_or("Non-UTF-8 archive path")?,
+            Some(dest.to_str().ok_or("Non-UTF-8 dest path")?),
+        )?;
+        if !result.success {
+            return Err(result.error.unwrap_or_else(|| "Extraction failed".to_string()));
+        }
+        return Ok(dest.to_path_buf());
+    }
+
+    // Create a TempDir and extract into it — transfer ownership to slot
+    let temp_dir = tempfile::TempDir::new()
+        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    let output_path = temp_dir.path().to_path_buf();
+
+    let (result, _) = extract_archive(
+        archive_path.to_str().ok_or("Non-UTF-8 archive path")?,
+        Some(output_path.to_str().ok_or("Non-UTF-8 path")?),
+    )?;
+    if !result.success {
+        return Err(result.error.unwrap_or_else(|| "Extraction failed".to_string()));
+    }
+
+    *slot = Some(temp_dir);
+    Ok(output_path)
 }
 
 #[cfg(test)]

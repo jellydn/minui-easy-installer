@@ -1,6 +1,7 @@
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
+use std::path::PathBuf;
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -99,6 +100,60 @@ pub async fn download_archive(
         },
         temp_dir,
     ))
+}
+
+/// Download an archive into a session-owned temp slot, returning just the path.
+///
+/// The owning InstallSession keeps the TempDir alive for the lifetime of
+/// the install pipeline, preventing the file from being deleted prematurely.
+///
+/// Returns the file path as a PathBuf on success. On checksum mismatch or
+/// download failure, returns an Err.
+pub async fn download_archive_into(
+    slot: &mut Option<TempDir>,
+    url: &str,
+    expected_checksum: Option<&str>,
+) -> Result<PathBuf, String> {
+    let temp_dir =
+        TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+
+    let file_name = url.rsplit('/').next().unwrap_or("archive.zip");
+    let file_path = temp_dir.path().join(file_name);
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to download archive: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Download failed with status: {}", response.status()));
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read response bytes: {}", e))?;
+
+    fs::write(&file_path, &bytes).map_err(|e| format!("Failed to write archive: {}", e))?;
+
+    // Verify checksum if provided
+    if let Some(expected) = expected_checksum {
+        let file_path_str = file_path.to_str().ok_or("Non-UTF-8 path")?.to_string();
+        let verified = verify_checksum(&file_path_str, expected)?;
+        if !verified {
+            return Err("Checksum mismatch".to_string());
+        }
+    }
+
+    // Transfer ownership to the slot — keeps the dir alive
+    *slot = Some(temp_dir);
+    Ok(file_path)
 }
 
 #[cfg(test)]
