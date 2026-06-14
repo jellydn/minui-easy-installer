@@ -93,7 +93,9 @@ fn parse_minui_version(content: &str) -> Option<String> {
 /// Compare two version strings.
 ///
 /// Returns true if latest is newer than installed.
-/// Uses simple string comparison for now (works for date-based versions like 2024.12.25).
+/// Uses simple string comparison — works for date-based versions like 2024.12.25.
+/// WARNING: This is NOT semver comparison. Versions MUST be date-based (YYYY.MM.DD format)
+/// for correct ordering. Non-date versions may produce incorrect results.
 pub fn is_update_available(installed: &str, latest: &str) -> bool {
     // Normalize versions by removing 'v' prefix
     let installed_norm = installed.trim().trim_start_matches('v').trim();

@@ -1,6 +1,7 @@
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
+use std::time::Duration;
 use tempfile::TempDir;
 
 #[derive(Debug, serde::Serialize)]
@@ -45,8 +46,12 @@ pub async fn download_archive(
 
     let file_path = temp_dir.path().join(file_name);
 
-    let response = reqwest::get(url)
-        .await
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client.get(url).send().await
         .map_err(|e| format!("Failed to download archive: {}", e))?;
 
     if !response.status().is_success() {

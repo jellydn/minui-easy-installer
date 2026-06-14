@@ -2,6 +2,8 @@ use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 
+use crate::fs_utils;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ValidationCheck {
     pub name: String,
@@ -18,20 +20,7 @@ pub struct ValidationResult {
     pub free_space_bytes: Option<u64>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct HealthCheckResult {
-    pub checks: Vec<ValidationCheck>,
-    pub passed_count: u32,
-    pub failed_count: u32,
-    pub free_space_bytes: Option<u64>,
-    pub filesystem: Option<String>,
-    pub support_report: String,
-}
-
-const ESSENTIAL_BASE_PATHS: &[&str] = &[
-    "MinUI.zip",
-    "minui.txt",
-];
+const ESSENTIAL_BASE_PATHS: &[&str] = &["MinUI.zip", "minui.txt"];
 
 fn check_path_exists(sd_root: &Path, relative_path: &str) -> ValidationCheck {
     let full_path = sd_root.join(relative_path.trim_start_matches('/'));
@@ -110,11 +99,7 @@ fn check_pak_files(sd_root: &Path, dir: &str) -> Vec<ValidationCheck> {
     checks
 }
 
-fn check_free_space(sd_root: &Path) -> Option<u64> {
-    get_free_space(sd_root.to_str()?)
-}
-
-fn format_bytes(bytes: u64) -> String {
+pub fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = 1024 * 1024;
     const GB: u64 = 1024 * 1024 * 1024;
@@ -160,7 +145,7 @@ pub fn validate_installation(
     }
 
     // Check free space
-    let free_space = check_free_space(sd_root);
+    let free_space = sd_root.to_str().and_then(fs_utils::get_free_space);
     if let Some(space) = free_space {
         checks.push(ValidationCheck {
             name: "Free space".to_string(),
@@ -209,190 +194,6 @@ pub fn format_validation_report(result: &ValidationResult) -> String {
     if let Some(space) = result.free_space_bytes {
         let _ = writeln!(report);
         let _ = write!(report, "Free Space: {}", format_bytes(space));
-    }
-
-    report
-}
-
-/// Perform a comprehensive health check on the SD card.
-///
-/// Checks filesystem, free space, MinUI folders, and package PAK files.
-pub fn check_sd_card_health(
-    sd_mount: &str,
-    _device_platform: Option<&str>,
-) -> Result<HealthCheckResult, String> {
-    let sd_root = Path::new(sd_mount);
-
-    if !sd_root.exists() {
-        return Err("SD card mount point does not exist".to_string());
-    }
-
-    let mut checks = Vec::new();
-    let mut passed_count = 0u32;
-    let mut failed_count = 0u32;
-
-    // Check filesystem (warn if not FAT32)
-    let filesystem = detect_filesystem(sd_mount);
-    if let Some(ref fs_type) = filesystem {
-        let is_fat32 =
-            fs_type.to_lowercase().contains("fat32") || fs_type.to_lowercase().contains("ms-dos");
-        checks.push(ValidationCheck {
-            name: "filesystem".to_string(),
-            passed: is_fat32,
-            message: if is_fat32 {
-                format!("Filesystem: {} (FAT32 - recommended)", fs_type)
-            } else {
-                format!("Filesystem: {} (not FAT32 - may cause issues)", fs_type)
-            },
-        });
-        if is_fat32 {
-            passed_count += 1;
-        } else {
-            failed_count += 1;
-        }
-    }
-
-    // Check free space
-    let free_space = get_free_space(sd_mount);
-    if let Some(space) = free_space {
-        let has_space = space > 100 * 1024 * 1024; // 100MB minimum
-        checks.push(ValidationCheck {
-            name: "free_space".to_string(),
-            passed: has_space,
-            message: if has_space {
-                format!("Free space: {} (sufficient)", format_bytes(space))
-            } else {
-                format!(
-                    "Free space: {} (low - may need more space)",
-                    format_bytes(space)
-                )
-            },
-        });
-        if has_space {
-            passed_count += 1;
-        } else {
-            failed_count += 1;
-        }
-    }
-
-    // Check for MinUI folders (Apps is optional — not all releases create it)
-    let minui_folders = ["Tools", "Emus"];
-    for folder in &minui_folders {
-        let folder_path = sd_root.join(folder);
-        let exists = folder_path.exists() && folder_path.is_dir();
-        checks.push(ValidationCheck {
-            name: format!("folder_{}", folder.to_lowercase()),
-            passed: exists,
-            message: if exists {
-                format!("{}: Found", folder)
-            } else {
-                format!("{}: Missing", folder)
-            },
-        });
-        if exists {
-            passed_count += 1;
-        } else {
-            failed_count += 1;
-        }
-    }
-
-    // Check for PAK files in Tools
-    let tools_dir = sd_root.join("Tools");
-    if tools_dir.exists() {
-        let expected_paks = ["wifi.pak", "ssh.pak"];
-        for pak in &expected_paks {
-            let pak_path = tools_dir.join(pak);
-            let exists = pak_path.exists() && pak_path.is_dir();
-            if exists {
-                checks.push(ValidationCheck {
-                    name: format!("pak_{}", pak.replace(".pak", "")),
-                    passed: true,
-                    message: format!("{}: Installed", pak),
-                });
-                passed_count += 1;
-            }
-            // Don't flag missing optional PAKs as failures
-        }
-    }
-
-    let support_report = generate_support_report(&checks, free_space, filesystem.as_deref());
-
-    Ok(HealthCheckResult {
-        checks,
-        passed_count,
-        failed_count,
-        free_space_bytes: free_space,
-        filesystem,
-        support_report,
-    })
-}
-
-fn detect_filesystem(sd_mount: &str) -> Option<String> {
-    #[cfg(target_os = "macos")]
-    {
-        use std::process::Command;
-        let output = Command::new("diskutil")
-            .arg("info")
-            .arg(sd_mount)
-            .output()
-            .ok()?;
-
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines() {
-                if line.contains("File System Personality:") {
-                    return Some(line.split(':').nth(1)?.trim().to_string());
-                }
-            }
-        }
-    }
-
-    None
-}
-
-fn get_free_space(sd_mount: &str) -> Option<u64> {
-    #[cfg(unix)]
-    {
-        use std::ffi::CString;
-        use std::mem;
-
-        let path = CString::new(sd_mount).ok()?;
-        let mut stat: libc::statvfs = unsafe { mem::zeroed() };
-
-        let result = unsafe { libc::statvfs(path.as_ptr(), &mut stat) };
-        if result == 0 {
-            Some((stat.f_bavail as u64) * (stat.f_frsize as u64))
-        } else {
-            None
-        }
-    }
-
-    #[cfg(not(unix))]
-    {
-        None
-    }
-}
-
-fn generate_support_report(
-    checks: &[ValidationCheck],
-    free_space: Option<u64>,
-    filesystem: Option<&str>,
-) -> String {
-    let mut report = String::new();
-    report.push_str("SD Card Health Report\n");
-    report.push_str("====================\n\n");
-
-    for check in checks {
-        let status = if check.passed { "✓" } else { "✗" };
-        report.push_str(&format!("{} {}\n", status, check.message));
-    }
-
-    if let Some(space) = free_space {
-        report.push_str(&format!("\nFree Space: {}\n", format_bytes(space)));
-    }
-
-    if let Some(fs) = filesystem {
-        report.push_str(&format!("Filesystem: {}\n", fs));
     }
 
     report
@@ -500,48 +301,5 @@ mod tests {
         assert!(report.contains("File exists"));
         assert!(report.contains("File missing"));
         assert!(report.contains("500.00 MB"));
-    }
-
-    #[test]
-    fn test_check_sd_card_health_nonexistent() {
-        let result = check_sd_card_health("/nonexistent/path", None);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_check_sd_card_health_empty_card() {
-        let temp = tempfile::tempdir().unwrap();
-        let result = check_sd_card_health(temp.path().to_str().unwrap(), None);
-        assert!(result.is_ok());
-
-        let health = result.unwrap();
-        // Should have checks for missing folders
-        assert!(health
-            .checks
-            .iter()
-            .any(|c| c.name == "folder_tools" && !c.passed));
-        assert!(!health.support_report.is_empty());
-    }
-
-    #[test]
-    fn test_check_sd_card_health_with_folders() {
-        let temp = tempfile::tempdir().unwrap();
-        let sd_root = temp.path();
-
-        std::fs::create_dir_all(sd_root.join("Tools")).unwrap();
-        std::fs::create_dir_all(sd_root.join("Emus")).unwrap();
-
-        let result = check_sd_card_health(sd_root.to_str().unwrap(), None);
-        assert!(result.is_ok());
-
-        let health = result.unwrap();
-        assert!(health
-            .checks
-            .iter()
-            .any(|c| c.name == "folder_tools" && c.passed));
-        assert!(health
-            .checks
-            .iter()
-            .any(|c| c.name == "folder_emus" && c.passed));
     }
 }
