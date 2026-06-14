@@ -111,9 +111,14 @@ impl Pipeline {
 
 /// Create a validated target directory within the SD card mount.
 ///
-/// Resolves the final path, creates it, and verifies it doesn't escape
-/// the SD card via symlinks or canonicalization artifacts. Returns the
-/// canonical path.
+/// Resolves the final path, validates that it stays inside the SD card,
+/// creates it, and re-validates the canonical form (catches symlink races).
+/// Returns the canonical path.
+///
+/// Security note: validation happens on the parent directory BEFORE any
+/// `create_dir_all` call. This prevents a malicious or malformed
+/// `target_dir`/`platform`/`pak_name` from creating directories outside
+/// the SD card mount, even briefly.
 pub fn create_target_within(
     sd_mount: &Path,
     target_dir: &str,
@@ -129,6 +134,26 @@ pub fn create_target_within(
         .join(platform)
         .join(format!("{}.pak", pak_name));
 
+    // Validate the target is inside canonical_sd BEFORE creating anything.
+    // We canonicalize the parent (which must exist for create_dir_all to
+    // succeed) and check the parent is within the SD card root. If the
+    // parent itself escapes, the leaf will too, so this is sufficient.
+    let parent = target
+        .parent()
+        .ok_or_else(|| "Target path has no parent directory".to_string())?;
+    let canonical_parent = parent
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve target parent: {}", e))?;
+
+    if !canonical_parent.starts_with(&canonical_sd) {
+        return Err(format!(
+            "Security violation: target escapes SD card: {}",
+            target.display()
+        ));
+    }
+
+    // Safe to create now that the parent is validated.
+    let created_now = !target.exists();
     fs::create_dir_all(&target)
         .map_err(|e| format!("Failed to create package directory: {}", e))?;
 
@@ -136,9 +161,24 @@ pub fn create_target_within(
         .canonicalize()
         .map_err(|e| format!("Failed to resolve package path: {}", e))?;
 
+    // Re-validate after creation to catch symlink races (e.g. someone
+    // swapped a directory for a symlink between our create and canonicalize).
     if !canonical.starts_with(&canonical_sd) {
+        // Best-effort cleanup. Only remove what we *know* we created —
+        // never touch a directory that pre-existed this call. And always
+        // operate on the canonical path so we can't accidentally follow a
+        // symlink to an unrelated directory.
+        if created_now {
+            if let Err(cleanup_err) = fs::remove_dir(&canonical) {
+                eprintln!(
+                    "create_target_within: cleanup failed for escaped path {}: {}",
+                    canonical.display(),
+                    cleanup_err
+                );
+            }
+        }
         return Err(format!(
-            "Security violation: target escapes SD card: {}",
+            "Security violation: target escapes SD card after creation: {}",
             target.display()
         ));
     }

@@ -177,15 +177,27 @@ fn parse_airport_output(output: &str) -> Vec<String> {
     for line in output.lines().skip(1) {
         // Skip header line
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if !parts.is_empty() {
-            let ssid = parts[0].trim();
-            // Skip BSSIDs (MAC addresses: 17 chars, 5 colons, hex digits)
-            let is_bssid = ssid.len() == 17
-                && ssid.split(':').count() == 6
-                && ssid.chars().all(|c| c.is_ascii_hexdigit() || c == ':');
-            if !ssid.is_empty() && !is_bssid {
-                ssids.push(ssid.to_string());
-            }
+        if parts.is_empty() {
+            continue;
+        }
+        let ssid = parts[0].trim();
+        if ssid.is_empty() {
+            // Hidden network: airport puts the BSSID in the first column.
+            // Skip the whole line — we don't have an SSID to report.
+            continue;
+        }
+        // BSSIDs are 6 groups of 2 hex digits separated by colons (17 chars).
+        // Require each colon-delimited segment to be exactly 2 hex digits so
+        // we don't incorrectly drop user SSIDs that contain colons
+        // (e.g. "guest:net:2.4ghz") which would have non-hex characters or
+        // segments of the wrong length.
+        let is_bssid = ssid.len() == 17
+            && ssid.split(':').count() == 6
+            && ssid
+                .split(':')
+                .all(|part| part.len() == 2 && part.chars().all(|c| c.is_ascii_hexdigit()));
+        if !is_bssid {
+            ssids.push(ssid.to_string());
         }
     }
 
@@ -369,6 +381,43 @@ mod tests {
 
         let ssids = parse_airport_output(output);
         assert_eq!(ssids, vec!["MyNetwork", "OtherNet"]);
+    }
+
+    #[test]
+    fn test_parse_airport_output_skips_hidden_ssids() {
+        // Hidden network: airport leaves the SSID column empty and the
+        // BSSID slides into the first column. We must not report the BSSID
+        // as the SSID, and we must not include an empty string.
+        let output = "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
+                                 00:11:22:33:44:55 -50  6       Y  -- WPA2\n\
+                       Visible 66:77:88:99:AA:BB -60  11      Y  -- WPA2\n";
+        let ssids = parse_airport_output(output);
+        assert_eq!(ssids, vec!["Visible"]);
+    }
+
+    #[test]
+    fn test_parse_airport_output_keeps_ssids_with_colons() {
+        // An SSID that contains colons and is NOT in strict 2-hex-per-segment
+        // BSSID format must be kept. The old check
+        // `chars().all(is_ascii_hexdigit || ':')` would have misclassified
+        // the 3-char-segment string below as a BSSID and dropped it.
+        let output = "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
+                       guest:net:2.4ghz 00:11:22:33:44:55 -50  6       Y  -- WPA2\n\
+                       ab:cde:f:12:34:56 66:77:88:99:AA:BB -60  11      Y  -- WPA2\n";
+        let ssids = parse_airport_output(output);
+        assert_eq!(ssids, vec!["ab:cde:f:12:34:56", "guest:net:2.4ghz"]);
+    }
+
+    #[test]
+    fn test_parse_airport_output_still_drops_strict_bssids() {
+        // Regression: a 17-char 2-hex-per-segment string in column 0 must
+        // still be dropped (it's a real BSSID, either a hidden-SSID
+        // network or a stray entry).
+        let output = "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
+                       00:11:22:33:44:55 -50  6       Y  -- WPA2\n\
+                       Visible 66:77:88:99:AA:BB -60  11      Y  -- WPA2\n";
+        let ssids = parse_airport_output(output);
+        assert_eq!(ssids, vec!["Visible"]);
     }
 
     #[test]
