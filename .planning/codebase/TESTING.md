@@ -1,109 +1,331 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-06-13
-
-> Two independent test stacks: **vitest** for the TS/React frontend (`src/`) and
-> **cargo test** with inline `#[cfg(test)]` modules for the Rust backend (`src-tauri/src/`).
+**Analysis Date:** 2026-06-14
 
 ## Test Framework
 
 **Runner:**
 
-- Frontend: **vitest** `^4.1.8` (`package.json` devDependencies).
-  Config: `vitest.config.ts` (uses `@vitejs/plugin-react`, `environment: "jsdom"`,
-  `setupFiles: ["./vitest.setup.ts"]`, `include: ["src/**/*.test.{ts,tsx}"]`).
-- Backend: **cargo test** (Rust edition 2021, `src-tauri/Cargo.toml`). Async tests
-  run under `tokio` (full features). No separate test crate — tests are inline.
+- Vitest 4.1.8 (frontend TypeScript tests)
+- Config: `vitest.config.ts`
+- Environment: `jsdom` (simulates browser DOM for React component testing)
+- Setup file: `vitest.setup.ts` — imports `@testing-library/jest-dom/vitest` for DOM matchers
 
 **Assertion Library:**
 
-- Frontend: vitest built-in `expect` + `@testing-library/jest-dom` matchers
-  (`toBeInTheDocument`, `toBeDisabled`, `toHaveAttribute`) registered via
-  `vitest.setup.ts` → `import "@testing-library/jest-dom/vitest";`.
-  Component tests use `@testing-library/react` (`render`, `screen`, `waitFor`,
-  `cleanup`) and `@testing-library/user-event`.
-- Backend: std `assert!` / `assert_eq!`.
+- Vitest built-in `expect` (compatible with Jest API)
+- Extended with `@testing-library/jest-dom` matchers — `toBeInTheDocument()`, `toBeDisabled()`, `toHaveAttribute()`, etc.
 
 **Run Commands:**
 
 ```bash
-npm test            # Run all frontend tests once ("test": "vitest run")
-npx vitest          # Watch mode (vitest default; no npm script defined)
-npx vitest run --coverage   # Coverage via @vitest/coverage-v8 (installed)
-cargo test          # Run all Rust backend tests (from src-tauri/)
+bun test                    # Run all tests once (vitest run)
+vitest                      # Watch mode
+bun run test                # Same as vitest run
 ```
 
 ## Test File Organization
 
 **Location:**
 
-- **Co-located** with source in both stacks.
-- Frontend: `src/types/<name>.test.ts` sits next to `src/types/<name>.ts`; component
-  tests `src/<Component>.test.tsx` sit next to `src/<Component>.tsx`.
-- Backend: tests live in the same `.rs` file inside an inline `mod tests`.
+- Co-located with source files — test files live alongside the modules they test
+- Frontend: `src/types/*.test.ts` for type/utility modules, `src/*.test.tsx` for React components
+- Backend: `#[cfg(test)] mod tests` blocks at the bottom of each `.rs` source file
 
 **Naming:**
 
-- TS: `*.test.ts` (pure logic/types) and `*.test.tsx` (React components).
-- Rust: `#[test]` fns named `test_<behavior>` inside `#[cfg(test)] mod tests`.
+- TypeScript: `<module-name>.test.ts` or `<module-name>.test.tsx`
+- Rust: inline `mod tests` with `test_` prefixed functions
 
 **Structure:**
 
 ```
 src/
-  types/
-    drive.ts          drive.test.ts        (8 tests)
-    version.ts        version.test.ts       (4 tests)
-    install.ts        install.test.ts       (7 tests)
-    release.ts        release.test.ts      (12 tests)
-    package.ts        package.test.ts      (23 tests)
-    validate.ts       validate.test.ts      (6 tests)
-    device.ts         device.test.ts        (4 tests)
-    archive.ts        archive.test.ts      (15 tests)
-  DriveSelector.tsx   DriveSelector.test.tsx (5 tests)
-  Home.tsx            Home.test.tsx          (4 tests)
-  WifiWizard.tsx      WifiWizard.test.tsx    (6 tests)
-  PackageStore.tsx    PackageStore.test.tsx  (6 tests)
-src-tauri/src/*.rs    (inline #[cfg(test)] mod tests)
+├── types/
+│   ├── archive.ts              # Source
+│   ├── archive.test.ts         # Tests (9 .test.ts files)
+│   ├── drive.ts
+│   ├── drive.test.ts
+│   ├── install.ts
+│   ├── install.test.ts
+│   ├── package.ts
+│   ├── package.test.ts
+│   ├── release.ts
+│   ├── release.test.ts
+│   ├── version.ts
+│   ├── version.test.ts
+│   ├── validate.ts
+│   ├── validate.test.ts
+│   ├── device.ts
+│   ├── device.test.ts
+│   └── device-install-map.test.ts
+├── DriveSelector.tsx           # Component source
+├── DriveSelector.test.tsx      # Component test (4 .test.tsx files)
+├── Home.tsx
+├── Home.test.tsx
+├── PackageStore.test.tsx
+└── WifiWizard.test.tsx
+src-tauri/src/
+├── download.rs                 # Rust module with inline tests
+├── extract.rs                  # Rust module with inline tests
+├── install.rs                  # Rust module with inline tests
+├── version.rs                  # Rust module with inline tests
+├── drives.rs                   # Rust module with inline tests
+├── wifi.rs                     # Rust module with inline tests
+├── validate.rs                 # Rust module with inline tests
+└── package.rs                  # Rust module with inline tests
 ```
 
 ## Test Structure
 
-**Suite Organization (TS — `src/types/install.test.ts`):**
+**Suite Organization:**
 
 ```typescript
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { InstallResult } from "./install";
-import { installMinui } from "./install";
+import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+describe("parseGitHubRelease", () => {
+	it("parses a valid GitHub release with base and extras", () => {
+		// Arrange
+		const input = { tag_name: "v25.06.12", assets: [...] };
 
-describe("installMinui", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+		// Act
+		const result = parseGitHubRelease(input) as MinUIRelease;
 
-  it("returns success with file counts on successful install", async () => {
-    const mockResult: InstallResult = {
-      success: true,
-      error: null,
-      base_files_copied: 15,
-      extras_files_copied: 3,
-    };
-    const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockResolvedValue(mockResult);
-    const result = await installMinui({
-      baseUrl: "...",
-      sdMount: "...",
-      platform: "miyoo-mini-plus",
-      extrasDir: "/Tools",
-    });
-    // expect(...)
-  });
+		// Assert
+		expect(result).toEqual({
+			version: "25.06.12",
+			baseArchiveUrl: expect.stringContaining("base.zip"),
+			extrasArchiveUrl: expect.stringContaining("extras.zip"),
+			checksums: null,
+		});
+	});
 });
 ```
 
-**Suite Organization (Rust — `src-tauri/src/version.rs`):**
+**Patterns:**
+
+- Top-level `describe()` groups tests by function or component name
+- Nested `describe()` for sub-groups when testing multiple related functions (e.g., `describe("downloadArchive")`, `describe("verifyChecksum")`, `describe("extractArchive")` in `archive.test.ts`)
+- `it()` for individual test cases with descriptive names
+- `test()` used interchangeably with `it()` (both appear in the codebase)
+- `beforeEach(() => vi.clearAllMocks())` for resetting mock state between tests
+- `afterEach(() => cleanup())` for React component tests to prevent DOM leaks
+- No global `beforeAll` or `afterAll` usage observed
+
+## Mocking
+
+**Framework:** Vitest built-in `vi.mock()` and `vi.fn()`
+
+**Patterns:**
+
+```typescript
+// Mock Tauri invoke (most common — appears in every Tauri-connected test file)
+vi.mock("@tauri-apps/api/core", () => ({
+	invoke: vi.fn(),
+}));
+
+// Mock entire modules (for Home.test.tsx — multiple module mocks)
+vi.mock("./types/release", () => ({
+	fetchMinUIRelease: vi.fn(),
+}));
+vi.mock("./types/package", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./types/package")>();
+	return {
+		...actual,                    // Preserve non-mocked exports
+		fetchPackageRegistry: vi.fn(),
+		checkPackageUpdates: vi.fn(),
+	};
+});
+
+// Mock with dynamic import for type modules
+const { invoke } = await import("@tauri-apps/api/core");
+vi.mocked(invoke).mockResolvedValue(mockResult);
+
+// Mock fetch function parameter (dependency injection pattern)
+export async function fetchMinUIRelease(
+    fetchFn: typeof globalThis.fetch = globalThis.fetch,
+): Promise<ReleaseFetchResult> { ... }
+// In tests: fetchMinUIRelease(mockFetch)
+
+// Helper function to mock invoke with command routing (WifiWizard.test.tsx)
+function mockInvoke(
+    invoke: ReturnType<typeof vi.fn>,
+    overrides: Record<string, unknown> = {},
+) {
+    invoke.mockImplementation((cmd: string) => {
+        if (cmd === "get_current_wifi_ssid") return Promise.resolve(null);
+        if (cmd in overrides) return Promise.resolve(overrides[cmd]);
+        return Promise.resolve([]);
+    });
+}
+```
+
+**What to Mock:**
+
+- `@tauri-apps/api/core` — always mocked (no Tauri runtime in test environment)
+- Backend-bound type modules (`./types/release`, `./types/version`, `./types/package`, `./types/install`, `./types/validate`) — mocked in component tests to isolate UI logic
+- `globalThis.fetch` — injected as parameter (not mocked globally) in `fetchMinUIRelease()`
+
+**What NOT to Mock:**
+
+- Pure utility functions (`formatSize`, `getDriveDisplayName`, `classifyError`) — tested directly
+- Type-only modules (`./types/drive`, `./types/version`) — type shape tests run without mocks
+- React hooks from `react` — never mocked
+
+## Fixtures and Factories
+
+**Test Data:**
+
+```typescript
+// Inline mock objects (most common pattern)
+const mockDrive: RemovableDrive = {
+  name: "SD_CARD",
+  mount_path: "/Volumes/SD_CARD",
+  size_bytes: 32_000_000_000,
+  filesystem: "FAT32",
+  available_bytes: 28_000_000_000,
+};
+
+// Inline mock result objects
+const mockResult: InstallResult = {
+  success: true,
+  error: null,
+  base_files_copied: 15,
+  extras_files_copied: 3,
+  extras_warning: null,
+  rom_dirs_created: 0,
+};
+
+// Mock registry data (PackageStore.test.tsx)
+const mockRegistry: PackageRegistry = {
+  version: "1.0",
+  packages: [
+    {
+      name: "Wifi.pak",
+      version: "1.0.0",
+      category: "Emulators",
+      // ...
+    },
+  ],
+};
+
+// GitHub release API mock data (inline in test)
+const mockFetch = vi.fn().mockResolvedValue({
+  ok: true,
+  json: () =>
+    Promise.resolve({
+      tag_name: "v25.06.12",
+      assets: [{ browser_download_url: "..." }],
+    }),
+});
+```
+
+**Location:**
+
+- No separate fixture files — all test data is defined inline within test functions or at `describe` scope
+- Mock objects are typed with their corresponding interface (`RemovableDrive`, `InstallResult`, `PackageRegistry`, etc.)
+
+## Coverage
+
+**Requirements:** None enforced (no coverage threshold in `vitest.config.ts`)
+
+**Dependencies:** `@vitest/coverage-v8` is installed as a devDependency
+
+**View Coverage:**
+
+```bash
+npx vitest --coverage        # Generate coverage report
+```
+
+## Test Types
+
+**Unit Tests:**
+
+- TypeScript: 9 type/utility test files covering pure functions and type shapes (`drive.test.ts`, `install.test.ts`, `release.test.ts`, `version.test.ts`, `package.test.ts`, `validate.test.ts`, `archive.test.ts`, `device.test.ts`, `device-install-map.test.ts`)
+- Focus on: parsing logic, error classification, type validation, function return shapes, edge cases (null inputs, empty arrays, missing data)
+- No network calls — fetch functions use dependency injection or mocked modules
+
+**Integration Tests:**
+
+- React component tests: 4 files (`DriveSelector.test.tsx`, `Home.test.tsx`, `PackageStore.test.tsx`, `WifiWizard.test.tsx`)
+- Test component rendering, user interactions (`userEvent.click`, `userEvent.type`), async state updates (`waitFor`), and Tauri IPC flow (mocked)
+- Verify UI states: loading, error, empty, populated, confirmation dialogs
+
+**E2E Tests:** Not used. No Playwright, Cypress, or other E2E framework observed.
+
+**Rust Tests:**
+
+- 8 Rust modules with `#[cfg(test)] mod tests` blocks
+- Total Rust test functions: ~40 tests across `download.rs` (3), `extract.rs` (5), `install.rs` (4), `version.rs` (9), `drives.rs` (3), `wifi.rs` (9), `validate.rs` (7), `package.rs` (5)
+- Use `tempfile::tempdir()` for filesystem isolation
+- Test real file I/O: create archives, write files, verify checksums, detect versions
+- Platform-specific tests: `#[cfg(target_os = "macos")]` and `#[cfg(target_os = "windows")]` for OS-dependent parsing
+
+## Common Patterns
+
+**Async Testing:**
+
+```typescript
+// waitFor for async state updates in React components
+it("displays package cards after loading", async () => {
+	const { fetchPackageRegistry } = await import("./types/package");
+	vi.mocked(fetchPackageRegistry).mockResolvedValue({
+		success: true,
+		data: mockRegistry,
+	});
+
+	render(<PackageStore selectedDevice="miyoo-mini-plus" selectedDrive="/Volumes/SD" />);
+
+	await waitFor(() => {
+		expect(screen.getByText("Wifi.pak")).toBeInTheDocument();
+	});
+});
+
+// Async test functions for mocked modules
+it("returns success with file counts on successful install", async () => {
+	const { invoke } = await import("@tauri-apps/api/core");
+	vi.mocked(invoke).mockResolvedValue(mockResult);
+	const result = await installMinui({ ... });
+});
+```
+
+**Error Testing:**
+
+```typescript
+// Testing error responses from mocked IPC
+it("returns error with copy code on failed install", async () => {
+	const mockResult: InstallResult = {
+		success: false,
+		error: "Failed to copy file to SD card",
+		// ...
+	};
+	const { invoke } = await import("@tauri-apps/api/core");
+	vi.mocked(invoke).mockResolvedValue(mockResult);
+
+	const result = await installMinui({ ... });
+
+	expect(result.success).toBe(false);
+	if (!result.success) {
+		expect(result.error.code).toBe("COPY_ERROR");
+		expect(result.error.message).toContain("copy");
+	}
+});
+
+// Testing component error states
+it("shows error state with retry on fetch failure", async () => {
+	vi.mocked(fetchPackageRegistry).mockResolvedValue({
+		success: false,
+		error: { message: "Network error", code: "NETWORK_ERROR" },
+	});
+	render(<PackageStore ... />);
+	await waitFor(() => {
+		expect(screen.getByText(/Failed to load packages/)).toBeInTheDocument();
+	});
+	expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+});
+```
+
+**Rust Test Pattern:**
 
 ```rust
 #[cfg(test)]
@@ -112,193 +334,15 @@ mod tests {
     use std::io::Write;
 
     #[test]
-    fn test_parse_minui_version_with_prefix() {
-        let content = "MinUI v2024.12.25\nSome other content";
-        assert_eq!(parse_minui_version(content), Some("2024.12.25".to_string()));
+    fn test_verify_checksum_success() {
+        // Arrange: create temp file with known content
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        write!(temp_file, "test content").unwrap();
+
+        // Act + Assert
+        let expected = "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72";
+        let result = verify_checksum(temp_file.path().to_str().unwrap(), expected);
+        assert!(result.unwrap());
     }
 }
 ```
-
-**Patterns:**
-
-- Setup: TS `beforeEach(() => vi.clearAllMocks())` in every mocked suite; component
-  suites also `afterEach(() => cleanup())` (`src/Home.test.tsx`,
-  `src/DriveSelector.test.tsx`, `src/WifiWizard.test.tsx`).
-- Teardown: `cleanup()` (Testing Library) in component tests; Rust uses scoped
-  `tempfile::tempdir()` that auto-removes when dropped.
-- Assertion: discriminated-union results are asserted with a type-narrowing guard,
-  e.g. `expect(result.success).toBe(true); if (result.success) { expect(result.data...) }`
-  (`src/types/archive.test.ts`).
-
-## Mocking
-
-**Framework:** vitest `vi` (frontend). Rust has no mocking framework — tests use real
-filesystem temp dirs.
-
-**Patterns (`src/types/archive.test.ts`, `src/Home.test.tsx`):**
-
-```typescript
-// Mock the Tauri IPC bridge so backend invoke() calls are intercepted
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
-
-// Per-test: resolve or reject the mocked invoke
-const { invoke } = await import("@tauri-apps/api/core");
-vi.mocked(invoke).mockResolvedValue(mockResult);
-// vi.mocked(invoke).mockRejectedValue(new Error("scan unavailable"));
-
-// Assert the exact command + args contract
-expect(invoke).toHaveBeenCalledWith("write_wifi_config", {
-  sdMount: "/Volumes/SD",
-  ssid: "MyNetwork",
-  password: "secret123",
-});
-
-// Partial mock keeping real exports (Home.test.tsx)
-vi.mock("./types/package", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./types/package")>();
-  return {
-    ...actual,
-    fetchPackageRegistry: vi.fn(),
-    checkPackageUpdates: vi.fn(),
-  };
-});
-```
-
-**What to Mock:**
-
-- The `@tauri-apps/api/core` `invoke` bridge (every test that touches the backend).
-- Sibling type-module API fns when testing a component in isolation (`./types/release`,
-  `./types/version`, `./types/install`, `./types/validate`, `./types/package` in
-  `src/Home.test.tsx`).
-- `fetchMinUIRelease` accepts an injectable `fetchFn` param (`src/types/release.ts`),
-  enabling fetch to be stubbed without `vi.mock` (dependency injection).
-
-**What NOT to Mock:**
-
-- Pure logic under test (e.g. `formatSize`, `parseGitHubRelease`,
-  `formatValidationReport`'s local fallback) is exercised directly.
-- Rust: nothing is mocked; real files are written into a `tempfile` dir.
-
-## Fixtures and Factories
-
-**Test Data:**
-
-```typescript
-// Inline literal fixtures defined per-file (no shared factory module)
-const mockDrive: RemovableDrive = {
-  name: "SD_CARD",
-  mount_path: "/Volumes/SD_CARD",
-  size_bytes: 32_000_000_000,
-  filesystem: "FAT32",
-  available_bytes: 28_000_000_000,
-};
-```
-
-```rust
-// Rust: build real on-disk fixtures in a temp dir
-let temp = tempfile::tempdir().unwrap();
-let mut f = fs::File::create(temp.path().join("minui.txt")).unwrap();
-f.write_all(b"MinUI v2024.12.25").unwrap();
-```
-
-**Location:**
-
-- No shared fixtures/factories directory. Test data is inline at the top of each test
-  file (`mockDrive` in `src/Home.test.tsx` & `src/DriveSelector.test.tsx`,
-  `mockResult` per `it`). Rust builds throwaway files via `tempfile`.
-
-## Coverage
-
-**Requirements:** None enforced. No coverage threshold config in `vitest.config.ts`;
-`@vitest/coverage-v8` is installed but no `npm run coverage` script exists.
-
-**View Coverage:**
-
-```bash
-npx vitest run --coverage   # frontend (v8 provider)
-```
-
-## Test Types
-
-**Unit Tests:**
-
-- Frontend: 8 `src/types/*.test.ts` files = **79 tests** covering pure logic & the
-  thin invoke-wrapper API (drive: 8, version: 4, install: 7, release: 12, package: 23,
-  validate: 6, device: 4, archive: 15).
-- Backend: inline `#[cfg(test)]` modules = **53 Rust tests** across 8 modules
-  (download: 3, drives: 3, extract: 6, install: 5, package: 9, validate: 9,
-  version: 11, wifi: 7). `lib.rs`/`main.rs` have none.
-
-**Integration Tests:**
-
-- Component tests (`*.test.tsx`) act as light frontend integration tests: they render
-  a component, mock the Tauri bridge + sibling API modules, and assert rendered
-  output and `invoke` contracts. 4 files = **21 tests** (DriveSelector: 5, Home: 4,
-  WifiWizard: 6, PackageStore: 6).
-- **Total frontend: 12 files, 100 tests, all passing** (verified via `npx vitest run`,
-  2026-06-13).
-
-**E2E Tests:**
-
-- Not used. No Playwright/WebDriver/`tauri-driver` setup present.
-
-## Coverage Gaps
-
-- **Component test coverage is partial.** Of the React components in `src/`, only
-  `DriveSelector`, `Home`, `WifiWizard`, and `PackageStore` have tests. The following
-  have **no** `*.test.tsx`: `App.tsx`, `DeviceSelector.tsx`, `ConfirmDialog.tsx`,
-  `InstallProgress.tsx`, `HealthCheck.tsx`, `ValidationReport.tsx`.
-  > NOTE: an earlier project brief stated "zero React component tests" — that is now
-  > **out of date**; 4 component test files (21 tests) exist and pass as of this analysis.
-- No end-to-end tests exercising the real Rust↔React IPC path; the bridge is always
-  mocked on the frontend side.
-- No enforced coverage threshold and no coverage npm script.
-- `src-tauri/src/lib.rs` Tauri command wrappers are untested (only the underlying
-  module fns they delegate to are tested).
-
-## Common Patterns
-
-**Async Testing:**
-
-```typescript
-it("downloads archive successfully", async () => {
-  const { invoke } = await import("@tauri-apps/api/core");
-  vi.mocked(invoke).mockResolvedValue(mockResult);
-  const result = await downloadArchive("https://example.com/archive.zip");
-  expect(result.success).toBe(true);
-});
-
-// Components: assert post-async UI with waitFor
-await waitFor(() => {
-  expect(
-    screen.getByRole("button", { name: "Install MinUI" }),
-  ).toBeInTheDocument();
-});
-```
-
-```rust
-// Rust async backend tests use #[tokio::test] (download/install/package modules)
-```
-
-**Error Testing:**
-
-```typescript
-// Reject the mock and assert the normalized error union + code
-vi.mocked(invoke).mockRejectedValue(new Error("scan unavailable"));
-// -> result.success === false, result.error.code === "..._ERROR"
-
-// Fallback-path testing (validate.test.ts): invoke fails in test env, so
-// formatValidationReport falls back to local formatting, which is asserted.
-```
-
-```rust
-#[test]
-fn test_verify_checksum_failure() {
-    let result = verify_checksum(path, "wrong_checksum");
-    assert!(!result.unwrap());
-}
-```
-
----
-
-_Testing analysis: 2026-06-13_

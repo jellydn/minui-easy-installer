@@ -1,0 +1,72 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# Top-most EditorConfig file
+root = true
+
+# Defaults for everything: 2-space indent, LF line endings,
+# UTF-8, trim trailing whitespace, ensure files end with a newline.
+# Per-language overrides below.
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Markdown: trailing whitespace often carries meaning (hard line breaks).
+[*.md]
+trim_trailing_whitespace = false
+
+[*.mdx]
+trim_trailing_whitespace = false
+
+# Rust uses 4-space indent by convention.
+[*.rs]
+indent_size = 4
+
+# Makefiles require hard tabs for recipe lines.
+[Makefile]
+indent_style = tab
+
+# `just` recipes also require hard tabs.
+[justfile]
+indent_style = tab
+
+# Lockfiles and generated vendor files: do not modify.
+# (Brace expansion in the filename position is not portable across
+# editors, so these are split into individual filename blocks.)
+[bun.lock]
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[Cargo.lock]
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[package-lock.json]
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[yarn.lock]
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[pnpm-lock.yaml]
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset

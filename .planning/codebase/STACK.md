@@ -1,103 +1,126 @@
 # Technology Stack
 
-**Analysis Date:** 2026-06-13
+**Analysis Date:** 2026-06-14
 
 ## Languages
 
 **Primary:**
 
-- TypeScript ~5.6.3 - Frontend UI and shared types (`package.json`, `tsconfig.json`, all of `src/`)
-- Rust (edition 2021) - Tauri backend, native OS integration (`src-tauri/Cargo.toml`, all of `src-tauri/src/`)
+- TypeScript 5.6.3 — React frontend (`src/`)
+- Rust 2021 edition — Tauri backend (`src-tauri/src/`)
 
 **Secondary:**
 
-- TSX/JSX (react-jsx) - React components (`src/App.tsx`, `src/Home.tsx`, `tsconfig.json` `"jsx": "react-jsx"`)
-- CSS - App styling (`src/styles.css`)
-- Shell snippets embedded in Rust - PowerShell command for Windows drive detection (`src-tauri/src/drives.rs`)
+- HTML/CSS — UI layout and styling (implied by Tauri + React)
 
 ## Runtime
 
 **Environment:**
 
-- Node.js (ESM, `"type": "module"`) for the frontend toolchain (`package.json`)
-- Tauri v2 native runtime (WebView + Rust host process) for the desktop app (`src-tauri/tauri.conf.json`)
-- Tokio 1 async runtime (`features = ["full"]`) for Rust backend (`src-tauri/Cargo.toml`)
+- Tauri v2 — Desktop runtime (Rust + WebView)
 
 **Package Manager:**
 
-- npm (frontend) - Lockfile: present (`package-lock.json`)
-- Cargo (Rust) - Lockfile: present (`src-tauri/Cargo.lock`)
+- npm / Bun — JavaScript (`package.json` scripts use `bun run` in `justfile`)
+- Cargo — Rust (`src-tauri/Cargo.toml`)
+
+**Lockfile:**
+
+- `package-lock.json` — npm lockfile (present)
+- `Cargo.lock` — Rust lockfile (present, committed with crate)
 
 ## Frameworks
 
 **Core:**
 
-- React 18.3.1 + react-dom 18.3.1 - Frontend UI (`package.json`, `src/main.tsx`)
-- Tauri 2 - Desktop shell, IPC command bridge, bundling (`src-tauri/Cargo.toml`, `src-tauri/src/lib.rs`)
-- @tauri-apps/api ^2.0.0 - Frontend → Rust `invoke` bridge (`package.json`, `src/DriveSelector.tsx`)
+- Tauri v2 — Desktop app framework (Rust backend, WebView frontend)
+- React 18.3.1 — UI component library
 
 **Testing:**
 
-- Vitest 4.1.8 - Unit/component test runner, jsdom environment (`vitest.config.ts`, `package.json`)
-- @testing-library/react 16.3.2 + jest-dom 6.9.1 + user-event 14.6.1 - React component testing (`package.json`, `vitest.setup.ts`)
-- jsdom 29.1.1 - DOM environment for tests (`vitest.config.ts`)
-- @vitest/coverage-v8 4.1.8 - Coverage reporting (`package.json`)
-- Rust built-in `#[cfg(test)]` unit tests - Backend tests (e.g. `src-tauri/src/drives.rs`, `src-tauri/src/wifi.rs`, `src-tauri/src/download.rs`)
+- Vitest 4.1.8 — JavaScript test runner
+- @testing-library/react 16.3.2 — React component testing utilities
+- @testing-library/jest-dom 6.9.1 — Custom DOM matchers
+- @testing-library/user-event 14.6.1 — User interaction simulation
+- jsdom 29.1.1 — DOM environment for tests
+- @vitest/coverage-v8 4.1.8 — Code coverage via V8
+- Rust built-in `#[cfg(test)]` — Rust unit tests (per-module)
 
 **Build/Dev:**
 
-- Vite 6.0.0 + @vitejs/plugin-react 4.3.4 - Dev server (port 1420) and build (`vite.config.ts`, `package.json`)
-- TypeScript compiler (`tsc`) - Typecheck + pre-build (`package.json` `build`/`typecheck`)
-- @tauri-apps/cli ^2.0.0 - Tauri dev/build orchestration (`package.json`)
-- tauri-build 2 - Rust build script dependency (`src-tauri/Cargo.toml`)
+- Vite 6.0.0 — Frontend dev server and bundler
+- @vitejs/plugin-react 4.3.4 — React Fast Refresh for Vite
+- tauri-build 2.x — Tauri build helper (Rust build dependency)
+- just 0.x — Command runner (`justfile`)
+- oxlint 1.69.0 — Rust-powered TypeScript linter
+- oxc-parser 0.135.0 — Rust-powered TypeScript parser
+- ESLint 10.5.0 — JavaScript linter (legacy config in `.eslintrc.cjs`)
 
 ## Key Dependencies
 
 **Critical:**
 
-- reqwest 0.12 (`features = ["json", "blocking"]`) - HTTP download of MinUI archives (`src-tauri/src/download.rs`)
-- zip 0.6 - Archive extraction with path-traversal guards (`src-tauri/src/extract.rs`)
-- sha2 0.10 + hex 0.4 - SHA-256 checksum verification of downloads (`src-tauri/src/download.rs`)
-- tempfile 3 - Temp dir staging before SD-card copy (`src-tauri/src/download.rs`, `src-tauri/src/extract.rs`)
-- serde 1 (derive) + serde_json 1 - (De)serialization of IPC payloads and PowerShell JSON (`src-tauri/src/drives.rs`, `src-tauri/src/package.rs`)
-- tokio 1 - Async runtime backing async Tauri commands (`src-tauri/Cargo.toml`, `src-tauri/src/lib.rs`)
+- `@tauri-apps/api` ^2.0.0 — Tauri IPC bridge between frontend and Rust backend
+- `@tauri-apps/cli` ^2.0.0 — Tauri CLI for dev/build
+- `reqwest` 0.12 (with `json`, `blocking` features) — HTTP client for downloading archives
+- `sha2` 0.10 — SHA-256 checksum verification for downloaded archives
+- `zip` 0.6 — ZIP archive extraction
+- `tempfile` 3 — Temporary file/directory management for downloads and extractions
 
 **Infrastructure:**
 
-- time 0.3.36 - Timestamps (`src-tauri/Cargo.toml`)
-- libc 0.2 (unix target only) - Native unix calls (`src-tauri/Cargo.toml`)
-- windows-sys 0.59 (`Win32_Storage_FileSystem`, windows target only) - Native Windows storage APIs (`src-tauri/Cargo.toml`)
+- `serde` 1 (with `derive`) — Rust serialization/deserialization
+- `serde_json` 1 — JSON parsing in Rust
+- `tokio` 1 (full features) — Async runtime for Rust HTTP operations
+- `time` 0.3.36 — Date/time handling in Rust
+- `hex` 0.4 — Hex encoding for checksums
+
+**Platform-Specific:**
+
+- `libc` 0.2 — Unix-only: `statvfs` for disk space queries
+- `windows-sys` 0.59 (`Win32_Storage_FileSystem`) — Windows-only: filesystem operations
 
 ## Configuration
 
 **Environment:**
 
-- `TAURI_DEV_HOST` - Optional dev host for HMR over LAN (`vite.config.ts`)
-- No `.env` files or secret-based config; registry/GitHub URLs are hard-coded constants (`src/types/package.ts` `REGISTRY_URL`, `src/types/release.ts` `GITHUB_API_URL`)
+- `TAURI_DEV_HOST` — Optional env var for Vite dev server HMR host (used in `vite.config.ts`)
+- No `.env` file or dotenv dependency detected
 
-**Build:**
+**Build Config Files:**
 
-- `tsconfig.json` - Strict TS (`strict`, `noUnusedLocals`, `noUnusedParameters`), bundler module resolution, `noEmit`
-- `vite.config.ts` - Vite + React, fixed port 1420, ignores `src-tauri/**`
-- `vitest.config.ts` + `vitest.setup.ts` - jsdom env, `src/**/*.test.{ts,tsx}` include
-- `.eslintrc.cjs` - ESLint with `@typescript-eslint` (note: `lint` script actually runs `oxlint src`; `fmt` runs `oxfmt src`)
-- `src-tauri/tauri.conf.json` - App identifier `dev.minui.easy-installer`, 800×600 window, bundle targets `all`, CSP null
-- `src-tauri/capabilities/default.json` - Capability set granting `core:default` to the main window
-- `src-tauri/Cargo.toml` - Crate `minui_easy_installer_lib` (`staticlib`, `cdylib`, `rlib`)
+- `tsconfig.json` — TypeScript config: ES2020 target, strict mode, React JSX, bundler module resolution
+- `vite.config.ts` — Vite config: React plugin, port 1420, strict port, HMR on port 1421
+- `vitest.config.ts` — Vitest config: jsdom environment, setup file, test glob `src/**/*.test.{ts,tsx}`
+- `src-tauri/tauri.conf.json` — Tauri app config: window 800x600, CSP policy, bundle targets
+- `src-tauri/Cargo.toml` — Rust crate config: edition 2021, staticlib+cdylib+rlib output
+- `.eslintrc.cjs` — ESLint config: browser env, TypeScript plugin
+- `justfile` — Task runner: dev, build, lint, fmt, check, pre-commit recipes
+
+**Security/CSP:**
+
+- CSP in `tauri.conf.json`: `default-src 'self'; connect-src 'self' https://packages.minui.dev https://api.github.com https://github.com https://*.githubusercontent.com`
+- Capabilities in `src-tauri/capabilities/default.json`: `core:default` permissions only
 
 ## Platform Requirements
 
 **Development:**
 
-- Node.js + npm and Rust/Cargo toolchain (Rust edition 2021)
-- Tauri v2 prerequisites (platform WebView, build tooling)
-- Dev tooling: Vite, Vitest, oxlint/oxfmt, @tauri-apps/cli
+- macOS 10.15+ or Windows 10+ (Tauri v2 requirement)
+- Node.js / Bun for frontend dev
+- Rust toolchain (stable, 2021 edition)
+- `just` command runner (optional, for `justfile` recipes)
+- `cargo tauri dev` for full-stack development
 
 **Production:**
 
-- Desktop app, MVP targets Windows + macOS only (per `AGENTS.md`; no Linux in Phase 1, though some Rust paths are `cfg(target_os = "linux")`)
-- Bundled installers via Tauri (`bundle.targets = "all"`, icons in `src-tauri/icons/`, `src-tauri/tauri.conf.json`)
+- macOS `.dmg` or Windows `.msi`/`.exe` installer
+- Targets: `"all"` (all Tauri-supported bundle formats)
+- Icons: 32x32, 128x128, 128x128@2x, `.icns` (macOS), `.ico` (Windows)
 
----
+**Frontend TypeScript (strict):**
 
-_Stack analysis: 2026-06-13_
+- Target: ES2020
+- Strict mode enabled (`noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`)
+- Module: ESNext with bundler resolution
+- JSX: react-jsx (automatic runtime)

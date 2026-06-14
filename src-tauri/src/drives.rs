@@ -2,6 +2,8 @@ use serde::Serialize;
 use std::path::Path;
 use std::process::Command;
 
+use crate::fs_utils;
+
 #[derive(Debug, Serialize, Clone)]
 pub struct RemovableDrive {
     pub name: String,
@@ -13,7 +15,8 @@ pub struct RemovableDrive {
 
 #[cfg(target_os = "macos")]
 pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
-    // Use df to find all volumes under /Volumes/
+    // Use df to find volumes under /Volumes/, then verify they are removable/external
+    // using diskutil info.
     let output = Command::new("df")
         .args(["-k"])
         .output()
@@ -37,17 +40,27 @@ pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
             continue;
         }
 
-        // Get filesystem type from diskutil info
-        let filesystem = get_filesystem(mount_path);
-
-        let available = parts[3].parse::<u64>().ok().map(|k| k * 1024);
-
-        let size = get_disk_size(mount_path);
-
+        // Exclude known internal/system volumes by name
         let name = Path::new(mount_path)
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
+            .unwrap_or_default();
+        if name == "Macintosh HD" || name.starts_with("Macintosh HD") {
+            continue;
+        }
+
+        // Use diskutil info to check if this volume is on a physical disk
+        // and was not synthesised from a disk image or network mount
+        let is_external = is_removable_volume(mount_path);
+
+        // Skip internal drives — only include confirmed removable/external
+        if !is_external {
+            continue;
+        }
+
+        let filesystem = get_filesystem(mount_path);
+        let available = parts[3].parse::<u64>().ok().map(|k| k * 1024);
+        let size = fs_utils::get_disk_space(mount_path).map(|ds| ds.total);
 
         drives.push(RemovableDrive {
             name,
@@ -63,6 +76,46 @@ pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
     }
 
     Ok(drives)
+}
+
+#[cfg(target_os = "macos")]
+fn is_removable_volume(mount_path: &str) -> bool {
+    use std::process::Command;
+
+    let output = match Command::new("diskutil")
+        .args(["info", mount_path])
+        .output()
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return false,
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let info = stdout.as_ref();
+
+    // Check if Internal is false
+    let is_internal = if let Some(pos) = info.find("Internal:") {
+        let rest = info[pos..].trim_start_matches("Internal:").trim();
+        !rest.starts_with("No") && !rest.starts_with("false")
+    } else {
+        // If key not found, assume internal (safer to exclude)
+        true
+    };
+
+    if is_internal {
+        return false;
+    }
+
+    // Check if it's removable or external
+    let removable = info.contains("Removable Media: Yes")
+        || info.contains("Removable Media Or External Device: Yes");
+
+    // Check if it's a physical disk (not a disk image or network volume)
+    let physical = !info.contains("Virtual: Yes")
+        && !info.contains("Disk Image: Yes")
+        && !info.contains("Network Volume: Yes");
+
+    removable || physical
 }
 
 /// Format a drive to FAT32 on macOS using diskutil.
@@ -132,12 +185,7 @@ pub fn format_drive(mount_path: &str, volume_name: &str) -> Result<(), String> {
     let format_name: String = format_name.chars().take(11).collect();
 
     let result = Command::new("diskutil")
-        .args([
-            "eraseDisk",
-            "FAT32",
-            &format_name,
-            &target,
-        ])
+        .args(["eraseDisk", "FAT32", &format_name, &target])
         .output()
         .map_err(|e| format!("Failed to run diskutil: {}", e))?;
 
@@ -180,40 +228,7 @@ fn get_filesystem(mount_path: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-fn get_disk_size(mount_path: &str) -> Option<u64> {
-    use std::ffi::CString;
-    use std::mem;
-
-    let path = CString::new(mount_path).ok()?;
-    unsafe {
-        let mut stat: libc::statvfs = mem::zeroed();
-        if libc::statvfs(path.as_ptr(), &mut stat) == 0 {
-            let total = stat.f_blocks as u64 * stat.f_frsize as u64;
-            return Some(total);
-        }
-    }
-
-    // Fallback: parse from diskutil info
-    let output = Command::new("diskutil")
-        .args(["info", mount_path])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if line.contains("Total Size:") || line.contains("Disk Size:") {
-            let value = line.split(':').nth(1)?.trim();
-            return parse_size_str(value);
-        }
-    }
-    None
-}
-
-#[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn parse_size_str(s: &str) -> Option<u64> {
     let s = s.trim();
     let (num_str, unit) = if let Some(pos) = s.find(char::is_alphabetic) {

@@ -1,217 +1,143 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-06-13
-
-> Scope: Tauri v2 desktop app — Rust backend (`src-tauri/src/`) + React/TypeScript
-> frontend (`src/`). Conventions below are derived by reading the actual source.
+**Analysis Date:** 2026-06-14
 
 ## Naming Patterns
 
 **Files:**
 
-- TS pure-logic / types modules: lowercase single word — `src/types/drive.ts`,
-  `src/types/version.ts`, `src/types/install.ts`, `src/types/release.ts`,
-  `src/types/package.ts`, `src/types/validate.ts`, `src/types/device.ts`,
-  `src/types/archive.ts`.
-- React components: PascalCase `.tsx` — `src/DriveSelector.tsx`, `src/Home.tsx`,
-  `src/WifiWizard.tsx`, `src/PackageStore.tsx`, `src/ConfirmDialog.tsx`,
-  `src/InstallProgress.tsx`, `src/App.tsx`, `src/main.tsx`.
-- Rust modules: lowercase single word — `src-tauri/src/drives.rs`,
-  `src-tauri/src/download.rs`, `src-tauri/src/extract.rs`, `src-tauri/src/install.rs`,
-  `src-tauri/src/version.rs`, `src-tauri/src/package.rs`, `src-tauri/src/validate.rs`,
-  `src-tauri/src/wifi.rs`. Registered in `src-tauri/src/lib.rs`.
-- Test files co-located with `.test.ts` / `.test.tsx` suffix (see `TESTING.md`).
+- React components: PascalCase — `DriveSelector.tsx`, `Home.tsx`, `InstallProgress.tsx`, `ConfirmDialog.tsx`
+- Type/utility modules: camelCase — `drive.ts`, `install.ts`, `release.ts`, `version.ts`, `package.ts`, `archive.ts`
+- Rust modules: snake_case — `download.rs`, `install.rs`, `version.rs`, `extract.rs`, `fs_utils.rs`
+- Test files: co-located with source, suffixed `.test.ts` or `.test.tsx` — `release.test.ts`, `Home.test.tsx`
+- Static data: lowercase JSON — `store.json` (in `src/types/`)
 
 **Functions:**
 
-- TS: `camelCase` — `formatSize`, `getDriveDisplayName` (`src/types/drive.ts`),
-  `checkMinuiVersion` (`src/types/version.ts`), `installMinui` (`src/types/install.ts`),
-  `parseGitHubRelease`, `fetchMinUIRelease` (`src/types/release.ts`).
-- React components: `PascalCase` function declarations, e.g.
-  `function DriveSelector({ ... }: DriveSelectorProps)` (`src/DriveSelector.tsx`).
-- Rust: `snake_case` — `verify_checksum`, `download_archive` (`src-tauri/src/download.rs`),
-  `detect_installed_version`, `parse_minui_version`, `is_update_available`,
-  `check_for_updates` (`src-tauri/src/version.rs`).
-- Tauri command handlers in `src-tauri/src/lib.rs` are thin `snake_case` wrappers
-  annotated `#[tauri::command]` that delegate to a module fn (e.g.
-  `get_removable_drives` → `drives::list_removable_drives()`).
+- Frontend: camelCase — `formatSize()`, `getDriveDisplayName()`, `fetchMinUIRelease()`, `installMinui()`, `checkMinuiVersion()`, `classifyError()`
+- Backend (Tauri commands): snake_case matching Rust convention — `get_removable_drives`, `install_minui`, `check_minui_version`
+- Internal Rust helpers: snake_case — `detect_installed_version()`, `parse_minui_version()`, `is_update_available()`, `is_preserved_path()`
+- React event handlers: `handle` prefix — `handleInstallClick()`, `handleCancelInstall()`, `handleConfirmInstall()`, `handleDismissInstall()`
+- Async fetch wrappers: `fetch` prefix — `fetchDrives()`, `fetchMinUIRelease()`, `fetchPackageRegistry()`
 
 **Variables:**
 
-- TS: `camelCase` locals (`mockDrive`, `baseArchiveUrl`, `extrasArchiveUrl`).
-- Rust: `snake_case` locals (`temp_dir`, `file_path`, `checksum_verified`).
-- TS module constants: `SCREAMING_SNAKE_CASE` — `GITHUB_API_URL` (`src/types/release.ts`);
-  module-private data tables use `SCREAMING_SNAKE_CASE` too — `DEVICE_PROFILES`
-  (`src/types/device.ts`).
+- Frontend state: camelCase with descriptive names — `installPhase`, `installMessage`, `showConfirmDialog`, `isCheckingVersion`
+- Rust constants: SCREAMING_SNAKE_CASE — `ROM_DIRS`, `PRESERVED_FOLDERS`, `GITHUB_API_URL`
+- Local variables: camelCase in TS, snake_case in Rust
 
 **Types:**
 
-- TS: `PascalCase` interfaces and type aliases — `RemovableDrive` (`src/types/drive.ts`),
-  `InstallResult`, `InstallError`, `InstallPhase` (`src/types/install.ts`),
-  `MinUIRelease`, `ReleaseChecksums`, `ReleaseFetchResult` (`src/types/release.ts`).
-- Rust: `PascalCase` structs — `DownloadResult` (`src-tauri/src/download.rs`),
-  `VersionCheckResult`, `InstalledVersion` (`src-tauri/src/version.rs`),
-  `PackageInstallResult`, `PackageInstallPathRules`, `InstalledPackage`,
-  `PackageUpdateInfo` (`src-tauri/src/package.rs`).
-- **Cross-boundary field casing:** structs that cross the Tauri IPC boundary keep
-  `snake_case` fields on _both_ sides — Rust serde struct fields are `snake_case`
-  with no `rename_all`, and the mirrored TS interface also uses `snake_case`
-  (e.g. `mount_path`, `size_bytes`, `available_bytes` in both
-  `src-tauri/src/drives.rs`'s `RemovableDrive` and `src/types/drive.ts`'s
-  `RemovableDrive`; `base_files_copied` in both `install.rs` and `src/types/install.ts`).
-  Pure-frontend types that never round-trip through serde use `camelCase`
-  (e.g. `baseArchiveUrl`, `extrasArchiveUrl` in `src/types/release.ts`;
-  `installPathRules`, `baseDir` in `src/types/device.ts`).
-- **invoke argument casing:** TS `invoke()` call sites pass `camelCase` keys
-  (`sdMount`, `latestVersion`, `baseUrl`) which Tauri auto-maps to the Rust
-  handler's `snake_case` params (`sd_mount`, `latest_version`, `base_url`) — see
-  `src/types/version.ts` calling `check_minui_version` → `src-tauri/src/lib.rs`.
+- Interfaces: PascalCase — `RemovableDrive`, `InstallResult`, `MinUIRelease`, `VersionCheckResult`, `PackageRegistryEntry`
+- Type aliases: PascalCase — `InstallPhase`, `PackageCategory`, `InstallErrorCode`, `ReleaseFetchResult`
+- Discriminated unions: `...Either` suffix — `InstallResultEither`, `VersionCheckResultEither`, `DownloadResultEither`, `ExtractionResultEither`
+- Error types: `...Error` suffix with `message: string` and `code: string` — `InstallError`, `DownloadError`, `ReleaseFetchError`
+- Result types: `...FetchResult` or `...Result` suffix — `PackageRegistryFetchResult`, `ReleaseFetchResult`
+- Props interfaces: `...Props` suffix — `DriveSelectorProps`, `HomeProps`
 
 ## Code Style
 
 **Formatting:**
 
-- TS/TSX: **tabs** for indentation (verified: leading `\t` in `src/types/drive.ts`).
-  Formatter is `oxfmt` via `npm run fmt` → `"fmt": "oxfmt src"` (`package.json`).
-- Rust: **4 spaces** for indentation (verified: leading spaces in
-  `src-tauri/src/version.rs`). Standard `cargo fmt` defaults; no `rustfmt.toml` present.
-- Double-quoted strings in TS; `format!`/`"..."` in Rust.
+- Tool: `oxfmt` (Oxidation Compiler formatter) — run via `bun run fmt`
+- Indentation: Tabs (observed consistently across all `.ts`, `.tsx`, `.cjs`, and `.json` files)
+- Semicolons: Used (TypeScript files use semicolons)
+- Quotes: Double quotes for strings in TS/TSX
+- Trailing commas: Used in multi-line structures (object literals, function parameters, arrays)
+- JSX: Indented with consistent 4-space JSX content within components
 
 **Linting:**
 
-- TS lint tool is **oxlint**, NOT eslint — `"lint": "oxlint src"` (`package.json`).
-  `oxlint` is the installed devDependency that scripts invoke.
-- A legacy `.eslintrc.cjs` exists (extends `eslint:recommended`,
-  `plugin:@typescript-eslint/recommended`) and `eslint` is listed in devDependencies,
-  but **no npm script runs eslint** — the `.eslintrc.cjs` is effectively unused/vestigial.
-  No `.oxlintrc.json` config file is present, so oxlint runs with defaults.
-- Typecheck is separate from lint: `"typecheck": "tsc --noEmit"` (`package.json`).
-- TS strictness via `tsconfig.json`: `"strict": true`, `"noUnusedLocals": true`,
-  `"noUnusedParameters": true`, `"noFallthroughCasesInSwitch": true`,
-  `"forceConsistentCasingInFileNames": true`.
+- Primary linter: `oxlint` (Oxidation Compiler linter) — run via `bun run lint`
+- Secondary: ESLint configured in `.eslintrc.cjs` with `@typescript-eslint/recommended` rules
+- TypeScript: `tsconfig.json` enforces `strict: true`, `noUnusedLocals: true`, `noUnusedParameters: true`, `noFallthroughCasesInSwitch: true`, `forceConsistentCasingInFileNames: true`
+- Type checking: `bun run typecheck` (runs `tsc --noEmit`)
 
 ## Import Organization
 
-**Order (TS, observed in `src/DriveSelector.tsx` / `src/Home.test.tsx`):**
+**Order:**
 
-1. External packages — `@tauri-apps/api/core`, `react`, `@testing-library/*`, `vitest`.
-2. Local value/type imports from sibling/`./types/*` modules.
-3. `import type { ... }` used for type-only imports (e.g.
-   `import type { RemovableDrive } from "./types/drive";`), kept separate from value
-   imports of the same module.
+1. Tauri API imports — `import { invoke } from "@tauri-apps/api/core"`, `import { listen } from "@tauri-apps/api/event"`
+2. React/React-DOM imports — `import { useCallback, useEffect, useState } from "react"`
+3. Local type imports (type-only) — `import type { RemovableDrive } from "./types/drive"`
+4. Local value imports — `import { formatSize, getDriveDisplayName } from "./types/drive"`
+5. Local component imports — `import ConfirmDialog from "./ConfirmDialog"`
 
-**Order (Rust, observed in `src-tauri/src/download.rs` / `package.rs`):**
-
-1. External crates (`use sha2::...`, `use tempfile::TempDir;`).
-2. `std` imports (`use std::fs;`, `use std::path::Path;`).
-3. Crate-local modules (`use crate::download;`, `use crate::extract;`).
-4. In `#[cfg(test)]` modules: `use super::*;` first.
+**Pattern for type imports:** Always use `import type` for pure type imports. Value imports are separated from type imports even when from the same module (e.g., `import type { RemovableDrive }` on one line, `import { formatSize }` on the next).
 
 **Path Aliases:**
 
-- None configured. TS uses relative paths (`./types/drive`).
-  `tsconfig.json` sets `"moduleResolution": "bundler"` and
-  `"allowImportingTsExtensions": true` but defines no `paths` aliases.
+- No path aliases configured — all imports use relative paths (`./types/drive`, `./Home`, `@tauri-apps/api/core`)
+
+**Dynamic imports:** Used in type modules to lazily load Tauri API — `const { invoke } = await import("@tauri-apps/api/core")` (seen in `install.ts`, `version.ts`, `package.ts`, `archive.ts`). This avoids circular dependency issues and keeps type modules testable without Tauri runtime.
 
 ## Error Handling
 
 **Patterns:**
 
-- **Rust → Result<T, String>:** all fallible backend fns and every
-  `#[tauri::command]` return `Result<T, String>` with human-readable error strings
-  built via `.map_err(|e| format!("...: {}", e))` (e.g. `verify_checksum`,
-  `download_archive` in `src-tauri/src/download.rs`). Some commands that cannot fail
-  return the value directly (e.g. `check_minui_version` returns
-  `version::VersionCheckResult`; `scan_wifi_networks` returns `Vec<String>`).
-- **Result struct pattern:** operations also carry a `success: bool` + `error:
-Option<String>` payload struct (e.g. `DownloadResult`, `InstallResult`,
-  `PackageInstallResult`) so partial/expected failures (checksum mismatch) return
-  `Ok(DownloadResult{ success:false, ... })` rather than `Err`.
-- **TS discriminated-union "Either":** frontend API wrappers return a tagged union
-  `{ success: true; data: T } | { success: false; error: E }` —
-  `InstallResultEither`, `VersionCheckResultEither`, `ValidationResultEither`,
-  `ReleaseFetchResult`. Errors carry a `code` string-literal union (e.g.
-  `InstallError.code: "DOWNLOAD_ERROR" | "EXTRACTION_ERROR" | ...` in
-  `src/types/install.ts`). `installMinui` maps backend error substrings to a `code`.
-- **try/catch normalization:** TS wrappers catch and normalize unknown errors:
-  `const message = err instanceof Error ? err.message : "Unknown error";`
-  (`src/types/version.ts`, `src/types/install.ts`).
-- **Untrusted-data parsing:** `parseGitHubRelease(data: unknown)`
-  (`src/types/release.ts`) narrows `unknown` defensively and returns an error object
-  instead of throwing — matches the AGENTS.md "treat registry data as untrusted" rule.
-- **React components:** local `error` state set in `catch` and rendered
-  (`setError(String(err))` in `src/DriveSelector.tsx`); `try/catch/finally` with a
-  `loading` flag.
+- **Either/Result discriminated unions** — The primary error handling pattern across the entire codebase. Every async API function returns `Promise<XxxResultEither>` where `success: true` carries `data` and `success: false` carries `error` with a typed `code` string.
+  ```typescript
+  type InstallResultEither =
+    | { success: true; data: InstallResult }
+    | { success: false; error: InstallError };
+  ```
+- **Error classification** — Errors from Rust IPC are classified by string matching on the error message. The `classifyError()` function in `install.ts` maps error messages to error codes (`DOWNLOAD_ERROR`, `EXTRACTION_ERROR`, `COPY_ERROR`, `CHECKSUM_ERROR`).
+- **Catch-all with string fallback** — Every `catch` block converts unknown errors: `const message = err instanceof Error ? err.message : "Unknown error"`
+- **Non-fatal errors** — Version check failures, package update failures, and extras installation failures are treated as non-fatal. They log warnings but do not block the main flow (e.g., extras failure becomes `extras_warning` on `InstallResult`).
+- **Tauri commands** — Rust backend returns `Result<T, String>` where the error variant is always a `String`. Error strings are formatted with descriptive prefixes (e.g., `"Base download failed: {e}"`, `"Failed to create Roms/{dir}: {e}"`).
 
 ## Logging
 
-**Framework:** No logging framework. No structured logger; `console.*` is avoided in
-the type modules. Errors are surfaced via return values / component state rather than
-logged. (Aligns with AGENTS.md: never log WiFi passwords or secrets.)
+**Framework:** None (no structured logging on frontend or backend)
 
 **Patterns:**
 
-- Backend errors propagate as `Result`/`error` strings to the frontend, which renders
-  them; no plaintext logging of secrets.
+- Frontend: State-driven UI messages via `installMessage` and `installLog` arrays — progress events are accumulated in `InstallProgressEvent[]` and displayed in the `InstallProgressUI` component
+- Frontend: Non-fatal errors silently caught — e.g., version check failures have an empty `catch {}` block
+- Backend (Rust): No `log` or `tracing` crate usage observed — errors are returned as `String` values in `Result` types and propagated via Tauri IPC
+- Progress reporting: Rust backend emits `InstallProgressEvent` via Tauri's `app_handle.emit("install-progress", event)` — received on frontend via `listen<InstallProgressEvent>("install-progress", callback)`
 
 ## Comments
 
 **When to Comment:**
 
-- Sparse, intent-focused. Inline comments explain non-obvious decisions, e.g.
-  `// Keep the temp directory alive by leaking it` (`src-tauri/src/download.rs`) and
-  `// No installed version means update available` (`src-tauri/src/version.rs`).
+- Doc comments on public Rust functions explaining purpose, parameters, and expected behavior — `/// Detect installed MinUI version from SD card metadata.`
+- Inline comments explaining non-obvious logic — `// MinUI format: SSID:PASSWORD on one line`
+- Comments explaining data formats — `/// Expected format:\n/// MinUI v2024.12.25`
+- Comments on constants explaining their purpose — `/// Folders that must never be deleted or overwritten during install`
+- No unnecessary comments on obvious code
 
 **JSDoc/TSDoc:**
 
-- TS modules use essentially no JSDoc — types are self-documenting via interfaces.
-- Rust uses `///` doc comments on public fns, sometimes with fenced examples of file
-  formats (e.g. `detect_installed_version`, `parse_minui_version`,
-  `is_update_available` in `src-tauri/src/version.rs`;
-  `resolve_package_install_path` in `src-tauri/src/package.rs`).
+- Single-line `/** ... */` comments on functions with non-obvious behavior — `/** Infers error code from a Rust error message string */`
+- No full JSDoc parameter documentation observed — types serve as documentation
+- TSDoc not used for component props — TypeScript interfaces are self-documenting
 
 ## Function Design
 
-**Size:** Small, single-purpose functions. Logic is decomposed into helpers
-(`parse_minui_version`, `is_update_available`, `detect_installed_version` compose into
-`check_for_updates` in `src-tauri/src/version.rs`).
+**Size:** Functions are kept small and focused. Complex flows are decomposed into helper functions (e.g., `install_minui` calls `download_archive`, `extract_archive`, `copy_base_files`, `copy_extras_files`, `create_rom_dirs`). UI components are kept under ~200 lines.
 
 **Parameters:**
 
-- TS public API fns take a single **options object** with named fields, e.g.
-  `installMinui(options: { baseUrl; extrasUrl?; sdMount; platform; extrasDir })`
-  (`src/types/install.ts`), `checkMinuiVersion(options: { sdMount; latestVersion? })`.
-- Optional params expressed as `?:` in TS and `Option<&str>` in Rust
-  (`download_archive(url: &str, expected_checksum: Option<&str>)`).
-- Rust fns take borrowed refs (`&str`, `&PackageInstallPathRules`); `lib.rs` handlers
-  own `String`/`Option<String>` and pass `.as_deref()` down.
-- React components destructure a typed `Props` interface in the signature
-  (`{ selectedDrive, onSelectDrive }: DriveSelectorProps`).
+- Options objects for functions with 3+ parameters — `installMinui(options: { baseUrl, extrasUrl, baseChecksum, ... })`, `checkMinuiVersion(options: { sdMount, latestVersion })`
+- Direct parameters for 1-2 arg functions — `formatSize(bytes)`, `getDriveDisplayName(drive)`, `verifyChecksum(filePath, expectedChecksum)`
+- Tauri command parameters match frontend invocation names exactly (camelCase on both sides)
 
 **Return Values:**
 
-- See Error Handling: Rust `Result<T, String>` or plain value; TS discriminated-union
-  Either types or plain values.
+- All async API functions return discriminated union `Either` types — `{ success: true, data } | { success: false, error }`
+- Simple utility functions return primitive values or `null`
+- Rust functions return `Result<T, String>` for fallible operations
+- State-changing functions return void (React setState is side-effect based)
 
 ## Module Design
 
 **Exports:**
 
-- TS: named exports only (`export function`, `export interface`, `export type`,
-  `export const`). React components use `export default function` (default export per
-  component file).
-- Rust: `pub fn` / `pub struct` for module API; module-private helpers are unexported
-  (`fn parse_minui_version`, `fn copy_package_files`).
-- Rust structs that cross IPC derive `#[derive(Debug, Clone, serde::Serialize,
-serde::Deserialize)]` (Serialize-only for outbound-only, e.g. `DownloadResult` is
-  `serde::Serialize` only).
+- One primary type/function per module — each file in `src/types/` defines a focused domain (drive, install, release, version, package, archive, validate)
+- Helper functions are co-located with their types — `formatSize()` lives in `drive.ts` alongside `RemovableDrive`
+- No re-exports or barrel files observed
 
-**Barrel Files:**
+**Barrel Files:** Not used. Each module is imported directly by path.
 
-- None. There is no `index.ts` re-export barrel; consumers import directly from each
-  `src/types/<name>.ts`. Rust modules are declared and individually wired in
-  `src-tauri/src/lib.rs`.
-
----
-
-_Convention analysis: 2026-06-13_
+**Rust modules:** Organized by domain (`download.rs`, `install.rs`, `version.rs`, `extract.rs`, `drives.rs`, `fs_utils.rs`, `wifi.rs`, `validate.rs`, `package.rs`) with `lib.rs` as the central registration point for Tauri commands.

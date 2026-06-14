@@ -1,278 +1,422 @@
-import { classifyError } from "./install";
+import type { AppError } from "./errors";
+import { classifyError } from "./errors";
 import storeData from "./store.json";
 
 export interface PackageRegistryEntry {
-	name: string;
-	version: string;
-	category: PackageCategory;
-	description: string;
-	repository: string;
-	downloads: number | null;
-	rating: number | null;
-	artifactUrl: string;
-	checksum: string | null;
-	supportedDevices: string[];
-	installPathRules: PackageInstallPathRules;
+  name: string;
+  version: string;
+  category: PackageCategory;
+  description: string;
+  repository: string;
+  downloads: number | null;
+  rating: number | null;
+  artifactUrl: string;
+  checksum: string | null;
+  supportedDevices: string[];
+  installPathRules: PackageInstallPathRules;
 }
 
 export type PackageCategory =
-	| "Utilities"
-	| "Emulators"
-	| "Network"
-	| "Community";
+  | "Utilities"
+  | "Emulators"
+  | "Network"
+  | "Community";
 
 export interface PackageInstallPathRules {
-	targetDir: string;
-	extractToRoot: boolean;
-	pakName?: string;
+  targetDir: string;
+  extractToRoot: boolean;
+  pakName?: string;
 }
 
 export interface PackageRegistry {
-	version: string;
-	packages: PackageRegistryEntry[];
+  version: string;
+  packages: PackageRegistryEntry[];
 }
 
 export interface PackageRegistryError {
-	message: string;
-	code:
-		| "INVALID_ENTRY"
-		| "VALIDATION_ERROR"
-		| "PARSE_ERROR"
-		| "NETWORK_ERROR"
-		| "NOT_FOUND";
+  message: string;
+  code:
+    | "INVALID_ENTRY"
+    | "VALIDATION_ERROR"
+    | "PARSE_ERROR"
+    | "NETWORK_ERROR"
+    | "NOT_FOUND";
+}
+
+const REGISTRY_URL = "https://packages.minui.dev/registry/index.json";
+
+// Module-level cache for the remote registry (session-scoped)
+let cachedRegistry: PackageRegistry | null = null;
+
+export function clearRegistryCache(): void {
+  cachedRegistry = null;
 }
 
 export async function installPackage(options: {
-	artifactUrl: string;
-	checksum?: string;
-	sdMount: string;
-	targetDir: string;
-	extractToRoot: boolean;
-	pakName?: string;
-	platform: string;
+  artifactUrl: string;
+  checksum?: string;
+  sdMount: string;
+  targetDir: string;
+  extractToRoot: boolean;
+  pakName?: string;
+  platform: string;
 }): Promise<PackageInstallResultEither> {
-	try {
-		const { invoke } = await import("@tauri-apps/api/core");
-		const result = await invoke<PackageInstallResult>("install_package", {
-			artifactUrl: options.artifactUrl,
-			checksum: options.checksum || null,
-			sdMount: options.sdMount,
-			targetDir: options.targetDir,
-			extractToRoot: options.extractToRoot,
-			pakName: options.pakName,
-			platform: options.platform,
-		});
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const result = await invoke<PackageInstallResult>("install_package", {
+      artifactUrl: options.artifactUrl,
+      checksum: options.checksum || null,
+      sdMount: options.sdMount,
+      targetDir: options.targetDir,
+      extractToRoot: options.extractToRoot,
+      pakName: options.pakName,
+      platform: options.platform,
+    });
 
-		if (result.success) {
-			return { success: true, data: result };
-		}
+    if (result.success) {
+      return { success: true, data: result };
+    }
 
-		const errorMsg = result.error || "Package installation failed";
-		const code = classifyError(errorMsg);
+    const errorMsg = result.error || "Package installation failed";
+    const code = classifyError(errorMsg);
 
-		return {
-			success: false,
-			error: { message: errorMsg, code },
-		};
-	} catch (err) {
-		const message = err instanceof Error ? err.message : "Unknown error";
-		return {
-			success: false,
-			error: { message, code: "UNKNOWN_ERROR" },
-		};
-	}
+    return {
+      success: false,
+      error: { message: errorMsg, code },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return {
+      success: false,
+      error: { message, code: "UNKNOWN_ERROR" },
+    };
+  }
 }
 
 export async function detectInstalledPackages(
-	sdMount: string,
+  sdMount: string,
 ): Promise<InstalledPackage[]> {
-	try {
-		const { invoke } = await import("@tauri-apps/api/core");
-		return await invoke<InstalledPackage[]>("detect_installed_packages", {
-			sdMount,
-		});
-	} catch {
-		return [];
-	}
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<InstalledPackage[]>("detect_installed_packages", {
+      sdMount,
+    });
+  } catch {
+    return [];
+  }
 }
 
 export async function checkPackageUpdates(
-	sdMount: string,
-	registryPackages: [string, string][],
+  sdMount: string,
+  registryPackages: [string, string][],
 ): Promise<PackageUpdateInfo[]> {
-	try {
-		const { invoke } = await import("@tauri-apps/api/core");
-		return await invoke<PackageUpdateInfo[]>("check_package_updates", {
-			sdMount,
-			registryPackages,
-		});
-	} catch {
-		return [];
-	}
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<PackageUpdateInfo[]>("check_package_updates", {
+      sdMount,
+      registryPackages,
+    });
+  } catch {
+    return [];
+  }
 }
 
 export type PackageRegistryFetchResult =
-	| { success: true; data: PackageRegistry }
-	| { success: false; error: PackageRegistryError };
+  | { success: true; data: PackageRegistry }
+  | { success: false; error: PackageRegistryError };
 
 export interface PackageInstallResult {
-	success: boolean;
-	error: string | null;
-	files_copied: number;
+  success: boolean;
+  error: string | null;
+  files_copied: number;
 }
 
-export type PackageInstallError = {
-	message: string;
-	code:
-		| "DOWNLOAD_ERROR"
-		| "EXTRACTION_ERROR"
-		| "COPY_ERROR"
-		| "CHECKSUM_ERROR"
-		| "UNKNOWN_ERROR";
-};
+export type PackageInstallError = AppError;
 
 export type PackageInstallResultEither =
-	| { success: true; data: PackageInstallResult }
-	| { success: false; error: PackageInstallError };
+  | { success: true; data: PackageInstallResult }
+  | { success: false; error: PackageInstallError };
 
 export interface InstalledPackage {
-	name: string;
-	version: string | null;
-	source: string;
+  name: string;
+  version: string | null;
+  source: string;
 }
 
 export interface PackageUpdateInfo {
-	name: string;
-	installed_version: string | null;
-	latest_version: string;
-	update_available: boolean;
+  name: string;
+  installed_version: string | null;
+  latest_version: string;
+  update_available: boolean;
 }
 
 function resolveArtifactUrl(
-	repository: string,
-	version: string,
-	pakName: string,
+  repository: string,
+  version: string,
+  pakName: string,
 ): string {
-	const repo = repository.replace("https://github.com/", "");
-	const fileName = `${pakName.replace(/\s+/g, ".")}.pak.zip`;
-	return `https://github.com/${repo}/releases/download/${version}/${fileName}`;
+  const repo = repository.replace("https://github.com/", "");
+  const fileName = `${pakName.replace(/\s+/g, ".")}.pak.zip`;
+  return `https://github.com/${repo}/releases/download/${version}/${fileName}`;
 }
 
 interface StoreEmuPak {
-	name: string;
-	repository: string;
-	version: string;
-	pak_name: string;
-	rom_folder: string;
-	description?: string;
+  name: string;
+  repository: string;
+  version: string;
+  pak_name: string;
+  rom_folder: string;
+  description?: string;
+  checksum?: string;
 }
 
 interface StoreToolPak {
-	name: string;
-	repository: string;
-	version: string;
-	pak_name: string;
-	device?: string[];
-	download_url?: string;
-	description?: string;
+  name: string;
+  repository: string;
+  version: string;
+  pak_name: string;
+  device?: string[];
+  download_url?: string;
+  description?: string;
+  checksum?: string;
 }
 
 interface StoreRegistry {
-	emu_paks: StoreEmuPak[];
-	tool_paks: StoreToolPak[];
+  emu_paks: StoreEmuPak[];
+  tool_paks: StoreToolPak[];
 }
 
 function isStoreRegistry(data: unknown): data is StoreRegistry {
-	if (!data || typeof data !== "object") return false;
-	const d = data as Record<string, unknown>;
-	return Array.isArray(d.emu_paks) && Array.isArray(d.tool_paks);
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  return Array.isArray(d.emu_paks) && Array.isArray(d.tool_paks);
+}
+
+interface ValidationError {
+  entryName: string;
+  field: string;
+  reason: string;
+}
+
+function validateStoreEntry(
+  pak: StoreEmuPak | StoreToolPak,
+  type: "emu" | "tool",
+): ValidationError | null {
+  if (
+    !pak.name ||
+    typeof pak.name !== "string" ||
+    pak.name.trim().length === 0
+  ) {
+    return {
+      entryName: "(unnamed)",
+      field: "name",
+      reason: "missing or empty",
+    };
+  }
+  if (!pak.repository || typeof pak.repository !== "string") {
+    return {
+      entryName: pak.name,
+      field: "repository",
+      reason: "missing or not a string",
+    };
+  }
+  if (!pak.repository.startsWith("https://github.com/")) {
+    return {
+      entryName: pak.name,
+      field: "repository",
+      reason: "must be https://github.com/...",
+    };
+  }
+  if (
+    !pak.version ||
+    typeof pak.version !== "string" ||
+    pak.version.trim().length === 0
+  ) {
+    return {
+      entryName: pak.name,
+      field: "version",
+      reason: "missing or empty",
+    };
+  }
+  if (
+    !pak.pak_name ||
+    typeof pak.pak_name !== "string" ||
+    pak.pak_name.trim().length === 0
+  ) {
+    return {
+      entryName: pak.name,
+      field: "pak_name",
+      reason: "missing or empty",
+    };
+  }
+  if (type === "emu") {
+    const emu = pak as StoreEmuPak;
+    if (!emu.rom_folder || typeof emu.rom_folder !== "string") {
+      return {
+        entryName: pak.name,
+        field: "rom_folder",
+        reason: "missing or not a string",
+      };
+    }
+  }
+  if (pak.checksum !== undefined) {
+    if (typeof pak.checksum !== "string" || pak.checksum.length !== 64) {
+      return {
+        entryName: pak.name,
+        field: "checksum",
+        reason: "must be a 64-character hex string",
+      };
+    }
+  }
+  return null;
 }
 
 function resolveDownloadUrl(
-	repository: string,
-	version: string,
-	pak_name: string,
-	download_url?: string,
+  repository: string,
+  version: string,
+  pak_name: string,
+  download_url?: string,
 ): string {
-	if (download_url) return download_url;
-	return resolveArtifactUrl(repository, version, pak_name);
+  if (download_url) return download_url;
+  return resolveArtifactUrl(repository, version, pak_name);
 }
 
 function convertStoreRegistry(data: StoreRegistry): PackageRegistry {
-	const packages: PackageRegistryEntry[] = [];
+  const allErrors: string[] = [];
+  const packages: PackageRegistryEntry[] = [];
 
-	for (const pak of data.emu_paks) {
-		packages.push({
-			name: pak.name,
-			version: pak.version,
-			category: "Emulators",
-			description:
-				pak.description ||
-				`Emulates ${pak.rom_folder.replace("Roms/", "")} games`,
-			repository: pak.repository,
-			downloads: null,
-			rating: null,
-			artifactUrl: resolveDownloadUrl(
-				pak.repository,
-				pak.version,
-				pak.pak_name,
-			),
-			checksum: null,
-			supportedDevices: [],
-			installPathRules: {
-				targetDir: "/Emus",
-				extractToRoot: false,
-				pakName: pak.pak_name,
-			},
-		});
-	}
+  for (const pak of data.emu_paks) {
+    const err = validateStoreEntry(pak, "emu");
+    if (err) {
+      allErrors.push(`[emu_paks] ${err.entryName}.${err.field}: ${err.reason}`);
+      continue;
+    }
+    packages.push({
+      name: pak.name,
+      version: pak.version,
+      category: "Emulators",
+      description:
+        pak.description ||
+        `Emulates ${pak.rom_folder.replace("Roms/", "")} games`,
+      repository: pak.repository,
+      downloads: null,
+      rating: null,
+      artifactUrl: resolveDownloadUrl(
+        pak.repository,
+        pak.version,
+        pak.pak_name,
+      ),
+      checksum: null,
+      supportedDevices: [],
+      installPathRules: {
+        targetDir: "/Emus",
+        extractToRoot: false,
+        pakName: pak.pak_name,
+      },
+    });
+  }
 
-	for (const pak of data.tool_paks) {
-		packages.push({
-			name: pak.name,
-			version: pak.version,
-			category: "Utilities",
-			description: pak.description || `${pak.name} utility`,
-			repository: pak.repository,
-			downloads: null,
-			rating: null,
-			artifactUrl: resolveDownloadUrl(
-				pak.repository,
-				pak.version,
-				pak.pak_name,
-				pak.download_url,
-			),
-			checksum: null,
-			supportedDevices: pak.device || [],
-			installPathRules: {
-				targetDir: "/Tools",
-				extractToRoot: false,
-				pakName: pak.pak_name,
-			},
-		});
-	}
+  for (const pak of data.tool_paks) {
+    const err = validateStoreEntry(pak, "tool");
+    if (err) {
+      allErrors.push(
+        `[tool_paks] ${err.entryName}.${err.field}: ${err.reason}`,
+      );
+      continue;
+    }
+    packages.push({
+      name: pak.name,
+      version: pak.version,
+      category: "Utilities",
+      description: pak.description || `${pak.name} utility`,
+      repository: pak.repository,
+      downloads: null,
+      rating: null,
+      artifactUrl: resolveDownloadUrl(
+        pak.repository,
+        pak.version,
+        pak.pak_name,
+        pak.download_url,
+      ),
+      checksum: pak.checksum || null,
+      supportedDevices: pak.device || [],
+      installPathRules: {
+        targetDir: "/Tools",
+        extractToRoot: false,
+        pakName: pak.pak_name,
+      },
+    });
+  }
 
-	return { version: "1.0.0", packages };
+  return { version: "1.0.0", packages };
+}
+
+function parseRegistryFromJson(data: unknown): PackageRegistryFetchResult {
+  if (!isStoreRegistry(data)) {
+    return {
+      success: false,
+      error: {
+        message: "Invalid store format: missing emu_paks/tool_paks arrays",
+        code: "PARSE_ERROR",
+      },
+    };
+  }
+
+  const registry = convertStoreRegistry(data);
+
+  if (registry.packages.length === 0) {
+    return {
+      success: false,
+      error: {
+        message: "Registry has no valid entries",
+        code: "VALIDATION_ERROR",
+      },
+    };
+  }
+
+  return { success: true, data: registry };
 }
 
 export async function fetchPackageRegistry(): Promise<PackageRegistryFetchResult> {
-	try {
-		if (isStoreRegistry(storeData)) {
-			return { success: true, data: convertStoreRegistry(storeData) };
-		}
+  // Return cache if available
+  if (cachedRegistry) {
+    return { success: true, data: cachedRegistry };
+  }
 
-		return {
-			success: false,
-			error: {
-				message: "Invalid store data",
-				code: "PARSE_ERROR",
-			},
-		};
-	} catch (err) {
-		const message = err instanceof Error ? err.message : "Unknown error";
-		return {
-			success: false,
-			error: { message, code: "NETWORK_ERROR" },
-		};
-	}
+  // Try fetching remote registry via Tauri backend
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const text = await invoke<string>("fetch_url", { url: REGISTRY_URL });
+    const json = JSON.parse(text);
+    const result = parseRegistryFromJson(json);
+
+    if (result.success) {
+      cachedRegistry = result.data;
+      return result;
+    }
+  } catch {
+    // Remote fetch failed — fall through to bundled store
+  }
+
+  // Fall back to bundled store.json
+  try {
+    const result = parseRegistryFromJson(storeData);
+    if (result.success) {
+      return result;
+    }
+
+    return {
+      success: false,
+      error: {
+        message: `Failed to load package data: ${result.error.message}`,
+        code: "NETWORK_ERROR",
+      },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return {
+      success: false,
+      error: { message, code: "NETWORK_ERROR" },
+    };
+  }
 }

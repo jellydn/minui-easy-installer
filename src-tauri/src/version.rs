@@ -90,17 +90,59 @@ fn parse_minui_version(content: &str) -> Option<String> {
     None
 }
 
+/// Try to parse a version string as semver, normalizing leading zeros first.
+fn try_parse_semver(v: &str) -> Option<semver::Version> {
+    // Direct parse first (fast path for clean semver like "0.12.0")
+    if let Ok(ver) = semver::Version::parse(v) {
+        return Some(ver);
+    }
+
+    // Normalize: strip leading zeros from each dot-separated segment
+    // This handles date versions like "2025.01.01" -> "2025.1.1"
+    let parts: Vec<&str> = v.split('.').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let normalized: String = parts
+        .iter()
+        .map(|p| p.trim_start_matches('0'))
+        .map(|p| if p.is_empty() { "0" } else { p })
+        .collect::<Vec<_>>()
+        .join(".");
+    semver::Version::parse(&normalized).ok()
+}
+
+/// Compare two version strings intelligently.
+///
+/// Tries semver parsing first (works for "0.12.0", "1.2.3", etc.
+/// as well as date versions like "2025.01.01" after normalization).
+/// Falls back to date-based string comparison when neither parses as semver.
+pub fn compare_versions(installed: &str, latest: &str) -> bool {
+    let installed = installed.trim().trim_start_matches('v').trim();
+    let latest = latest.trim().trim_start_matches('v').trim();
+
+    // Try semver for both
+    if let (Some(inst_ver), Some(lat_ver)) =
+        (try_parse_semver(installed), try_parse_semver(latest))
+    {
+        return lat_ver > inst_ver;
+    }
+
+    // If one is semver and the other isn't, assume the semver one is more recent
+    // (this handles the case where a version format changes)
+    if try_parse_semver(installed).is_some() != try_parse_semver(latest).is_some() {
+        return try_parse_semver(latest).is_some();
+    }
+
+    // Neither parses as semver — fall back to string comparison (works for YYYY.MM.DD)
+    latest > installed
+}
+
 /// Compare two version strings.
 ///
 /// Returns true if latest is newer than installed.
-/// Uses simple string comparison for now (works for date-based versions like 2024.12.25).
 pub fn is_update_available(installed: &str, latest: &str) -> bool {
-    // Normalize versions by removing 'v' prefix
-    let installed_norm = installed.trim().trim_start_matches('v').trim();
-    let latest_norm = latest.trim().trim_start_matches('v').trim();
-
-    // Simple string comparison works for date-based versions
-    latest_norm > installed_norm
+    compare_versions(installed, latest)
 }
 
 /// Check for version updates by comparing installed version with latest release.
@@ -161,6 +203,29 @@ mod tests {
     fn test_is_update_available_with_v_prefix() {
         assert!(is_update_available("v2024.12.25", "v2025.01.01"));
         assert!(!is_update_available("v2025.01.01", "v2024.12.25"));
+    }
+
+    #[test]
+    fn test_compare_versions_semver() {
+        // These are the real store.json versions that fail lexicographic comparison
+        assert!(compare_versions("0.9.0", "0.12.0"));
+        assert!(compare_versions("0.6.2", "0.7.0"));
+        assert!(!compare_versions("0.12.0", "0.9.0"));
+        assert!(!compare_versions("0.7.0", "0.6.2"));
+        assert!(!compare_versions("0.12.0", "0.12.0"));
+    }
+
+    #[test]
+    fn test_compare_versions_date_based() {
+        assert!(compare_versions("2024.11.01", "2024.12.25"));
+        assert!(!compare_versions("2024.12.25", "2024.11.01"));
+    }
+
+    #[test]
+    fn test_compare_versions_garbage() {
+        // Both unparseable — falls through to string comparison
+        assert!(compare_versions("alpha", "beta"));
+        assert!(!compare_versions("beta", "alpha"));
     }
 
     #[test]

@@ -17,26 +17,6 @@ fn is_path_traversal(path: &str) -> bool {
     normalized.contains("..") || normalized.starts_with('/') || normalized.starts_with('\\')
 }
 
-/// Validates a zip entry path for path traversal attacks
-fn validate_entry_path(entry_path: &str) -> Result<(), String> {
-    if is_path_traversal(entry_path) {
-        return Err(format!(
-            "Path traversal detected in archive entry: {}",
-            entry_path
-        ));
-    }
-
-    // Additional check: ensure no absolute paths
-    if Path::new(entry_path).is_absolute() {
-        return Err(format!(
-            "Absolute path detected in archive entry: {}",
-            entry_path
-        ));
-    }
-
-    Ok(())
-}
-
 // Determines output directory and returns (ExtractionResult, TempDir if one was created)
 fn determine_output(
     destination: Option<&str>,
@@ -77,6 +57,10 @@ pub fn extract_archive(
     fs::create_dir_all(&output_path)
         .map_err(|e| format!("Failed to create destination directory: {}", e))?;
 
+    let canonical_output = output_path
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize output path: {}", e))?;
+
     let mut files_extracted = 0u32;
 
     for i in 0..archive.len() {
@@ -86,16 +70,16 @@ pub fn extract_archive(
 
         let entry_path = entry.name().to_string();
 
-        // Validate for path traversal
-        validate_entry_path(&entry_path)?;
+        if is_path_traversal(&entry_path) {
+            return Err(format!(
+                "Path traversal detected in archive entry: {}",
+                entry_path
+            ));
+        }
 
         let file_path = output_path.join(&entry_path);
 
         // Ensure file path is within destination directory
-        let canonical_output = output_path
-            .canonicalize()
-            .map_err(|e| format!("Failed to canonicalize output path: {}", e))?;
-
         let canonical_file = file_path
             .parent()
             .unwrap_or(&file_path)
@@ -153,7 +137,9 @@ pub fn extract_archive(
             {
                 use std::os::unix::fs::PermissionsExt;
                 if let Some(mode) = entry.unix_mode() {
-                    let _ = fs::set_permissions(&file_path, fs::Permissions::from_mode(mode));
+                    if let Err(e) = fs::set_permissions(&file_path, fs::Permissions::from_mode(mode)) {
+                        eprintln!("Warning: failed to set permissions on {}: {}", entry_path, e);
+                    }
                 }
             }
 
@@ -164,12 +150,60 @@ pub fn extract_archive(
     Ok((
         ExtractionResult {
             success: true,
-            output_path: Some(output_path.to_str().unwrap_or("").to_string()),
+            output_path: Some(
+                output_path
+                    .to_str()
+                    .ok_or("Non-UTF-8 output path")?
+                    .to_string(),
+            ),
             files_extracted: Some(files_extracted),
             error: None,
         },
         _temp_dir,
     ))
+}
+
+/// Extract an archive into a session-owned temp slot, returning just the path.
+///
+/// The owning InstallSession keeps the TempDir alive for the lifetime of
+/// the install pipeline, preventing the extracted files from being deleted.
+/// If a destination is provided, files are extracted there directly (no slot needed).
+///
+/// Returns the output directory path as a PathBuf.
+pub fn extract_archive_into(
+    slot: &mut Option<tempfile::TempDir>,
+    archive_path: &Path,
+    destination: Option<&Path>,
+) -> Result<PathBuf, String> {
+    if let Some(dest) = destination {
+        // Extract directly to a caller-specified directory
+        let (result, _) = extract_archive(
+            archive_path
+                .to_str()
+                .ok_or("Non-UTF-8 archive path")?,
+            Some(dest.to_str().ok_or("Non-UTF-8 dest path")?),
+        )?;
+        if !result.success {
+            return Err(result.error.unwrap_or_else(|| "Extraction failed".to_string()));
+        }
+        return Ok(dest.to_path_buf());
+    }
+
+    // Create a TempDir and extract into it — transfer ownership to slot
+    let temp_dir = tempfile::TempDir::new()
+        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    let output_path = temp_dir.path().to_path_buf();
+
+    let (result, _) = extract_archive(
+        archive_path.to_str().ok_or("Non-UTF-8 archive path")?,
+        Some(output_path.to_str().ok_or("Non-UTF-8 path")?),
+    )?;
+    if !result.success {
+        return Err(result.error.unwrap_or_else(|| "Extraction failed".to_string()));
+    }
+
+    *slot = Some(temp_dir);
+    Ok(output_path)
 }
 
 #[cfg(test)]
@@ -186,15 +220,6 @@ mod tests {
         assert!(!is_path_traversal("etc/passwd"));
         assert!(!is_path_traversal("file.txt"));
         assert!(!is_path_traversal("folder/subfolder/file.txt"));
-    }
-
-    #[test]
-    fn test_validate_entry_path() {
-        assert!(validate_entry_path("etc/passwd").is_ok());
-        assert!(validate_entry_path("file.txt").is_ok());
-        assert!(validate_entry_path("folder/subfolder/file.txt").is_ok());
-        assert!(validate_entry_path("../etc/passwd").is_err());
-        assert!(validate_entry_path("/etc/passwd").is_err());
     }
 
     #[test]

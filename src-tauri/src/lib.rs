@@ -5,8 +5,10 @@ mod download;
 mod drives;
 mod extract;
 mod fs_utils;
+mod health;
 mod install;
 mod package;
+mod pipeline;
 mod validate;
 mod version;
 mod wifi;
@@ -22,6 +24,10 @@ async fn format_drive(mount_path: String, volume_name: String) -> Result<(), Str
     drives::format_drive(&mount_path, &volume_name)
 }
 
+/// Standalone download command — deprecated in favor of the install pipeline.
+/// The TempDir is dropped immediately after this returns, so the file_path
+/// in the result is no longer valid once this returns. Kept for backward
+/// compatibility with frontend archive.ts. Prefer install_minui or install_package.
 #[tauri::command]
 async fn download_and_verify_archive(
     url: String,
@@ -29,7 +35,8 @@ async fn download_and_verify_archive(
 ) -> Result<download::DownloadResult, String> {
     let checksum_ref = checksum.as_deref();
     let (result, _temp_dir) = download::download_archive(&url, checksum_ref).await?;
-    // _temp_dir drops here, cleaning up the downloaded file
+    // _temp_dir drops here — file still exists on disk for the return trip
+    // but will be cleaned up shortly after. Not safe to chain with extraction.
     Ok(result)
 }
 
@@ -45,7 +52,8 @@ async fn extract_archive_to_directory(
 ) -> Result<extract::ExtractionResult, String> {
     let dest_ref = destination.as_deref();
     let (result, _temp_dir) = extract::extract_archive(&archive_path, dest_ref)?;
-    // _temp_dir drops here, cleaning up extracted files if a temp dir was created
+    // Same caveat as download_and_verify_archive: if no destination is
+    // specified, the TempDir drops here and the extracted files vanish.
     Ok(result)
 }
 
@@ -64,20 +72,21 @@ async fn install_minui(
 ) -> Result<install::InstallResult, String> {
     let handle = app_handle.clone();
     let progress = Arc::new(move |event: install::InstallProgressEvent| {
-        let _ = handle.emit("install-progress", event);
+        if let Err(e) = handle.emit("install-progress", event) {
+            eprintln!("Warning: failed to emit install progress event: {}", e);
+        }
     });
-    install::install_minui(
-        &base_url,
-        extras_url.as_deref(),
-        base_checksum.as_deref(),
-        extras_checksum.as_deref(),
-        &sd_mount,
-        &platform,
-        &extras_platform,
-        &version,
-        progress,
-    )
-    .await
+    let options = install::InstallOptions {
+        base_url,
+        extras_url,
+        base_checksum,
+        extras_checksum,
+        sd_mount,
+        platform,
+        extras_platform,
+        version,
+    };
+    install::install_minui(&options, progress).await
 }
 
 #[tauri::command]
@@ -156,8 +165,31 @@ async fn check_package_updates(
 async fn check_sd_card_health(
     sd_mount: String,
     device_platform: Option<String>,
-) -> Result<validate::HealthCheckResult, String> {
-    validate::check_sd_card_health(&sd_mount, device_platform.as_deref())
+) -> Result<health::HealthCheckResult, String> {
+    health::check_sd_card_health(&sd_mount, device_platform.as_deref())
+}
+
+#[tauri::command]
+async fn fetch_url(url: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch URL: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status()));
+    }
+
+    response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -179,7 +211,8 @@ pub fn run() {
             get_current_wifi_ssid,
             detect_installed_packages,
             check_package_updates,
-            check_sd_card_health
+            check_sd_card_health,
+            fetch_url
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

@@ -1,11 +1,27 @@
 #:schema https://www.schemastore.org/prek.json
 
+# Note: three of the hooks below auto-rewrite staged files:
+#   - `end-of-file-fixer`
+#   - `mixed-line-ending --fix=lf`
+#   - `bun-lint` (runs `bun run lint -- --fix`)
+# If two of them touch the same file in one commit, the second sees a
+# dirty index and can re-introduce the staging-state mismatch that
+# blocks the commit. The hooks are ordered to minimize this: the cheap
+# built-in checks run first, then the local TS hooks last.
+#
+# If a hook rewrites a file, re-stage with `git add -u` and retry.
+
 [[repos]]
 repo = "builtin"
 hooks = [
-    { id = "trailing-whitespace" },
+    { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md,mdx"] },
     { id = "end-of-file-fixer" },
     { id = "check-added-large-files" },
+    { id = "check-yaml" },
+    { id = "check-json", exclude = "\\.jsonc$" },
+    { id = "mixed-line-ending", args = ["--fix=lf"] },
+    { id = "check-merge-conflict" },
+    { id = "check-case-conflict" },
 ]
 
 # bun lint & typecheck
