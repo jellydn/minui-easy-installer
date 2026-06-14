@@ -4,6 +4,7 @@ use std::path::Path;
 use crate::download;
 use crate::extract;
 use crate::fs_utils;
+use crate::version;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PackageInstallResult {
@@ -89,9 +90,7 @@ pub fn check_package_updates(
 
         let update_available = match installed_pkg {
             Some(pkg) => match &pkg.version {
-                // Simple string comparison works for date-based versions (YYYY.MM.DD).
-                // WARNING: This is NOT semver — non-date versions may produce incorrect results.
-                Some(installed_ver) => latest_version > installed_ver,
+                Some(installed_ver) => version::compare_versions(installed_ver, latest_version),
                 None => true, // Unknown version - assume update available
             },
             None => false, // Not installed
