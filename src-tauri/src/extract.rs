@@ -137,8 +137,9 @@ pub fn extract_archive(
             {
                 use std::os::unix::fs::PermissionsExt;
                 if let Some(mode) = entry.unix_mode() {
-                    // Non-critical: permission setting failure on extract (e.g., read-only media)
-                    let _ = fs::set_permissions(&file_path, fs::Permissions::from_mode(mode));
+                    if let Err(e) = fs::set_permissions(&file_path, fs::Permissions::from_mode(mode)) {
+                        eprintln!("Warning: failed to set permissions on {}: {}", entry_path, e);
+                    }
                 }
             }
 

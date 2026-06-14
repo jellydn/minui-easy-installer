@@ -64,7 +64,9 @@ pub fn create_rom_dirs(sd_mount: &str) -> Result<u32, String> {
     // Create placeholder for Portmaster in the Ports directory
     let ports_dst = roms_root.join("Ports (PORTS)").join("Portmaster.sh");
     if !ports_dst.exists() {
-        let _ = fs::write(&ports_dst, "");
+        if let Err(e) = fs::write(&ports_dst, "") {
+            eprintln!("Warning: failed to create Portmaster placeholder: {}", e);
+        }
     }
 
     Ok(created)
@@ -130,6 +132,17 @@ pub fn copy_extras_files(
     sd_mount: &str,
     extras_platform: &str,
 ) -> Result<u32, String> {
+    // Security guard: extras_platform must match expected format
+    if extras_platform.is_empty()
+        || !extras_platform
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        return Err(format!(
+            "Invalid extras_platform: '{}' must contain only alphanumeric characters and hyphens",
+            extras_platform
+        ));
+    }
     let extras_src = Path::new(extracted_extras_path);
     let sd_root = Path::new(sd_mount);
 
@@ -403,6 +416,94 @@ mod tests {
         assert_eq!(copied, 2);
         assert!(sd_root.join("miyoo-mini-plus/minui.pak").exists());
         assert!(sd_root.join("miyoo-mini-plus/boot.sh").exists());
+    }
+
+    #[test]
+    fn test_is_preserved_path_nested() {
+        let sd_root = Path::new("/Volumes/SDCARD");
+
+        // Deep nesting under preserved folder should be preserved
+        assert!(is_preserved_path(
+            Path::new("/Volumes/SDCARD/ROMS/GB/game.gb"),
+            sd_root
+        ));
+        assert!(is_preserved_path(
+            Path::new("/Volumes/SDCARD/ROMS/Nintendo Entertainment System (FC)/game.nes"),
+            sd_root
+        ));
+        assert!(is_preserved_path(
+            Path::new("/Volumes/SDCARD/Saves/game.sav"),
+            sd_root
+        ));
+        assert!(is_preserved_path(
+            Path::new("/Volumes/SDCARD/Saves/subdir/nested.sav"),
+            sd_root
+        ));
+        assert!(is_preserved_path(
+            Path::new("/Volumes/SDCARD/BIOS/gba_bios.bin"),
+            sd_root
+        ));
+
+        // Preserved folder name appearing non-top-level should NOT be preserved
+        assert!(!is_preserved_path(
+            Path::new("/Volumes/SDCARD/Tools/ROMS/wifi.pak"),
+            sd_root
+        ));
+        assert!(!is_preserved_path(
+            Path::new("/Volumes/SDCARD/Emus/saves/mgba.pak"),
+            sd_root
+        ));
+
+        // Case insensitivity for nested folders
+        assert!(is_preserved_path(
+            Path::new("/Volumes/SDCARD/roms/nes/game.nes"),
+            sd_root
+        ));
+        assert!(!is_preserved_path(
+            Path::new("/Volumes/SDCARD/Tools/bios/"),
+            sd_root
+        ));
+    }
+
+    #[test]
+    fn test_copy_dir_recursive_preserves_user_data() {
+        let temp = tempfile::tempdir().unwrap();
+        let base_src = temp.path().join("base_extracted");
+        let sd_root = temp.path().join("sdcard");
+
+        // Simulate existing SD card with user data
+        fs::create_dir_all(sd_root.join("ROMS/GB")).unwrap();
+        fs::create_dir_all(sd_root.join("Saves")).unwrap();
+        fs::create_dir_all(sd_root.join("Tools")).unwrap();
+        fs::write(sd_root.join("ROMS/GB/pokemon.gb"), "rom_data").unwrap();
+        fs::write(sd_root.join("Saves/pokemon.sav"), "save_data").unwrap();
+
+        // Update archive content
+        fs::create_dir_all(base_src.join("Tools")).unwrap();
+        fs::write(base_src.join("Tools/wifi.pak"), "new_wifi").unwrap();
+        fs::write(base_src.join("minui.txt"), "MinUI v2025.01.01").unwrap();
+
+        let copied = fs_utils::copy_dir_recursive(&base_src, &sd_root, &|_src, dst| {
+            is_preserved_path(dst, &sd_root)
+        })
+        .unwrap();
+
+        // Only minui.txt and Tools/wifi.pak should be copied — ROMs and Saves skipped
+        assert_eq!(copied, 2);
+        assert!(sd_root.join("Tools/wifi.pak").exists());
+        assert!(sd_root.join("minui.txt").exists());
+
+        // User data must survive
+        assert!(sd_root.join("ROMS/GB/pokemon.gb").exists());
+        assert_eq!(
+            fs::read_to_string(sd_root.join("ROMS/GB/pokemon.gb")).unwrap(),
+            "rom_data"
+        );
+        assert!(sd_root.join("Saves/pokemon.sav").exists());
+        assert_eq!(
+            fs::read_to_string(sd_root.join("Saves/pokemon.sav")).unwrap(),
+            "save_data"
+        );
     }
 
     #[test]
