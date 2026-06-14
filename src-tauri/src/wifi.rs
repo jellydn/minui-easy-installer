@@ -98,7 +98,12 @@ fn get_current_wifi_ssid_macos() -> Option<String> {
             in_current = true;
             continue;
         }
-        if in_current && line.starts_with("          ") && trimmed.ends_with(':') && !trimmed.contains("PHY Mode") && !trimmed.contains("Network Type") {
+        if in_current
+            && line.starts_with("          ")
+            && trimmed.ends_with(':')
+            && !trimmed.contains("PHY Mode")
+            && !trimmed.contains("Network Type")
+        {
             let ssid = trimmed.trim_end_matches(':').trim();
             if !ssid.is_empty() {
                 return Some(ssid.to_string());
@@ -174,7 +179,7 @@ fn parse_airport_output(output: &str) -> Vec<String> {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if !parts.is_empty() {
             let ssid = parts[0].trim();
-            if !ssid.is_empty() && !ssid.contains(':') {
+            if !ssid.is_empty() {
                 // Skip BSSIDs (contain colons)
                 ssids.push(ssid.to_string());
             }
