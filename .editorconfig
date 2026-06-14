@@ -5,6 +5,7 @@ root = true
 
 # Defaults for everything: 2-space indent, LF line endings,
 # UTF-8, trim trailing whitespace, ensure files end with a newline.
+# Per-language overrides below.
 [*]
 charset = utf-8
 end_of_line = lf
@@ -13,38 +14,11 @@ indent_size = 2
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-# TypeScript / TSX / JavaScript / JSX
-[*.{ts,tsx,js,jsx,mjs,cjs}]
-indent_size = 2
+# Markdown: trailing whitespace often carries meaning (hard line breaks).
+[*.md]
+trim_trailing_whitespace = false
 
-# JSON / JSONC — keep 2-space indent
-[*.{json,jsonc}]
-indent_size = 2
-
-# YAML
-[*.{yml,yaml}]
-indent_size = 2
-
-# TOML
-[*.toml]
-indent_size = 2
-
-# CSS / SCSS
-[*.{css,scss,sass}]
-indent_size = 2
-
-# HTML
-[*.{html,htm}]
-indent_size = 2
-
-# Shell
-[*.{sh,bash,zsh}]
-indent_size = 2
-
-# Markdown: trailing whitespace often carries meaning (hard line breaks),
-# and many files indent list items / nested blocks with 2 spaces.
-[*.{md,mdx}]
-indent_size = 2
+[*.mdx]
 trim_trailing_whitespace = false
 
 # Rust uses 4-space indent by convention.
@@ -60,7 +34,37 @@ indent_style = tab
 indent_style = tab
 
 # Lockfiles and generated vendor files: do not modify.
-[{bun.lock,Cargo.lock,package-lock.json,yarn.lock,pnpm-lock.yaml}]
+# (Brace expansion in the filename position is not portable across
+# editors, so these are split into individual filename blocks.)
+[bun.lock]
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[Cargo.lock]
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[package-lock.json]
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[yarn.lock]
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[pnpm-lock.yaml]
 indent_style = unset
 indent_size = unset
 end_of_line = unset
