@@ -2,6 +2,8 @@ use serde::Serialize;
 use std::path::Path;
 use std::process::Command;
 
+use crate::fs_utils;
+
 #[derive(Debug, Serialize, Clone)]
 pub struct RemovableDrive {
     pub name: String,
@@ -42,7 +44,7 @@ pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
 
         let available = parts[3].parse::<u64>().ok().map(|k| k * 1024);
 
-        let size = get_disk_size(mount_path);
+        let size = fs_utils::get_disk_space(mount_path).map(|ds| ds.total);
 
         let name = Path::new(mount_path)
             .file_name()
@@ -132,12 +134,7 @@ pub fn format_drive(mount_path: &str, volume_name: &str) -> Result<(), String> {
     let format_name: String = format_name.chars().take(11).collect();
 
     let result = Command::new("diskutil")
-        .args([
-            "eraseDisk",
-            "FAT32",
-            &format_name,
-            &target,
-        ])
+        .args(["eraseDisk", "FAT32", &format_name, &target])
         .output()
         .map_err(|e| format!("Failed to run diskutil: {}", e))?;
 
@@ -180,40 +177,7 @@ fn get_filesystem(mount_path: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-fn get_disk_size(mount_path: &str) -> Option<u64> {
-    use std::ffi::CString;
-    use std::mem;
-
-    let path = CString::new(mount_path).ok()?;
-    unsafe {
-        let mut stat: libc::statvfs = mem::zeroed();
-        if libc::statvfs(path.as_ptr(), &mut stat) == 0 {
-            let total = stat.f_blocks as u64 * stat.f_frsize as u64;
-            return Some(total);
-        }
-    }
-
-    // Fallback: parse from diskutil info
-    let output = Command::new("diskutil")
-        .args(["info", mount_path])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if line.contains("Total Size:") || line.contains("Disk Size:") {
-            let value = line.split(':').nth(1)?.trim();
-            return parse_size_str(value);
-        }
-    }
-    None
-}
-
-#[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn parse_size_str(s: &str) -> Option<u64> {
     let s = s.trim();
     let (num_str, unit) = if let Some(pos) = s.find(char::is_alphabetic) {

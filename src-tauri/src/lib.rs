@@ -5,6 +5,7 @@ mod download;
 mod drives;
 mod extract;
 mod fs_utils;
+mod health;
 mod install;
 mod package;
 mod validate;
@@ -64,20 +65,20 @@ async fn install_minui(
 ) -> Result<install::InstallResult, String> {
     let handle = app_handle.clone();
     let progress = Arc::new(move |event: install::InstallProgressEvent| {
+        // Non-critical: progress event emission failure should not abort the install
         let _ = handle.emit("install-progress", event);
     });
-    install::install_minui(
-        &base_url,
-        extras_url.as_deref(),
-        base_checksum.as_deref(),
-        extras_checksum.as_deref(),
-        &sd_mount,
-        &platform,
-        &extras_platform,
-        &version,
-        progress,
-    )
-    .await
+    let options = install::InstallOptions {
+        base_url,
+        extras_url,
+        base_checksum,
+        extras_checksum,
+        sd_mount,
+        platform,
+        extras_platform,
+        version,
+    };
+    install::install_minui(&options, progress).await
 }
 
 #[tauri::command]
@@ -156,8 +157,8 @@ async fn check_package_updates(
 async fn check_sd_card_health(
     sd_mount: String,
     device_platform: Option<String>,
-) -> Result<validate::HealthCheckResult, String> {
-    validate::check_sd_card_health(&sd_mount, device_platform.as_deref())
+) -> Result<health::HealthCheckResult, String> {
+    health::check_sd_card_health(&sd_mount, device_platform.as_deref())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

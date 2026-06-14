@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use zip::ZipArchive;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -15,26 +15,6 @@ pub struct ExtractionResult {
 fn is_path_traversal(path: &str) -> bool {
     let normalized = path.replace('\\', "/");
     normalized.contains("..") || normalized.starts_with('/') || normalized.starts_with('\\')
-}
-
-/// Validates a zip entry path for path traversal attacks
-fn validate_entry_path(entry_path: &str) -> Result<(), String> {
-    if is_path_traversal(entry_path) {
-        return Err(format!(
-            "Path traversal detected in archive entry: {}",
-            entry_path
-        ));
-    }
-
-    // Additional check: ensure no absolute paths
-    if Path::new(entry_path).is_absolute() {
-        return Err(format!(
-            "Absolute path detected in archive entry: {}",
-            entry_path
-        ));
-    }
-
-    Ok(())
 }
 
 // Determines output directory and returns (ExtractionResult, TempDir if one was created)
@@ -77,6 +57,10 @@ pub fn extract_archive(
     fs::create_dir_all(&output_path)
         .map_err(|e| format!("Failed to create destination directory: {}", e))?;
 
+    let canonical_output = output_path
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize output path: {}", e))?;
+
     let mut files_extracted = 0u32;
 
     for i in 0..archive.len() {
@@ -86,16 +70,16 @@ pub fn extract_archive(
 
         let entry_path = entry.name().to_string();
 
-        // Validate for path traversal
-        validate_entry_path(&entry_path)?;
+        if is_path_traversal(&entry_path) {
+            return Err(format!(
+                "Path traversal detected in archive entry: {}",
+                entry_path
+            ));
+        }
 
         let file_path = output_path.join(&entry_path);
 
         // Ensure file path is within destination directory
-        let canonical_output = output_path
-            .canonicalize()
-            .map_err(|e| format!("Failed to canonicalize output path: {}", e))?;
-
         let canonical_file = file_path
             .parent()
             .unwrap_or(&file_path)
@@ -153,6 +137,7 @@ pub fn extract_archive(
             {
                 use std::os::unix::fs::PermissionsExt;
                 if let Some(mode) = entry.unix_mode() {
+                    // Non-critical: permission setting failure on extract (e.g., read-only media)
                     let _ = fs::set_permissions(&file_path, fs::Permissions::from_mode(mode));
                 }
             }
@@ -164,7 +149,12 @@ pub fn extract_archive(
     Ok((
         ExtractionResult {
             success: true,
-            output_path: Some(output_path.to_str().unwrap_or("").to_string()),
+            output_path: Some(
+                output_path
+                    .to_str()
+                    .ok_or("Non-UTF-8 output path")?
+                    .to_string(),
+            ),
             files_extracted: Some(files_extracted),
             error: None,
         },
@@ -186,15 +176,6 @@ mod tests {
         assert!(!is_path_traversal("etc/passwd"));
         assert!(!is_path_traversal("file.txt"));
         assert!(!is_path_traversal("folder/subfolder/file.txt"));
-    }
-
-    #[test]
-    fn test_validate_entry_path() {
-        assert!(validate_entry_path("etc/passwd").is_ok());
-        assert!(validate_entry_path("file.txt").is_ok());
-        assert!(validate_entry_path("folder/subfolder/file.txt").is_ok());
-        assert!(validate_entry_path("../etc/passwd").is_err());
-        assert!(validate_entry_path("/etc/passwd").is_err());
     }
 
     #[test]

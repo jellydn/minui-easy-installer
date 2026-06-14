@@ -89,6 +89,8 @@ pub fn check_package_updates(
 
         let update_available = match installed_pkg {
             Some(pkg) => match &pkg.version {
+                // Simple string comparison works for date-based versions (YYYY.MM.DD).
+                // WARNING: This is NOT semver — non-date versions may produce incorrect results.
                 Some(installed_ver) => latest_version > installed_ver,
                 None => true, // Unknown version - assume update available
             },
@@ -168,11 +170,19 @@ pub async fn install_package(
         .join(platform)
         .join(format!("{}.pak", rules.pak_name));
 
+    // Security: ensure target stays within SD card
+    let canonical_sd = Path::new(sd_mount).canonicalize()
+        .map_err(|e| format!("Failed to resolve SD card path: {}", e))?;
+    let canonical_pak = pak_root.canonicalize().unwrap_or_else(|_| pak_root.clone());
+    if !canonical_pak.starts_with(&canonical_sd) {
+        return Err(format!("Security violation: target directory escapes SD card: {}", rules.target_dir));
+    }
+
     fs::create_dir_all(&pak_root)
         .map_err(|e| format!("Failed to create package directory: {}", e))?;
 
     let extracted = Path::new(&extracted_path);
-    let files_copied = fs_utils::copy_dir_contents(extracted, &pak_root)?;
+    let files_copied = fs_utils::copy_dir_recursive(extracted, &pak_root, &|_s, _d| false)?;
 
     Ok(PackageInstallResult {
         success: true,
@@ -186,7 +196,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_copy_dir_contents() {
+    fn test_copy_dir_recursive_copies_files() {
         let temp = tempfile::tempdir().unwrap();
         let src = temp.path().join("src");
         let dst = temp.path().join("dst");
@@ -195,14 +205,14 @@ mod tests {
         fs::write(src.join("file1.txt"), "content1").unwrap();
         fs::write(src.join("file2.txt"), "content2").unwrap();
 
-        let copied = fs_utils::copy_dir_contents(&src, &dst).unwrap();
+        let copied = fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false).unwrap();
         assert_eq!(copied, 2);
         assert!(dst.join("file1.txt").exists());
         assert!(dst.join("file2.txt").exists());
     }
 
     #[test]
-    fn test_copy_dir_contents_with_subdirs() {
+    fn test_copy_dir_recursive_with_subdirs() {
         let temp = tempfile::tempdir().unwrap();
         let src = temp.path().join("src");
         let dst = temp.path().join("dst");
@@ -211,7 +221,7 @@ mod tests {
         fs::write(src.join("file1.txt"), "content1").unwrap();
         fs::write(src.join("subdir/file2.txt"), "content2").unwrap();
 
-        let copied = fs_utils::copy_dir_contents(&src, &dst).unwrap();
+        let copied = fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false).unwrap();
         assert_eq!(copied, 2);
         assert!(dst.join("file1.txt").exists());
         assert!(dst.join("subdir/file2.txt").exists());
