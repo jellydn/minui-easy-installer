@@ -24,6 +24,33 @@ interface HomeProps {
   onSelectDrive: (drive: RemovableDrive | null) => void;
 }
 
+interface InstallState {
+  phase: InstallPhase;
+  message: string;
+  log: InstallProgressEvent[];
+  error: string | null;
+  baseFilesCopied: number;
+  extrasFilesCopied: number;
+  romDirsCreated: number;
+  extrasWarning: string | null;
+  validationResult: ValidationResult | null;
+}
+
+// Hoisted to module scope so the object reference is stable across renders.
+// Was previously declared inside `Home` and reallocated on every render,
+// which would defeat `React.memo` on any child receiving it as a prop.
+const INITIAL_INSTALL_STATE: InstallState = {
+  phase: "idle",
+  message: "",
+  log: [],
+  error: null,
+  baseFilesCopied: 0,
+  extrasFilesCopied: 0,
+  romDirsCreated: 0,
+  extrasWarning: null,
+  validationResult: null,
+};
+
 function Home({
   selectedDevice,
   onSelectDevice,
@@ -36,31 +63,7 @@ function Home({
   const [updateAllMessage, setUpdateAllMessage] = useState("");
   const [updateAllError, setUpdateAllError] = useState<string | null>(null);
 
-  interface InstallState {
-    phase: InstallPhase;
-    message: string;
-    log: InstallProgressEvent[];
-    error: string | null;
-    baseFilesCopied: number;
-    extrasFilesCopied: number;
-    romDirsCreated: number;
-    extrasWarning: string | null;
-    validationResult: ValidationResult | null;
-  }
-
-  const initialInstallState: InstallState = {
-    phase: "idle",
-    message: "",
-    log: [],
-    error: null,
-    baseFilesCopied: 0,
-    extrasFilesCopied: 0,
-    romDirsCreated: 0,
-    extrasWarning: null,
-    validationResult: null,
-  };
-
-  const [install, setInstall] = useState<InstallState>(initialInstallState);
+  const [install, setInstall] = useState<InstallState>(INITIAL_INSTALL_STATE);
 
   // Check installed version when drive changes (event-driven, not effect-driven)
   useEffect(() => {
@@ -196,7 +199,7 @@ function Home({
   }, [selectedDevice, selectedDrive]);
 
   const handleDismissInstall = () => {
-    setInstall(initialInstallState);
+    setInstall(INITIAL_INSTALL_STATE);
   };
 
   const handleDismissValidation = () => {
@@ -281,32 +284,44 @@ function Home({
           return;
         }
 
-        const errors: string[] = [];
-        for (const update of version.packageUpdates) {
-          const entry = registryResult.data.packages.find(
-            (p) => p.name === update.name,
-          );
-          if (!entry) {
-            errors.push(`${update.name}: not found in registry`);
-            continue;
-          }
+        // Build a Map once for O(1) lookups. Without this, each iteration
+        // would call `packages.find(...)` — O(n) — so the loop as a whole
+        // is O(n*m) where m is the number of updates. With a Map, it's
+        // O(n + m).
+        const packageByName = new Map(
+          registryResult.data.packages.map((p) => [p.name, p]),
+        );
 
-          const result = await installPackage({
-            artifactUrl: entry.artifactUrl,
-            checksum: entry.checksum || undefined,
-            sdMount: selectedDrive.mount_path,
-            targetDir: entry.installPathRules.targetDir,
-            extractToRoot: entry.installPathRules.extractToRoot,
-            pakName: entry.installPathRules.pakName || update.name,
-            platform: profile.platform,
-          });
+        // Run all package installs concurrently. Each `installPackage` is
+        // an independent IPC call to the Rust backend, so they don't need
+        // to wait for each other. With sequential awaits, total wall time
+        // is the sum of all installs; with Promise.all, it's the slowest
+        // single install.
+        const installResults = await Promise.all(
+          version.packageUpdates.map(async (update) => {
+            const entry = packageByName.get(update.name);
+            if (!entry) {
+              return `${update.name}: not found in registry`;
+            }
+            const result = await installPackage({
+              artifactUrl: entry.artifactUrl,
+              checksum: entry.checksum || undefined,
+              sdMount: selectedDrive.mount_path,
+              targetDir: entry.installPathRules.targetDir,
+              extractToRoot: entry.installPathRules.extractToRoot,
+              pakName: entry.installPathRules.pakName || update.name,
+              platform: profile.platform,
+            });
+            if (!result.success) {
+              return `${update.name}: ${result.error?.message || "install failed"}`;
+            }
+            return null;
+          }),
+        );
 
-          if (!result.success) {
-            errors.push(
-              `${update.name}: ${result.error?.message || "install failed"}`,
-            );
-          }
-        }
+        const errors = installResults.filter(
+          (e): e is string => e !== null,
+        );
 
         if (errors.length > 0) {
           setUpdateAllError(`Package update errors:\n${errors.join("\n")}`);
