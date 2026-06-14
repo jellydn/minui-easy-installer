@@ -5,42 +5,48 @@
 			"repository": "https://github.com/josegonzalez/minui-dreamcast-pak",
 			"version": "0.5.0",
 			"pak_name": "DC",
-			"rom_folder": "Roms/Sega Dreamcast (DC)"
+			"rom_folder": "Roms/Sega Dreamcast (DC)",
+			"description": "Sega Dreamcast emulator"
 		},
 		{
 			"name": "Nintendo DS",
 			"repository": "https://github.com/josegonzalez/minui-nintendo-ds-pak",
 			"version": "0.12.0",
 			"pak_name": "NDS",
-			"rom_folder": "Roms/Nintendo DS (NDS)"
+			"rom_folder": "Roms/Nintendo DS (NDS)",
+			"description": "Nintendo DS emulator"
 		},
 		{
 			"name": "N64",
 			"repository": "https://github.com/josegonzalez/minui-n64-pak",
 			"version": "0.6.2",
 			"pak_name": "N64",
-			"rom_folder": "Roms/Nintendo 64 (N64)"
+			"rom_folder": "Roms/Nintendo 64 (N64)",
+			"description": "Nintendo 64 emulator"
 		},
 		{
 			"name": "Pico-8",
 			"repository": "https://github.com/josegonzalez/minui-pico-8-pak",
 			"version": "0.7.0",
 			"pak_name": "PICO",
-			"rom_folder": "Roms/Pico-8 (PICO)"
+			"rom_folder": "Roms/Pico-8 (PICO)",
+			"description": "PICO-8 fantasy console emulator"
 		},
 		{
 			"name": "Portmaster",
 			"repository": "https://github.com/ben16w/minui-portmaster",
 			"version": "2.12.0",
 			"pak_name": "PORTS",
-			"rom_folder": "Roms/Ports (PORTS)"
+			"rom_folder": "Roms/Ports (PORTS)",
+			"description": "Run ported PC games on your device"
 		},
 		{
 			"name": "PSP",
 			"repository": "https://github.com/ben16w/minui-psp",
 			"version": "5.1.0",
 			"pak_name": "PSP",
-			"rom_folder": "Roms/PlayStation Portable (PSP)"
+			"rom_folder": "Roms/PlayStation Portable (PSP)",
+			"description": "PlayStation Portable emulator"
 		}
 	],
 	"tool_paks": [
@@ -48,155 +54,180 @@
 			"name": "Artwork Scraper",
 			"repository": "https://github.com/josegonzalez/minui-artwork-scraper-pak",
 			"version": "0.8.0",
-			"pak_name": "Artwork Scraper"
+			"pak_name": "Artwork Scraper",
+			"description": "Download box art and screenshots for your ROMs"
 		},
 		{
 			"name": "Cloud Backups",
 			"repository": "https://github.com/ben16w/minui-cloud-backups",
 			"version": "1.1.0",
-			"pak_name": "Cloud Backups"
+			"pak_name": "Cloud Backups",
+			"description": "Backup saves and configs to the cloud"
 		},
 		{
 			"name": "Collection Manager",
 			"repository": "https://github.com/jiserra/Collection-Manager.pak",
 			"version": "0.1.1",
-			"pak_name": "Collection Manager"
+			"pak_name": "Collection Manager",
+			"description": "Organize your ROM collection into custom collections"
 		},
 		{
 			"name": "Developer",
 			"repository": "https://github.com/josegonzalez/minui-developer-pak",
 			"version": "0.10.0",
-			"pak_name": "Developer"
+			"pak_name": "Developer",
+			"description": "Developer utilities and system info"
 		},
 		{
 			"name": "SSH Server",
 			"repository": "https://github.com/josegonzalez/minui-dropbear-server-pak",
 			"version": "0.9.0",
-			"pak_name": "SSH Server"
+			"pak_name": "SSH Server",
+			"description": "Remote access via SSH"
 		},
 		{
 			"name": "HTTP Server",
 			"repository": "https://github.com/josegonzalez/minui-dufs-server-pak",
 			"version": "0.10.0",
-			"pak_name": "HTTP Server"
+			"pak_name": "HTTP Server",
+			"description": "Serve files over HTTP"
 		},
 		{
 			"name": "Favorites",
 			"repository": "https://github.com/ben16w/minui-favorites",
 			"version": "0.4.0",
-			"pak_name": "Favorites"
+			"pak_name": "Favorites",
+			"description": "Mark and filter your favorite games"
 		},
 		{
 			"name": "FTP Server",
 			"repository": "https://github.com/josegonzalez/minui-ftpserver-pak",
 			"version": "0.4.0",
-			"pak_name": "FTP Server"
+			"pak_name": "FTP Server",
+			"description": "Transfer files over FTP"
 		},
 		{
 			"name": "Gallery",
 			"repository": "https://github.com/josegonzalez/minui-gallery-pak",
 			"version": "0.4.0",
-			"pak_name": "Gallery"
+			"pak_name": "Gallery",
+			"description": "Browse screenshots and artwork on your device"
 		},
 		{
 			"name": "M3U Manager",
 			"repository": "https://github.com/josegonzalez/minui-m3u-manager-pak",
 			"version": "0.2.0",
-			"pak_name": "M3U Manager"
+			"pak_name": "M3U Manager",
+			"description": "Create and manage multi-disc game playlists"
 		},
 		{
 			"name": "Map.txt Generator",
 			"repository": "https://github.com/josegonzalez/minui-map-txt-generator-pak",
 			"version": "0.2.0",
-			"pak_name": "Map.txt Generator"
+			"pak_name": "Map.txt Generator",
+			"description": "Generate button mapping files for emulators"
 		},
 		{
 			"name": "Media Player",
 			"repository": "https://github.com/josegonzalez/trimui-brick-media-player-pak",
 			"version": "0.2.1",
 			"pak_name": "Media Player",
-			"device": ["brick"]
+			"device": ["brick"],
+			"description": "Play audio and video files"
 		},
 		{
 			"name": "Moonlight",
 			"repository": "https://github.com/josegonzalez/trimui-brick-moonlight-pak",
 			"version": "0.4.0",
 			"pak_name": "Moonlight",
-			"device": ["brick"]
+			"device": ["brick"],
+			"description": "Stream games from your PC via Moonlight"
 		},
 		{
 			"name": "Random Game",
 			"repository": "https://github.com/josegonzalez/minui-random-game-pak",
 			"version": "0.6.0",
-			"pak_name": "Random Game"
+			"pak_name": "Random Game",
+			"description": "Pick a random game from your collection"
 		},
 		{
 			"name": "Remote Terminal",
 			"repository": "https://github.com/josegonzalez/minui-remote-terminal-pak",
 			"version": "0.8.0",
-			"pak_name": "Remote Terminal"
+			"pak_name": "Remote Terminal",
+			"description": "Terminal access over serial or SSH"
 		},
 		{
 			"name": "Report",
 			"repository": "https://github.com/josegonzalez/minui-report-pak",
 			"version": "0.10.0",
-			"pak_name": "Report"
+			"pak_name": "Report",
+			"description": "Generate system reports and diagnostics"
 		},
 		{
 			"name": "Screenshot Monitor",
 			"repository": "https://github.com/josegonzalez/minui-screenshot-monitor-pak",
 			"version": "0.9.0",
-			"pak_name": "Screenshot Monitor"
+			"pak_name": "Screenshot Monitor",
+			"description": "Auto-capture screenshots during gameplay"
 		},
 		{
 			"name": "Search",
 			"repository": "https://github.com/laesetuc/minui-search-pak",
 			"version": "0.5.0",
-			"pak_name": "Search"
+			"pak_name": "Search",
+			"description": "Search your ROM collection by name"
 		},
 		{
 			"name": "Simple Mode",
 			"repository": "https://github.com/josegonzalez/minui-simple-mode-pak",
 			"version": "0.5.0",
-			"pak_name": "Simple Mode"
+			"pak_name": "Simple Mode",
+			"description": "Minimal launcher mode for kids or non-technical users"
 		},
 		{
 			"name": "Syncthing",
 			"repository": "https://github.com/josegonzalez/minui-syncthing-pak",
 			"version": "0.8.1",
-			"pak_name": "Syncthing"
+			"pak_name": "Syncthing",
+			"description": "Sync saves and ROMs with your devices via Syncthing"
 		},
 		{
 			"name": "Tailscale",
 			"repository": "https://github.com/ben16w/minui-tailscale",
 			"version": "1.2.0",
-			"pak_name": "Tailscale"
+			"pak_name": "Tailscale",
+			"description": "Secure remote access via Tailscale VPN"
 		},
 		{
 			"name": "Terminal",
 			"repository": "https://github.com/josegonzalez/minui-terminal-pak",
 			"version": "0.9.0",
-			"pak_name": "Terminal"
+			"pak_name": "Terminal",
+			"description": "On-device terminal emulator"
 		},
 		{
 			"name": "USB Mass Storage",
 			"repository": "https://github.com/josegonzalez/trimui-brick-usb-mass-storage-pak",
 			"version": "0.4.1",
 			"pak_name": "USB Mass Storage",
-			"device": ["brick"]
+			"device": ["brick"],
+			"description": "Use your device as a USB mass storage drive"
 		},
 		{
 			"name": "Wifi",
 			"repository": "https://github.com/josegonzalez/minui-wifi-pak",
 			"version": "0.17.0",
-			"pak_name": "Wifi"
+			"pak_name": "Wifi",
+			"description": "Wi-Fi connectivity manager"
 		},
 		{
 			"name": "Grout",
 			"repository": "https://github.com/rommapp/grout",
 			"version": "4.8.1.0",
 			"pak_name": "Grout",
-			"download_url": "https://github.com/rommapp/grout/releases/download/v4.8.1.0/Grout-MinUI.zip"
+			"download_url": "https://github.com/rommapp/grout/releases/download/v4.8.1.0/Grout-MinUI.zip",
+			"description": "ROM management and syncing with RomM server"
 		}
 	]
 }
