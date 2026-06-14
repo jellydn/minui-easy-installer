@@ -1,126 +1,185 @@
 # Architecture
 
-**Analysis Date:** 2026-06-13
+**Analysis Date:** 2026-06-14
 
 ## Pattern Overview
 
-**Overall:** Tauri v2 desktop app — thin React/TypeScript UI over a Rust command backend, communicating via Tauri IPC (`invoke`).
+**Overall:** Tauri v2 Bridge Architecture (IPC-based layered desktop app)
 
 **Key Characteristics:**
 
-- Two-process model: a webview frontend (React in `src/`) and a native Rust core (`src-tauri/src/`). The frontend never touches the filesystem, network drives, or shell directly — it calls Rust `#[tauri::command]` functions through `invoke()`.
-- Command boundary is explicitly registered in one place: `tauri::generate_handler![...]` inside `run()` in `src-tauri/src/lib.rs`. 14 commands are exposed.
-- Each Rust domain module (`drives`, `download`, `extract`, `install`, `validate`, `version`, `package`, `wifi`) has a mirrored TypeScript module under `src/types/` that wraps `invoke()` and re-declares the result shape, giving end-to-end typing across the IPC line.
-- Result-type discipline: most TS wrappers return a discriminated `…Either` union (`{ success: true; data } | { success: false; error }`) rather than throwing; Rust commands return `Result<T, String>`.
+- Rust backend handles all OS-level operations (filesystem, network, archive management)
+- React frontend provides UI and orchestrates user workflows
+- Typed IPC bridge via `@tauri-apps/api/core` `invoke()` calls to Rust `#[tauri::command]` handlers
+- Result-Either pattern used throughout for type-safe error propagation (no thrown exceptions at the type layer)
+- Event-based progress streaming from backend to frontend via Tauri `emit`/`listen`
 
 ## Layers
 
-**Presentation (React components):**
+**Presentation Layer (React Components):**
 
-- Purpose: Render screens, collect user intent, drive the install/update flow, show progress and reports.
-- Location: `src/*.tsx` — `App.tsx` (root + nav), `Home.tsx` (install orchestrator), `DriveSelector.tsx`, `DeviceSelector.tsx`, `ConfirmDialog.tsx`, `InstallProgress.tsx`, `ValidationReport.tsx`, `PackageStore.tsx`, `WifiWizard.tsx`, `HealthCheck.tsx`.
-- Contains: JSX, React hooks (`useState`/`useEffect`/`useCallback`), local component state.
-- Depends on: the IPC wrapper layer in `src/types/`.
-- Used by: bootstrapped by `src/main.tsx`.
+- Purpose: UI rendering, user interaction, screen navigation
+- Location: `src/`
+- Contains: React functional components, CSS styles, event handlers
+- Depends on: `src/types/` for API calls and type definitions
+- Used by: Tauri WebView (user-facing)
 
-**IPC / Domain wrappers (TypeScript):**
+**Type/API Layer (TypeScript Types + Invokers):**
 
-- Purpose: Type-safe bridge to Rust commands; also holds pure browser-side logic (release parsing, registry validation, byte formatting) that needs no native access.
-- Location: `src/types/*.ts` — `drive.ts`, `device.ts`, `install.ts`, `archive.ts`, `validate.ts`, `version.ts`, `package.ts`, `release.ts`.
-- Contains: `invoke<T>("command_name", args)` calls, interface declarations matching Rust structs, `…Either` result unions, and pure helpers.
-- Depends on: `@tauri-apps/api/core` (`invoke`), `globalThis.fetch` for HTTP (GitHub API, registry).
-- Used by: presentation components.
-- Note: `release.ts` and `package.ts` fetch over HTTP **from the frontend** (GitHub releases API, `packages.minui.dev` registry) rather than via Rust.
+- Purpose: Define data models and wrap Tauri IPC `invoke()` calls with typed Result-Either returns
+- Location: `src/types/`
+- Contains: Interfaces, type aliases, async functions that call `invoke()`, validation logic
+- Depends on: `@tauri-apps/api/core` for IPC; Rust backend commands for execution
+- Used by: Presentation layer components
 
-**Command surface (Rust):**
+**Rust Backend Core (Tauri Commands + Modules):**
 
-- Purpose: Declares the IPC API and adapts frontend args to domain functions.
-- Location: `src-tauri/src/lib.rs` — each `#[tauri::command]` thin-wraps a domain module call; `run()` registers them and opens devtools in debug.
-- Depends on: the domain modules below.
-- Used by: the frontend via `invoke`.
+- Purpose: All OS-level operations — drive detection, download, extraction, file copy, install orchestration
+- Location: `src-tauri/src/`
+- Contains: `#[tauri::command]` functions, module implementations, struct definitions
+- Depends on: `std::fs`, `tokio` (async), Rust crate ecosystem (reqwest, zip, etc.)
+- Used by: Frontend via Tauri IPC bridge
 
-**Domain core (Rust):**
+**Rust Backend Entry (Tauri App Bootstrap):**
 
-- Purpose: All privileged work — drive enumeration, downloads, checksum verification, archive extraction, file copy to SD card, validation, version/package detection, WiFi config.
-- Location: `src-tauri/src/` — `drives.rs`, `download.rs`, `extract.rs`, `install.rs`, `validate.rs`, `version.rs`, `package.rs`, `wifi.rs`.
-- Contains: `serde::Serialize` result structs, OS-specific code via `#[cfg(target_os = ...)]`, shell-outs (`diskutil`, `airport`, `nmcli`, `netsh`), `reqwest`/`sha2`/`zip` usage.
-- Depends on: external crates (`reqwest`, `sha2`, `hex`, `tempfile`, `zip`, `tokio`, `libc`/`windows-sys`).
-- Used by: the command surface in `lib.rs`.
+- Purpose: Bootstrap the Tauri application, register command handlers, open devtools in debug
+- Location: `src-tauri/src/main.rs`, `src-tauri/src/lib.rs`
+- Contains: `main()` function, Tauri builder with `generate_handler![]` macro
+- Depends on: All Rust modules
+- Used by: Tauri runtime
 
 ## Data Flow
 
-**Install MinUI (primary flow, orchestrated in `src/Home.tsx`):**
+**MinUI Installation Flow:**
 
-1. Drive detect — `DriveSelector.tsx` calls `invoke("get_removable_drives")` → `drives::list_removable_drives()` (`src-tauri/src/drives.rs`, parses `diskutil list external` on macOS).
-2. Device select — `DeviceSelector.tsx` picks a `DeviceProfile` from the static table in `src/types/device.ts` (platform + install path rules).
-3. Version pre-check — on drive select, `Home.tsx` fetches latest release (`fetchMinUIRelease` in `release.ts`, GitHub API) then `check_minui_version` → `version::check_for_updates` (`src-tauri/src/version.rs`, reads `minui.txt`/`.minui/version`), and `check_package_updates`.
-4. Confirm — `ConfirmDialog.tsx` gates the write (per project rule: never write without explicit confirmation).
-5. Download + extract + copy — `installMinui()` (`src/types/install.ts`) calls one blocking command `install_minui` → `install::install_minui` (`src-tauri/src/install.rs`): downloads base archive (`download.rs`, SHA-256 verify via `sha2`/`hex`), extracts to temp (`extract.rs`, with path-traversal guards), copies into the SD root **skipping `PRESERVED_FOLDERS`** (ROMS/Saves/BIOS/CHEATS), then repeats for the optional extras archive (extras failure is non-fatal).
-6. Validate — on success, `validateInstallation` → `validate::validate_installation` checks essential paths (`minui.pak`, `boot.sh`, `DMG.png`); rendered by `ValidationReport.tsx`. `HealthCheck.tsx` separately calls `check_sd_card_health`.
+1. User selects device + SD card on Home screen (`src/Home.tsx`)
+2. User clicks "Install MinUI" → ConfirmDialog overlay appears (`src/ConfirmDialog.tsx`)
+3. On confirm → `fetchMinUIRelease()` fetches latest GitHub release metadata (`src/types/release.ts`)
+4. `installMinui()` invokes Rust `install_minui` command (`src/types/install.ts` → `src-tauri/src/lib.rs`)
+5. Rust backend orchestrates: download → extract → copy base → download/extract/copy extras → create ROM dirs → write version metadata (`src-tauri/src/install.rs`)
+6. Progress events stream to frontend via Tauri `emit("install-progress")` → frontend `listen("install-progress")`
+7. On completion → `validateInstallation()` runs post-install checks (`src/types/validate.ts` → `src-tauri/src/validate.rs`)
+8. `ValidationReportUI` renders results (`src/ValidationReport.tsx`)
 
-**Other flows:** Package Store (`PackageStore.tsx` → `fetchPackageRegistry` HTTP + `install_package` → `package.rs`); WiFi setup (`WifiWizard.tsx` → `scan_wifi_networks` + `write_wifi_config` → `wifi.rs`, writes `wifi.txt`).
+**Version Check Flow:**
+
+1. Drive selected → `useEffect` triggers version check (`src/Home.tsx`)
+2. `fetchMinUIRelease()` gets latest version from GitHub (`src/types/release.ts`)
+3. `checkMinuiVersion()` invokes Rust `check_minui_version` which reads `minui.txt` or `.minui/version` from SD card (`src/types/version.ts` → `src-tauri/src/version.rs`)
+4. `checkPackageUpdates()` compares installed package versions against registry (`src/types/package.ts` → `src-tauri/src/package.rs`)
+5. UI displays installed version, update availability, and package updates
+
+**Package Store Flow:**
+
+1. User navigates to "Package Store" tab (`src/App.tsx`)
+2. `fetchPackageRegistry()` loads package data from bundled `store.json` (`src/types/package.ts`)
+3. `PackageStore` component renders browsable package list (`src/PackageStore.tsx`)
+4. User selects package → `installPackage()` invokes Rust `install_package` command
+5. Backend downloads, extracts, and copies package to correct SD card location
+
+**WiFi Configuration Flow:**
+
+1. User navigates to "WiFi Setup" tab (`src/App.tsx`)
+2. `scan_wifi_networks()` lists available networks (`src-tauri/src/wifi.rs`)
+3. User selects network and enters password
+4. `write_wifi_config()` writes `wifi.txt` to SD card root (`src-tauri/src/wifi.rs`)
 
 **State Management:**
 
-- No external store. State is React component-local `useState`. `App.tsx` holds the top-level `screen` (`home`/`store`/`wifi`) plus the cross-screen selections (`selectedDevice`, `selectedDrive`) and passes them down as props. `Home.tsx` owns the full install/version/update state machine.
+- Local component state via `useState` hooks (no global state manager)
+- `App.tsx` owns top-level navigation state (`screen`) and shared selections (`selectedDevice`, `selectedDrive`)
+- `Home.tsx` owns all install-related state (phase, progress, results, validation)
+- Tauri events (`listen`/`emit`) bridge long-running backend operations to frontend state
+- Cancellation via `cancelled` flag pattern in `useEffect` cleanup
 
 ## Key Abstractions
 
-**Command pair (Rust struct ↔ TS interface):**
+**Device Profile:**
 
-- Purpose: One serialized result shape shared across the IPC boundary.
-- Examples: `RemovableDrive` in `src-tauri/src/drives.rs` ↔ `src/types/drive.ts`; `InstallResult` in `src-tauri/src/install.rs` ↔ `src/types/install.ts`; `ValidationResult`/`HealthCheckResult` in `src-tauri/src/validate.rs` ↔ `src/types/validate.ts`.
-- Pattern: Rust `#[derive(Serialize)]` struct returned via `Result<T, String>`; TS `invoke<T>(...)` typed to the mirror interface.
+- Purpose: Maps device ID to platform identifiers and install path rules
+- Examples: `src/types/device.ts` (DeviceProfile, InstallPathRules)
+- Pattern: Static registry of typed objects with lookup functions (`getDeviceProfile`, `getAllDeviceProfiles`)
 
-**`…Either` result union:**
+**Result Either:**
 
-- Purpose: Explicit success/error handling without exceptions at call sites.
-- Examples: `InstallResultEither` (`src/types/install.ts`), `ValidationResultEither` (`src/types/validate.ts`), `VersionCheckResultEither` (`src/types/version.ts`), `ReleaseFetchResult` (`src/types/release.ts`).
-- Pattern: discriminated union on `success`; wrappers also map raw error strings to coded enums (e.g. `DOWNLOAD_ERROR`, `CHECKSUM_ERROR`).
+- Purpose: Type-safe error handling without exceptions; every IPC call returns either `{ success: true, data }` or `{ success: false, error }`
+- Examples: `src/types/install.ts` (InstallResultEither), `src/types/release.ts` (ReleaseFetchResult), `src/types/validate.ts` (ValidationResultEither)
+- Pattern: Discriminated union on `success` field; error objects include typed `code` strings for programmatic handling
 
-**Device profile table:**
+**Install Path Rules:**
 
-- Purpose: Per-device platform name + install path rules (`baseDir`/`extrasDir`/`toolsDir`).
-- Examples: `DEVICE_PROFILES` + `getDeviceProfile()` in `src/types/device.ts`.
-- Pattern: static in-memory lookup table (8 supported handhelds).
+- Purpose: Define where files should be placed on the SD card for each device type
+- Examples: `src/types/device.ts` (InstallPathRules), `src/types/package.ts` (PackageInstallPathRules)
+- Pattern: Configuration objects with `baseDir`, `extrasDir`, `toolsDir` paths
 
-**`InstallPhase` state machine:**
+**Progress Event:**
 
-- Purpose: UI progress states for the coarse-grained backend install.
-- Examples: `idle | downloading | extracting | copying | complete | error` in `src/types/install.ts`, driven in `Home.tsx`, rendered by `InstallProgress.tsx`.
+- Purpose: Stream install progress from Rust backend to React frontend in real-time
+- Examples: `src-tauri/src/install.rs` (InstallProgressEvent), `src/types/install.ts` (InstallProgressEvent)
+- Pattern: Backend emits events with `step` + `details`; frontend listens and updates UI state
+
+**Installed Version Detection:**
+
+- Purpose: Determine what version of MinUI is currently on the SD card without relying on installer-written metadata
+- Examples: `src/types/version.ts` (VersionCheckResult, InstalledVersion)
+- Pattern: Read-only probe of SD card filesystem (checks `minui.txt` or `.minui/version`)
 
 ## Entry Points
 
-**Frontend bootstrap:**
+**Frontend Entry:**
 
-- Location: `src/main.tsx`.
-- Triggers: webview loads `index.html` (Vite dev server on port 1420, see `vite.config.ts`/`tauri.conf.json`).
-- Responsibilities: `ReactDOM.createRoot(...).render(<App/>)` under `React.StrictMode`.
+- Location: `src/main.tsx` → `src/App.tsx`
+- Triggers: Tauri WebView loads `index.html` which loads the Vite-built bundle
+- Responsibilities: Mount React app, render App component with screen routing
 
-**Native entry:**
+**Rust Entry:**
 
-- Location: `src-tauri/src/main.rs` → calls `minui_easy_installer_lib::run()` in `src-tauri/src/lib.rs`.
-- Triggers: process launch.
-- Responsibilities: `run()` builds the Tauri app, registers the 14 commands via `generate_handler!`, opens devtools in debug, and runs the event loop.
+- Location: `src-tauri/src/main.rs` → `src-tauri/src/lib.rs`
+- Triggers: Tauri runtime starts the application
+- Responsibilities: Register all command handlers, configure app, open devtools in debug mode
+
+**Tauri Command Registry:**
+
+- Location: `src-tauri/src/lib.rs` (lines 166-183)
+- Triggers: Frontend `invoke()` calls from TypeScript
+- Responsibilities: Maps string command names to Rust async functions
 
 ## Error Handling
 
-**Strategy:** Rust commands return `Result<T, String>` (errors surface as rejected `invoke` promises); TS wrappers catch and convert into typed `…Either` errors so UI code branches on `result.success` instead of `try/catch`.
+**Strategy:** Typed error codes with Result-Either pattern throughout both TypeScript and Rust layers.
 
 **Patterns:**
 
-- Error-string classification: `install.ts` inspects the message ("download"/"extract"/"checksum") to assign an `InstallError.code`.
-- Non-fatal degradation: extras install failure and the drive version pre-check in `Home.tsx` are swallowed so the primary flow continues.
-- Direct `try/catch` in components that call `invoke` straight (`DriveSelector.tsx`, `WifiWizard.tsx`) storing `error` in local state.
+- **Rust → TypeScript:** All Rust commands return `Result<T, String>` or concrete result structs; errors are string messages that get classified by the TypeScript layer
+- **TypeScript classification:** `classifyError()` in `src/types/install.ts` infers error codes from message content (e.g., "download" → `DOWNLOAD_ERROR`)
+- **Error code enums:** Each domain defines its own error code union type (e.g., `InstallError.code`, `ExtractionError.code`, `PackageRegistryError.code`)
+- **Non-fatal errors:** Extras installation failures are captured as warnings (`extras_warning`) rather than hard failures
+- **Progress recovery:** Install phase state machine (`InstallPhase`) allows UI to show error state and let user dismiss
+- **Validation fallback:** `formatValidationReport()` falls back to client-side formatting if Rust invocation fails
 
 ## Cross-Cutting Concerns
 
-**Logging:** No structured logging framework; Rust returns descriptive error strings, debug builds open webview devtools (`lib.rs`). Project rule: never log WiFi passwords/secrets in plaintext (`wifi.rs` writes them only to `wifi.txt` on the card).
+**Logging:**
 
-**Validation:** Untrusted external data validated before use — `validatePackageEntry`/registry validation in `src/types/package.ts`, GitHub release parsing in `src/types/release.ts`; archive path-traversal guards (`is_path_traversal`/`validate_entry_path`) in `src-tauri/src/extract.rs`; post-install checks in `src-tauri/src/validate.rs`.
+- Rust: Progress events emitted via Tauri `emit()` (structured `InstallProgressEvent` with `step` and `details`)
+- TypeScript: Install log accumulated in state array (`installLog: InstallProgressEvent[]`) and displayed in UI
+- No external logging framework; errors propagated as Result types
 
-**Authentication:** None — no accounts; only outbound public HTTP to GitHub API and the static registry. Native capability is restricted by `src-tauri/capabilities/default.json` (`core:default` only).
+**Validation:**
 
----
+- Post-install validation via `validateInstallation()` (`src-tauri/src/validate.rs`) checks file presence and SD card health
+- SD card health checks (`check_sd_card_health`) verify filesystem, free space, and device compatibility
+- Package registry data treated as untrusted — `fetchPackageRegistry()` validates store.json schema before use
+- Archive extraction includes path traversal protection (`ExtractionError.code: "PATH_TRAVERSAL"`)
 
-_Architecture analysis: 2026-06-13_
+**Authentication:**
+
+- No authentication required; GitHub API accessed unauthenticated (rate-limited)
+- WiFi password handling: written to `wifi.txt` on SD card; never logged in plaintext
+- No secrets or credentials stored by the application
+
+**Data Preservation:**
+
+- Preserved folders (`ROMS`, `roms`, `Saves`, `saves`, `BIOS`, `bios`, `CHEATS`, `cheats`) are never deleted or overwritten during install
+- `is_preserved_path()` check applied during base file copy operations
+- ROM directories created only if they don't already exist

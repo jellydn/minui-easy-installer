@@ -1,186 +1,256 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-06-13
+**Analysis Date:** 2026-06-14
 
 ## Directory Layout
 
 ```
-2026-06-13-minui-installer/
-├── index.html              # Vite HTML entry (mounts #root)
-├── package.json            # Frontend deps + scripts (dev/build/test/lint/typecheck)
-├── vite.config.ts          # Vite config (React plugin, dev port 1420)
-├── vitest.config.ts        # Vitest config (jsdom)
-├── vitest.setup.ts         # Test setup (jest-dom)
-├── tsconfig.json           # TypeScript config
-├── .eslintrc.cjs           # ESLint config (lint via oxlint per package.json)
-├── justfile                # Task runner shortcuts
-├── prek.toml               # Pre-commit hook config
-├── README.md / AGENTS.md / plan.md
-├── assets/                 # banner.svg, logo.svg
-├── src/                    # React + TypeScript frontend
-│   ├── main.tsx            # React entry — renders <App/>
-│   ├── App.tsx             # Root component, top nav, cross-screen state
-│   ├── Home.tsx            # Install/update orchestrator (largest component)
-│   ├── DeviceSelector.tsx  # Pick handheld device profile
-│   ├── DriveSelector.tsx   # Detect + pick removable drive
-│   ├── ConfirmDialog.tsx   # Write-confirmation overlay modal
-│   ├── InstallProgress.tsx # Install phase progress UI
-│   ├── ValidationReport.tsx# Post-install validation report UI
-│   ├── HealthCheck.tsx     # SD card health check UI
-│   ├── PackageStore.tsx    # Browse/install registry packages
-│   ├── WifiWizard.tsx      # WiFi scan + write config
-│   ├── styles.css          # Global styles
-│   ├── vitest.d.ts         # Test type declarations
-│   ├── *.test.tsx          # Component tests (co-located)
-│   └── types/              # IPC wrappers + shared types + pure logic
-│       ├── drive.ts        # RemovableDrive type + formatSize
-│       ├── device.ts       # DeviceProfile table + getDeviceProfile
-│       ├── install.ts      # installMinui() invoke wrapper + InstallPhase
-│       ├── archive.ts      # download/verify/extract invoke wrappers
-│       ├── validate.ts     # validateInstallation/health invoke wrappers
-│       ├── version.ts      # checkMinuiVersion invoke wrapper
-│       ├── package.ts      # registry fetch/validate + package invoke wrappers
-│       ├── release.ts      # GitHub release fetch + parse
-│       └── *.test.ts       # Co-located unit tests
-├── src-tauri/              # Rust backend (Tauri core)
-│   ├── Cargo.toml          # Rust deps (tauri, reqwest, sha2, zip, tokio…)
-│   ├── Cargo.lock
-│   ├── build.rs            # Tauri build script
-│   ├── tauri.conf.json     # Tauri app config (window, bundle, dev URL)
-│   ├── capabilities/
-│   │   └── default.json    # IPC permission set (core:default)
-│   ├── icons/              # App icons (png/icns/ico)
-│   ├── gen/schemas/        # Generated capability/ACL schemas
-│   └── src/
-│       ├── main.rs         # Native entry → calls lib::run()
-│       ├── lib.rs          # Command definitions + generate_handler! registry
-│       ├── drives.rs       # Removable drive enumeration (OS-specific)
-│       ├── download.rs     # HTTP download + SHA-256 checksum verify
-│       ├── extract.rs      # ZIP extraction with path-traversal guards
-│       ├── install.rs      # MinUI install: download→extract→copy (preserves ROMs)
-│       ├── validate.rs     # Install validation + SD health check
-│       ├── version.rs      # Installed MinUI version detection
-│       ├── package.rs      # Package install + installed/update detection
-│       └── wifi.rs         # WiFi scan + wifi.txt write
-├── scripts/ralph/          # Autonomous "Ralph" agent loop (prompts, ralph.sh)
-└── tasks/                  # PRD: prd-minui-easy-installer-package-store.md
+minui-easy-installer/
+├── src/                        # React frontend (TypeScript)
+│   ├── types/                  # Domain types, API wrappers, data models
+│   ├── *.tsx                   # UI components
+│   ├── *.test.tsx              # Component tests (vitest)
+│   └── styles.css              # Global styles
+├── src-tauri/                  # Rust backend (Tauri v2)
+│   ├── src/                    # Rust source modules
+│   ├── capabilities/           # Tauri v2 capability definitions
+│   ├── gen/                    # Tauri generated code
+│   ├── icons/                  # Tauri app icons
+│   ├── target/                 # Rust build artifacts (gitignored)
+│   ├── Cargo.toml              # Rust dependencies
+│   ├── Cargo.lock              # Rust dependency lockfile
+│   ├── build.rs                # Rust build script
+│   └── tauri.conf.json         # Tauri configuration
+├── assets/                     # Static assets (logos, banners)
+├── icons/                      # App icons (multi-resolution PNGs, ICO, ICNS)
+├── scripts/                    # Utility scripts
+│   └── ralph/                  # Ralph-related scripts
+├── tasks/                      # Product requirement documents
+├── .planning/                  # Planning and architecture docs
+│   ├── codebase/               # Codebase documentation
+│   └── handoffs/               # Session handoff notes
+├── index.html                  # Vite HTML entry point
+├── package.json                # Node.js dependencies and scripts
+├── tsconfig.json               # TypeScript configuration
+├── vite.config.ts              # Vite build configuration
+├── vitest.config.ts            # Vitest test configuration
+├── vitest.setup.ts             # Vitest setup (custom matchers)
+├── justfile                    # Just task runner recipes
+├── prek.toml                   # Pre-commit hook config
+├── AGENTS.md                   # AI agent instructions
+├── DESIGN.md                   # Design documentation
+├── README.md                   # Project readme
+└── LICENSE                     # License file
 ```
 
 ## Directory Purposes
 
 **`src/`:**
 
-- Purpose: React/TypeScript frontend (webview process).
-- Contains: `.tsx` components at the top level, co-located `.test.tsx` tests, global `styles.css`.
-- Key files: `main.tsx` (entry), `App.tsx` (root/nav), `Home.tsx` (install orchestrator).
+- Purpose: React frontend — all UI components, styles, and TypeScript type/API modules
+- Contains: `.tsx` components, `.ts` type definitions and API wrappers, `.css` styles, `.test.ts` and `.test.tsx` tests
+- Key files: `App.tsx`, `Home.tsx`, `main.tsx`, `types/`
 
 **`src/types/`:**
 
-- Purpose: IPC wrapper layer — typed `invoke()` calls mirroring Rust structs — plus shared types and pure browser logic (release/registry parsing, formatting).
-- Contains: `.ts` modules and co-located `.test.ts` unit tests.
-- Key files: `install.ts`, `package.ts`, `release.ts`, `device.ts`.
+- Purpose: Domain types, Tauri IPC API wrappers, data models, validation logic, and test files
+- Contains: TypeScript interfaces, type aliases, async `invoke()` wrapper functions, static data JSON, and co-located test files
+- Key files: `device.ts`, `install.ts`, `release.ts`, `package.ts`, `version.ts`, `validate.ts`, `drive.ts`, `archive.ts`, `store.json`
 
 **`src-tauri/`:**
 
-- Purpose: Rust/Tauri native backend.
-- Contains: crate config, build script, app config, capabilities, icons, generated schemas, and source in `src/`.
-- Key files: `tauri.conf.json`, `Cargo.toml`, `capabilities/default.json`.
+- Purpose: Rust backend — Tauri app shell, all OS-level operations, IPC command handlers
+- Contains: Rust source modules, Cargo project files, Tauri configuration, generated code
+- Key files: `src/lib.rs`, `src/main.rs`, `src/install.rs`, `tauri.conf.json`, `Cargo.toml`
 
 **`src-tauri/src/`:**
 
-- Purpose: Rust command surface + privileged domain logic.
-- Contains: one module per domain, each with `Serialize` result structs and `#[cfg(test)]` unit tests.
-- Key files: `lib.rs` (command registry), `install.rs`, `drives.rs`.
+- Purpose: Rust source code — each module handles a specific domain (drives, download, extract, install, etc.)
+- Contains: `.rs` source files with `#[tauri::command]` functions and domain logic
+- Key files: `lib.rs` (command registry), `main.rs` (entry point), `install.rs` (core install flow), `download.rs`, `extract.rs`, `drives.rs`, `package.rs`, `validate.rs`, `version.rs`, `wifi.rs`, `fs_utils.rs`
 
-**`scripts/ralph/`:**
+**`assets/`:**
 
-- Purpose: Autonomous coding-loop tooling (`ralph.sh`, per-agent prompt files, `progress.txt`).
+- Purpose: Static brand assets used in the UI
+- Contains: SVG files (banner, logo)
+- Key files: `banner.svg`, `logo.svg`
+
+**`icons/`:**
+
+- Purpose: Multi-resolution app icons for all platforms (macOS, Windows, Linux)
+- Contains: PNG, ICO, ICNS, SVG icon files
+- Key files: `icon.icns` (macOS), `icon.ico` (Windows), `icon.png` (Linux), `icon-master.png` (source)
+
+**`scripts/`:**
+
+- Purpose: Utility/build scripts
+- Contains: Ralph-related tooling scripts
+- Key files: `ralph/` (subdirectory)
 
 **`tasks/`:**
 
-- Purpose: Product requirements doc driving the build.
+- Purpose: Product requirement documents and feature specifications
+- Contains: Markdown PRD files
+- Key files: `prd-minui-easy-installer-package-store.md`
+
+**`.planning/`:**
+
+- Purpose: Architecture documentation and session handoff notes
+- Contains: Markdown documentation files
+- Key files: `codebase/`, `handoffs/`
 
 ## Key File Locations
 
 **Entry Points:**
 
-- `src/main.tsx`: React bootstrap, renders `<App/>`.
-- `src-tauri/src/main.rs`: native `main()` → `minui_easy_installer_lib::run()`.
-- `src-tauri/src/lib.rs`: `run()` builds the Tauri app and registers all 14 IPC commands.
+- `src/main.tsx`: React app bootstrap — mounts `<App />` into DOM
+- `src/App.tsx`: Top-level component — screen routing (home, store, wifi), shared state
+- `src-tauri/src/main.rs`: Rust binary entry point — calls `run()`
+- `src-tauri/src/lib.rs`: Tauri app builder — registers all 16 command handlers
 
 **Configuration:**
 
-- `src-tauri/tauri.conf.json`: window size, bundle targets, dev URL (`localhost:1420`).
-- `vite.config.ts` / `tsconfig.json` / `vitest.config.ts`: frontend build/type/test.
-- `src-tauri/capabilities/default.json`: IPC permission allowlist.
-- `package.json` / `Cargo.toml`: dependency manifests.
+- `package.json`: Node.js project config — scripts (`dev`, `build`, `test`, `lint`, `typecheck`), dependencies
+- `tsconfig.json`: TypeScript compiler configuration
+- `vite.config.ts`: Vite build tool configuration
+- `vitest.config.ts`: Vitest test runner configuration
+- `src-tauri/tauri.conf.json`: Tauri app configuration (app name, window settings, permissions)
+- `src-tauri/Cargo.toml`: Rust dependency and project configuration
 
 **Core Logic:**
 
-- `src-tauri/src/install.rs`: download→extract→copy with preserved-folder protection.
-- `src-tauri/src/drives.rs`, `download.rs`, `extract.rs`, `validate.rs`, `version.rs`, `package.rs`, `wifi.rs`: per-domain native logic.
-- `src/Home.tsx`: frontend install/update orchestration and state machine.
-- `src/types/*.ts`: IPC bridge wrappers.
+- `src/Home.tsx`: Main install/update workflow — device selection, drive selection, version check, install orchestration (507 lines)
+- `src-tauri/src/install.rs`: Rust install flow — download, extract, copy base+extras, create ROM dirs (457 lines)
+- `src/types/device.ts`: Device profile registry — 17 device profiles with platform mappings (156 lines)
+- `src/types/package.ts`: Package store logic — registry fetching, package installation, update checking (278 lines)
+- `src/types/release.ts`: GitHub release parsing — fetches and parses MinUI release metadata (117 lines)
+- `src-tauri/src/download.rs`: Archive download with checksum verification
+- `src-tauri/src/extract.rs`: Archive extraction with path traversal protection
+- `src-tauri/src/drives.rs`: OS-level removable drive detection and formatting
+- `src-tauri/src/validate.rs`: Post-install validation and SD card health checks
+- `src-tauri/src/version.rs`: MinUI version detection from SD card filesystem
+- `src-tauri/src/wifi.rs`: WiFi network scanning and config writing
 
 **Testing:**
 
-- `src/**/*.test.tsx` and `src/types/*.test.ts`: Vitest/jsdom tests, co-located with sources.
-- `#[cfg(test)] mod tests` blocks inside each `src-tauri/src/*.rs`: Rust unit tests.
+- `src/DriveSelector.test.tsx`: Drive selector component tests
+- `src/Home.test.tsx`: Home screen component tests
+- `src/PackageStore.test.tsx`: Package store component tests
+- `src/WifiWizard.test.tsx`: WiFi wizard component tests
+- `src/types/archive.test.ts`: Archive download/extract API tests
+- `src/types/device.test.ts`: Device profile tests
+- `src/types/device-install-map.test.ts`: Device install map tests
+- `src/types/drive.test.ts`: Drive utility tests
+- `src/types/install.test.ts`: Install API wrapper tests
+- `src/types/package.test.ts`: Package store API tests
+- `src/types/release.test.ts`: GitHub release parsing tests
+- `src/types/validate.test.ts`: Validation API tests
+- `src/types/version.test.ts`: Version check API tests
+- `vitest.setup.ts`: Vitest global setup (custom DOM matchers)
 
 ## Naming Conventions
 
 **Files:**
 
-- React components: `PascalCase.tsx` (e.g. `DriveSelector.tsx`).
-- TS type/IPC modules: `lowercase.ts` named after the Rust module (`install.ts` ↔ `install.rs`).
-- Tests: co-located, same base name + `.test.tsx`/`.test.ts`.
-- Rust modules: `snake_case.rs`.
-
-**Identifiers:**
-
-- TS interfaces mirror Rust struct field casing (snake_case fields like `mount_path`, `base_files_copied` kept as-is across IPC).
-- Tauri commands: `snake_case` (`get_removable_drives`, `install_minui`); TS wrapper functions: `camelCase` (`installMinui`, `checkMinuiVersion`).
+- React components: `PascalCase.tsx` — e.g., `Home.tsx`, `PackageStore.tsx`, `ConfirmDialog.tsx`
+- TypeScript types/modules: `camelCase.ts` — e.g., `device.ts`, `install.ts`, `release.ts`
+- Rust modules: `snake_case.rs` — e.g., `fs_utils.rs`, `download.rs`
+- Test files: `*.test.ts` or `*.test.tsx` — co-located with source files
+- Static data: `camelCase.json` — e.g., `store.json`, `device-install-map.json`
 
 **Directories:**
 
-- `kebab-case` project root; flat `src/` (no nested feature folders) with a single `types/` subdir.
+- Frontend source: `src/` (lowercase)
+- Types subdirectory: `src/types/` (lowercase)
+- Backend source: `src-tauri/src/` (kebab-case)
+- Planning docs: `.planning/codebase/` (lowercase)
+
+**Exports:**
+
+- Default exports for React components (`export default App`)
+- Named exports for types and functions (`export interface DeviceProfile`, `export function getDeviceProfile`)
+- Type-only exports preferred (`export type InstallPhase`)
 
 ## Where to Add New Code
 
-**New Feature (new native capability):**
+**New Feature (Full-Stack):**
 
-- Backend: add a domain module `src-tauri/src/<feature>.rs`, declare `mod <feature>;` + a `#[tauri::command]` in `src-tauri/src/lib.rs`, and add it to `generate_handler![...]`.
-- Frontend bridge: add `src/types/<feature>.ts` with typed `invoke()` wrappers + mirror interfaces.
-- UI: add a `PascalCase.tsx` component in `src/`, wire into `App.tsx` nav or `Home.tsx`.
-- Tests: co-locate `*.test.ts(x)`; add `#[cfg(test)]` tests in the Rust module.
+- Frontend component: `src/NewFeature.tsx`
+- Frontend types/API: `src/types/newfeature.ts`
+- Rust backend module: `src-tauri/src/newfeature.rs`
+- Register command in: `src-tauri/src/lib.rs` (add to `mod` declarations and `generate_handler![]`)
+- Tests: `src/NewFeature.test.tsx` and `src/types/newfeature.test.ts`
 
-**New Component/Module:**
+**New Device Profile:**
 
-- Implementation: `src/<Name>.tsx` (component) or `src/types/<name>.ts` (logic/IPC).
+- Add entry to `DEVICE_PROFILES` array in `src/types/device.ts`
 
-**Utilities:**
+**New Install Path Rule:**
 
-- Shared frontend helpers: alongside their type in `src/types/*.ts` (e.g. `formatSize` in `drive.ts`); no separate utils dir exists.
+- Modify `InstallPathRules` interface in `src/types/device.ts` and update `DEFAULT_INSTALL_PATH_RULES`
+
+**New Package Category:**
+
+- Add variant to `PackageCategory` type in `src/types/package.ts`
+
+**New Post-Install Check:**
+
+- Add check logic in `src-tauri/src/validate.rs`
+- Add `ValidationCheck` entry in validation result
+
+**New Tauri Command:**
+
+- Implement function in appropriate `src-tauri/src/*.rs` module
+- Add `#[tauri::command]` wrapper in `src-tauri/src/lib.rs`
+- Register in `generate_handler![]` macro in `src-tauri/src/lib.rs`
+- Add TypeScript wrapper in `src/types/*.ts`
 
 ## Special Directories
 
-**`src-tauri/gen/schemas/`:**
+**`src-tauri/target/`:**
 
-- Purpose: Capability/ACL JSON schemas.
-- Generated: Yes (by Tauri build). Committed: Yes.
+- Purpose: Rust compilation artifacts and build cache
+- Generated: Yes (by `cargo build`)
+- Committed: No (gitignored)
 
-**`src-tauri/target/` (in `.gitignore`):**
+**`src-tauri/gen/`:**
 
-- Purpose: Rust build output. Generated: Yes. Committed: No.
+- Purpose: Tauri-generated bindings and TypeScript types
+- Generated: Yes (by `tauri build` / `tauri dev`)
+- Committed: Partially (depends on team convention)
 
-**`node_modules/` / `dist/`:**
+**`node_modules/`:**
 
-- Purpose: npm deps / Vite build output. Generated: Yes. Committed: No.
+- Purpose: Node.js package dependencies
+- Generated: Yes (by `bun install` / `npm install`)
+- Committed: No (gitignored)
+
+**`assets/`:**
+
+- Purpose: Brand assets (SVG logos and banners)
+- Generated: No (hand-crafted)
+- Committed: Yes
+
+**`icons/`:**
+
+- Purpose: Multi-platform app icons derived from master icon
+- Generated: Partially (some may be derived from `icon-master.png`)
+- Committed: Yes
+
+**`tasks/`:**
+
+- Purpose: Product requirement documents and specifications
+- Generated: No (authored documents)
+- Committed: Yes
+
+**`.planning/`:**
+
+- Purpose: Architecture documentation, codebase analysis, session handoff notes
+- Generated: No (authored documentation)
+- Committed: Yes
 
 **`scripts/ralph/`:**
 
-- Purpose: Autonomous agent loop assets. Generated: No. Committed: Yes.
-
----
-
-_Structure analysis: 2026-06-13_
+- Purpose: Utility scripts for development/build workflows
+- Generated: No
+- Committed: Yes
