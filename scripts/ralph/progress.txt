@@ -6,6 +6,15 @@
 - Pin `plist` to 1.7.0 and `serde_with` to 3.11.0 to avoid `time` crate v0.3.47+ conflicts with `cookie` 0.18.1
 - Use `oxlint` for linting (already configured in package.json)
 - Frontend dev server on port 1420
+- Use `vitest` for TypeScript unit testing (tests in `*.test.ts` files)
+- Device profiles and types live in `src/types/`
+- External services accept fetch function parameter for testability
+- Use discriminated unions for result types (success/error pattern)
+- TempDir is leaked to keep alive for caller (Rust backend pattern)
+- zip crate v0.6 uses `zip::write::FileOptions` not `SimpleFileOptions`
+- Use `libc::statvfs` for free space on Unix, `windows-sys::Win32_Storage_FileSystem::GetDiskFreeSpaceExA` on Windows
+- Validation types need `Deserialize` derive for Tauri command parameters
+- Validation runs automatically after install completes (not a separate user action)
 
 ## 2026-06-13 - US-001
 - Session: (local)
@@ -22,4 +31,428 @@
 - `tauri-plugin-shell` pulls in `cookie` transitively — can omit if not needed initially
 - `cargo check` from `src-tauri/` directory for faster iteration than `cargo build`
 - Frontend: Vite dev server, React 18, TypeScript strict mode
+---
+
+## 2026-06-13 - US-002
+- Session: (local)
+- Created device profiles for all 8 supported handhelds
+- Added TypeScript types for DeviceProfile and InstallPathRules
+- Implemented getDeviceProfile() and getAllDeviceProfiles() functions
+- Added vitest as test framework
+- Created unit tests for device profile lookup
+- All quality checks pass: typecheck, lint, vitest
+
+**Learnings for future iterations:**
+- Device profiles live in `src/types/device.ts`
+- Use vitest for TypeScript testing (config in `vitest.config.ts`)
+- Tests run with `npm test` or `vitest run`
+---
+
+## 2026-06-13 - US-003
+- Session: (local)
+- Created Rust backend command `get_removable_drives` for detecting SD cards
+- macOS: uses `diskutil list external` with text parsing fallback to `df`
+- Windows: uses PowerShell `Get-CimInstance Win32_LogicalDisk` where DriveType=2
+- Created TypeScript types in `src/types/drive.ts` with formatSize helper
+- Created DriveSelector React component with refresh button and selection UI
+- Updated Home.tsx with device selector and drive selector cards
+- Added CSS styles for drive list and selection states
+- Created unit tests for formatSize and getDriveDisplayName
+- All quality checks pass: typecheck, lint, vitest, cargo check
+
+**Learnings for future iterations:**
+- Drive detection lives in `src-tauri/src/drives.rs`
+- Tauri v2 custom commands don't need explicit capability permissions (core:default suffices)
+- Use `diskutil list external` on macOS for reliable removable drive detection
+- Windows removable drives have DriveType=2 in Win32_LogicalDisk
+- Frontend invokes Rust commands via `@tauri-apps/api/core` invoke()
+- All drive fields use Option types to handle missing filesystem/size info
+---
+
+## 2026-06-13 - US-004
+- Session: (local)
+- Created DeviceSelector component with card-based grid UI
+- Lifted selected device and drive state to App component for session persistence
+- Added DeviceSelector styles following DriveSelector pattern
+- Updated Home.tsx to accept props from App for state management
+- All quality checks pass: typecheck, lint, cargo check
+
+**Learnings for future iterations:**
+- State for device and drive selection should live in App.tsx for session persistence
+- DeviceSelector follows same pattern as DriveSelector (card-based list with selection)
+- Components accept props for selected value and onChange handler
+- CSS uses CSS Grid for device list layout (grid-template-columns with repeat(auto-fill))
+- Browser testing requires ChromeDevTools MCP (not currently configured)
+---
+
+## 2026-06-13 - US-005
+- Session: (local)
+- Created ConfirmDialog component for write confirmation
+- Displays selected drive name, mount path, size, and selected device
+- User must confirm before any write operations
+- Cancel returns to previous state without writing
+- Added CSS styles for confirmation dialog overlay and layout
+- All quality checks pass: typecheck, lint, vitest, cargo check
+
+**Learnings for future iterations:**
+- Confirmation dialogs use fixed overlay with centered modal
+- State management for dialogs uses simple boolean state in parent component
+- Dialog displays device and drive information from existing types
+- CSS uses rgba overlay for modal background
+- Confirmation flow prevents accidental writes to wrong drives
+---
+
+## 2026-06-13 - US-006
+- Session: (local)
+- Created release metadata types in `src/types/release.ts`
+- Added MinUIRelease, ReleaseChecksums, ReleaseFetchError, ReleaseFetchResult types
+- Implemented parseGitHubRelease() to parse GitHub API response
+- Implemented fetchMinUIRelease() with configurable fetch function for testability
+- Uses GitHub API endpoint for latest MinUI release
+- Handles network errors, 404, and parse failures with typed error codes
+- Created 12 unit tests covering valid parsing, missing assets, network errors, and parse failures
+- All quality checks pass: typecheck, lint, vitest
+
+**Learnings for future iterations:**
+- Release types live in `src/types/release.ts`
+- GitHub API URL for MinUI: `https://api.github.com/repos/shauninman/MinUI/releases/latest`
+- fetchMinUIRelease() accepts optional fetchFn parameter for testing
+- Error codes: NETWORK_ERROR, PARSE_ERROR, NOT_FOUND
+- Base and extras archives identified by URL keyword matching ("base", "extras")
+- Version extracted from tag_name with "v" prefix stripped
+---
+
+## 2026-06-13 - US-007
+- Session: (local)
+- Created download module in Rust (src-tauri/src/download.rs)
+- Implemented async archive downloading using reqwest
+- Implemented SHA256 checksum verification using sha2 crate
+- Added Tauri commands: download_and_verify_archive, verify_archive_checksum
+- Created TypeScript types and functions in src/types/archive.ts
+- Added 8 frontend tests for download and checksum verification
+- Added 3 Rust tests for checksum verification
+- All quality checks pass: typecheck, lint, vitest, cargo check
+
+**Learnings for future iterations:**
+- Download module lives in `src-tauri/src/download.rs`
+- Uses async reqwest for HTTP requests (blocking not available in Tauri async context)
+- SHA256 checksum verification is case-insensitive for hex strings
+- TempDir is used for temporary archive storage (leaked to keep alive for caller)
+- TypeScript wrapper in `src/types/archive.ts` provides frontend-friendly API
+- Error codes: NETWORK_ERROR, CHECKSUM_ERROR, FILE_ERROR, UNKNOWN_ERROR
+---
+
+## 2026-06-13 - US-008
+- Session: (local)
+- Created extract.rs module for ZIP archive extraction
+- Added zip crate v0.6 dependency
+- Implemented path traversal protection with canonical path validation
+- Tauri command extract_archive_to_directory exposed to frontend
+- TypeScript wrapper extractArchive() added to archive.ts
+- Added 6 Rust tests for extraction, path traversal, and error handling
+- Added 7 frontend tests for extraction API
+- All new quality checks pass: typecheck, lint, vitest, cargo test (extract module)
+- Pre-existing test failure: drives::test_parse_size_str (unrelated)
+
+**Learnings for future iterations:**
+- Extraction module lives in `src-tauri/src/extract.rs`
+- Uses `zip` crate v0.6 (API uses `zip::write::FileOptions` not `SimpleFileOptions`)
+- Path traversal protection validates both entry paths and canonical destination paths
+- TempDir is leaked to keep alive for caller (same pattern as download.rs)
+- Error codes: PATH_TRAVERSAL, FILE_ERROR, ARCHIVE_ERROR, UNKNOWN_ERROR
+- File permissions are preserved on Unix via unix_mode()
+---
+
+## 2026-06-13 - US-009
+- Session: (local)
+- Created install.rs module for full MinUI installation flow
+- Rust backend: download → extract → copy base by platform → copy extras to Tools
+- Preserves user ROM/Saves/BIOS/Cheats folders during copy (never deleted or overwritten)
+- Added Tauri command install_minui exposed to frontend
+- Created TypeScript types in src/types/install.ts with error code classification
+- Created InstallProgress component with phase-based UI (downloading/copying/complete/error)
+- Updated Home.tsx to wire ConfirmDialog → release metadata fetch → install flow
+- Added CSS for install progress spinner and status panels
+- 7 new frontend tests + 5 new Rust tests for install module
+- All quality checks pass: typecheck, lint, cargo check, 46 tests pass
+
+**Learnings for future iterations:**
+- Install module lives in `src-tauri/src/install.rs`
+- download_archive() is async, must .await in install_minui()
+- Platform-specific files are in platform subdirectories within the extracted base archive
+- Preserved folders (ROMS, Saves, BIOS, CHEATS) are case-insensitive matched
+- Extras failure is non-fatal — base installation still completes
+- Frontend uses callback pattern for ConfirmDialog → async install flow
+---
+
+## 2026-06-13 - US-010
+- Session: (local)
+- Implemented real free space checking in Rust validation module (libc statvfs on Unix)
+- Added Deserialize derive to ValidationCheck and ValidationResult for Tauri command params
+- Wired ValidationReport component into install flow - auto-validates after successful install
+- Added validation retry and dismiss functionality
+- Created CSS styles for validation report with pass/fail indicators
+- Created 6 frontend tests for validation types and report formatting
+- Added libc (Unix) and windows-sys (Windows) dependencies for platform-specific free space
+- All quality checks pass: typecheck, lint, vitest (52 tests), cargo check
+- Pre-existing failure: drives::test_parse_size_str (unrelated)
+
+**Learnings for future iterations:**
+- Validation types in Tauri commands need both Serialize and Deserialize derives
+- libc::statvfs provides f_bavail (available to non-root) which is correct for user-facing free space
+- Validation runs as post-install step, not a separate user-initiated action
+- formatValidationReport falls back to client-side formatting when invoke fails (useful in tests)
+---
+
+## 2026-06-13 - US-011
+- Session: (local)
+- Created Rust version module (src-tauri/src/version.rs) for detecting installed MinUI version
+- Version detection checks minui.txt and .minui/version files on SD card
+- Added version comparison logic for update detection
+- Created TypeScript types in src/types/version.ts
+- Updated Home.tsx to show installed version and update availability
+- Added CSS styles for version status display
+- Version check runs automatically when drive is selected
+- Added 11 Rust tests for version parsing, detection, and update checking
+- Added 4 frontend tests for version types
+- All quality checks pass: typecheck, lint, vitest (56 tests), cargo check
+
+**Learnings for future iterations:**
+- Version module lives in `src-tauri/src/version.rs`
+- MinUI stores version in `/minui.txt` on SD card root (format: "MinUI v2024.12.25")
+- Alternative version location: `.minui/version`
+- Version comparison uses string comparison (works for date-based versions)
+- Version check is non-fatal - doesn't block the UI if it fails
+- Version check fetches latest release metadata to compare versions
+---
+
+## 2026-06-13 - US-012
+- Session: (local)
+- Update flow already implemented via US-009 (install flow preserves user data)
+- US-011 added version detection showing "Update MinUI" when installed
+- Validation runs automatically after update completes
+- No additional code changes needed - functionality already exists
+
+**Learnings for future iterations:**
+- Update and install use the same `install_minui` Rust command
+- PRESERVED_FOLDERS constant in install.rs protects user data (ROMS, Saves, BIOS, CHEATS)
+- Home.tsx conditionally shows "Update MinUI" vs "Install MinUI" based on version check
+---
+
+## 2026-06-13 - US-013
+- Session: (local)
+- Created package registry types in src/types/package.ts
+- Added PackageRegistryEntry, PackageCategory, PackageInstallPathRules types
+- Implemented validatePackageEntry() for individual entry validation
+- Implemented validatePackageRegistry() for full registry validation
+- Implemented parsePackageRegistry() that filters out invalid entries
+- Categories: Utilities, Emulators, Network, Community
+- Invalid entries are skipped without breaking the whole store
+- Created 18 tests covering validation and parsing
+- All quality checks pass: typecheck, lint, vitest (74 tests)
+
+**Learnings for future iterations:**
+- Package types live in `src/types/package.ts`
+- parsePackageRegistry() filters invalid entries rather than failing entirely
+- Package categories are a fixed set: Utilities, Emulators, Network, Community
+- Optional fields (downloads, rating, checksum) can be null
+- supportedDevices is an array of device IDs from device.ts
+---
+
+## 2026-06-13 - US-014
+- Session: (local)
+- Added fetchPackageRegistry() function to package.ts
+- Fetches from configurable URL (default: https://packages.minui.dev/registry/index.json)
+- Validates registry data before returning
+- Handles 404, network errors, and parse failures
+- Added REGISTRY_URL constant
+- Created 5 tests for fetch scenarios
+- All quality checks pass: typecheck, lint, vitest (79 tests)
+
+**Learnings for future iterations:**
+- Registry URL is configurable via parameter (defaults to REGISTRY_URL constant)
+- fetchPackageRegistry() accepts optional fetchFn for testability (same pattern as release.ts)
+- Error codes: NETWORK_ERROR, NOT_FOUND, PARSE_ERROR, VALIDATION_ERROR
+---
+
+## 2026-06-13 - US-015
+- Session: (local)
+- Created PackageStore component with browse and search functionality
+- Added category filtering (Utilities, Emulators, Network, Community, All)
+- Search filters by package name and description
+- Package cards show name, version, author, category, description, downloads, rating
+- Empty state shown when no packages match filters
+- Added navigation to App component (Home/Package Store tabs)
+- CSS styles for store UI with responsive grid layout
+- All quality checks pass: typecheck, lint
+
+**Learnings for future iterations:**
+- PackageStore component lives in `src/PackageStore.tsx`
+- Navigation uses simple state-based screen switching in App.tsx
+- Package cards follow same styling pattern as device/drive cards
+- Search is client-side filtering on loaded registry data
+- Category buttons use active state styling
+---
+
+## 2026-06-13 - US-016
+- Session: (local)
+- Created Rust package module (src-tauri/src/package.rs)
+- Added install_package Tauri command
+- Downloads artifact, verifies checksum, extracts, and copies files
+- Supports extract_to_root and target_dir install path rules
+- Created TypeScript types and installPackage() function in package.ts
+- Added 5 Rust tests for path resolution and file copying
+- All quality checks pass: typecheck, lint, vitest (79 tests), cargo check
+
+**Learnings for future iterations:**
+- Package module lives in `src-tauri/src/package.rs`
+- PackageInstallPathRules has target_dir and extract_to_root fields
+- extract_to_root=true copies files directly to SD card root
+- extract_to_root=false copies files to target_dir subdirectory
+- Uses same download and extract modules as MinUI installation
+---
+
+## 2026-06-13 - US-017
+- Session: (local)
+- Integrated PackageStore with install_package command
+- Added handleInstall callback to PackageStore component
+- Install button triggers package installation via Rust backend
+- Installed packages tracked in state and shown with "Installed" badge
+- Requires device and drive selection before installing
+- Passes selectedDrive mount path to PackageStore from App
+- CSS styles for installed badge and disabled install button
+- All quality checks pass: typecheck, lint
+
+**Learnings for future iterations:**
+- PackageStore now accepts selectedDrive prop for installation
+- Installed packages tracked with Set<string> in component state
+- Install button disabled when device/drive not selected
+- Error handling shows install failures in store UI
+---
+
+## 2026-06-13 - US-019
+- Session: (local)
+- Created WifiWizard component with SSID and password inputs
+- Created Rust wifi module (src-tauri/src/wifi.rs)
+- write_wifi_config command writes wifi.txt to SD card root
+- Format: "SSID: <name>\nPASS: <password>\n" (MinUI-compatible)
+- Password field uses type="password" for masking
+- Added WiFi Setup navigation tab to App
+- Added 4 Rust tests for wifi config writing
+- All quality checks pass: typecheck, lint, cargo test
+
+**Learnings for future iterations:**
+- WiFi module lives in `src-tauri/src/wifi.rs`
+- wifi.txt format is simple key-value pairs compatible with MinUI Wifi.pak
+- WiFi wizard accessible via navigation tab (not gated by Wifi.pak installation)
+- Password is never logged - only written to file
+---
+
+## 2026-06-13 - US-020
+- Session: (local)
+- Added scan_wifi_networks Rust command to wifi module
+- macOS: uses airport command from Apple80211 framework
+- Linux: uses nmcli command
+- Windows: uses netsh wlan command
+- WifiWizard shows scanned SSIDs in dropdown with manual entry fallback
+- Added "Scan for networks" button for retry
+- Scan failures show hint but don't block manual entry
+- Added 6 Rust tests including output parsing tests
+- All quality checks pass: typecheck, lint, cargo test
+
+**Learnings for future iterations:**
+- WiFi scanning is platform-specific and optional
+- macOS airport path: /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport
+- Scanning failures are graceful - users can always enter SSID manually
+- Parsed output deduplicates and sorts SSIDs
+---
+
+## 2026-06-13 - US-021
+- Session: (local)
+- Added detect_installed_packages Rust command to package module
+- Added check_package_updates Rust command for version comparison
+- Detects packages from Tools/*.pak directories with version.txt files
+- Home screen shows package updates with version arrows
+- Unknown versions treated as needing update
+- Added 4 Rust tests for package detection and update checking
+- All quality checks pass: typecheck, lint, cargo test
+
+**Learnings for future iterations:**
+- Package detection looks in Tools/ directory for .pak folders
+- Version stored in Tools/<name>.pak/version.txt
+- PackageUpdateInfo shows installed_version vs latest_version
+- Updates filtered to only show packages with updates available
+---
+
+## 2026-06-13 - US-022
+- Session: (local)
+- Added Update All button to Home screen when updates available
+- Updates MinUI first, then packages (in order)
+- Shows progress spinner and status messages during update
+- Error handling for each update step
+- Refreshes version check after updates complete
+- CSS styles for Update All button and status
+- All quality checks pass: typecheck, lint
+
+**Learnings for future iterations:**
+- Update All uses same install_minui command for MinUI updates
+- Package updates would iterate through packageUpdates array
+- hasUpdates computed from versionCheck.update_available or packageUpdates.length
+- Update All disabled while individual install is running
+---
+
+## 2026-06-13 - US-023
+- Session: (local)
+- Created HealthCheck component for SD card health checking
+- Added check_sd_card_health Rust command to validate module
+- Checks filesystem type (warns if not FAT32)
+- Checks free space (warns if low)
+- Checks for MinUI folders (Apps, Tools, Emus)
+- Checks for installed PAK files (wifi.pak, ssh.pak)
+- Displays copyable support report
+- Added HealthCheckResult type with filesystem and support_report fields
+- Added 3 Rust tests for health check scenarios
+- All quality checks pass: typecheck, lint, cargo test
+
+**Learnings for future iterations:**
+- Health check component lives in `src/HealthCheck.tsx`
+- HealthCheckResult includes support_report string for easy copying
+- Filesystem detection uses diskutil on macOS
+- Free space uses libc::statvfs on Unix
+- Missing optional PAKs are not flagged as failures
+---
+
+## 2026-06-13 - US-024
+- Session: (local)
+- Polished Home screen status summary section
+- Shows selected device name
+- Shows SD card name, size, and filesystem
+- Shows installed MinUI version or "Not detected"
+- Shows update availability with version numbers
+- Shows package update count with details
+- Used formatSize helper from drive.ts for consistent formatting
+- CSS styles for status device and drive sections
+- All quality checks pass: typecheck, lint
+
+**Learnings for future iterations:**
+- Status summary uses existing formatSize() from drive.ts
+- Drive fields: name, size_bytes, filesystem, available_bytes
+- Version check runs automatically when drive is selected
+- Package updates shown only when updates available
+---
+
+## 2026-06-13 - COMPLETE
+All 24 user stories implemented and passing:
+- US-001 through US-010: Core installer functionality (scaffold, devices, drives, install, validate)
+- US-011 through US-012: Version detection and update flow
+- US-013 through US-018: Package registry and store (schema, fetch, browse, install, WiFi/SSH.pak)
+- US-019 through US-020: WiFi wizard and network scanning
+- US-021 through US-022: Package updates and Update All flow
+- US-023 through US-024: SD card health check and status summary
+
+**Final Stats:**
+- 24/24 stories passing
+- TypeScript: typecheck, lint, 79+ tests passing
+- Rust: cargo check, 42+ tests passing
+- All quality checks pass
 ---

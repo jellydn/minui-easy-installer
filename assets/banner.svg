@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#a78bfa"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="300" fill="url(#bg)" rx="16"/>
+
+  <!-- Grid pattern -->
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="1"/>
+  </pattern>
+  <rect width="1200" height="300" fill="url(#grid)" opacity="0.5"/>
+
+  <!-- Decorative circles -->
+  <circle cx="100" cy="50" r="150" fill="#6366f1" opacity="0.1"/>
+  <circle cx="1100" cy="250" r="200" fill="#8b5cf6" opacity="0.1"/>
+
+  <!-- Logo icon -->
+  <g transform="translate(150, 150) scale(0.6)">
+    <!-- SD Card -->
+    <rect x="-60" y="-100" width="120" height="180" rx="12" ry="12" fill="#f8fafc"/>
+    <rect x="-45" y="-100" width="35" height="25" rx="3" ry="3" fill="#e2e8f0"/>
+    <rect x="-40" y="50" width="80" height="12" rx="3" ry="3" fill="#94a3b8"/>
+    <rect x="-30" y="-60" width="60" height="45" rx="5" ry="5" fill="#0f172a"/>
+    <text x="0" y="-32" font-family="system-ui" font-size="16" font-weight="bold" fill="#22d3ee" text-anchor="middle">MinUI</text>
+    <circle cx="0" cy="90" r="22" fill="#22c55e"/>
+    <path d="M0,78 L0,100 M-8,90 L0,100 L8,90" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- Title -->
+  <text x="320" y="120" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="bold" fill="white">MinUI Easy Installer</text>
+
+  <!-- Subtitle -->
+  <text x="320" y="170" font-family="system-ui, -apple-system, sans-serif" font-size="24" fill="#94a3b8">&amp; Package Store</text>
+
+  <!-- Tagline -->
+  <text x="320" y="220" font-family="system-ui, -apple-system, sans-serif" font-size="18" fill="#64748b">The easiest way to install and manage MinUI on retro handhelds</text>
+
+  <!-- Tech badges -->
+  <g transform="translate(320, 245)">
+    <rect x="0" y="0" width="80" height="28" rx="14" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="40" y="19" font-family="system-ui" font-size="12" fill="#94a3b8" text-anchor="middle">Tauri v2</text>
+
+    <rect x="90" y="0" width="80" height="28" rx="14" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="130" y="19" font-family="system-ui" font-size="12" fill="#94a3b8" text-anchor="middle">React</text>
+
+    <rect x="180" y="0" width="80" height="28" rx="14" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="220" y="19" font-family="system-ui" font-size="12" fill="#94a3b8" text-anchor="middle">Rust</text>
+  </g>
+</svg>
