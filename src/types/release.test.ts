@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MinUIRelease, ReleaseFetchError } from "./release";
 import {
-  clearReleaseCache,
   fetchMinUIRelease,
   GITHUB_API_URL,
   parseGitHubRelease,
