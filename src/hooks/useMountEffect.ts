@@ -8,6 +8,6 @@ import { useEffect } from "react";
  * a data-fetching library instead.
  */
 export function useMountEffect(effect: () => void | (() => void)) {
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	useEffect(effect, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(effect, []);
 }

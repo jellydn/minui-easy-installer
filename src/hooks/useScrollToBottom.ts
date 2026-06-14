@@ -6,12 +6,12 @@ import { useEffect, useRef } from "react";
  * whenever `items` changes.
  */
 export function useScrollToBottom<T>(items: T[]) {
-	const containerRef = useRef<HTMLDivElement>(null);
-	const sentinelRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-	useEffect(() => {
-		sentinelRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, [items]);
+  useEffect(() => {
+    sentinelRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [items]);
 
-	return { containerRef, sentinelRef };
+  return { containerRef, sentinelRef };
 }

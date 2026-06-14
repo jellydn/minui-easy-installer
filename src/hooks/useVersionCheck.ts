@@ -6,9 +6,9 @@ import type { VersionCheckResult } from "../types/version";
 import { checkMinuiVersion } from "../types/version";
 
 interface VersionCheckState {
-	isChecking: boolean;
-	versionCheck: VersionCheckResult | null;
-	packageUpdates: PackageUpdateInfo[];
+  isChecking: boolean;
+  versionCheck: VersionCheckResult | null;
+  packageUpdates: PackageUpdateInfo[];
 }
 
 /**
@@ -17,64 +17,64 @@ interface VersionCheckState {
  * when the drive changes — converting the effect into an event-driven pattern.
  */
 export function useVersionCheck() {
-	const [state, setState] = useState<VersionCheckState>({
-		isChecking: false,
-		versionCheck: null,
-		packageUpdates: [],
-	});
-	const requestIdRef = useRef(0);
+  const [state, setState] = useState<VersionCheckState>({
+    isChecking: false,
+    versionCheck: null,
+    packageUpdates: [],
+  });
+  const requestIdRef = useRef(0);
 
-	const check = useCallback(async (sdMount: string) => {
-		const requestId = ++requestIdRef.current;
-		setState((s) => ({
-			...s,
-			isChecking: true,
-			versionCheck: null,
-			packageUpdates: [],
-		}));
+  const check = useCallback(async (sdMount: string) => {
+    const requestId = ++requestIdRef.current;
+    setState((s) => ({
+      ...s,
+      isChecking: true,
+      versionCheck: null,
+      packageUpdates: [],
+    }));
 
-		try {
-			const releaseResult = await fetchMinUIRelease();
-			if (requestId !== requestIdRef.current) return;
+    try {
+      const releaseResult = await fetchMinUIRelease();
+      if (requestId !== requestIdRef.current) return;
 
-			const latestVersion = releaseResult.success
-				? releaseResult.data.version
-				: undefined;
+      const latestVersion = releaseResult.success
+        ? releaseResult.data.version
+        : undefined;
 
-			const result = await checkMinuiVersion({ sdMount, latestVersion });
-			if (requestId !== requestIdRef.current) return;
+      const result = await checkMinuiVersion({ sdMount, latestVersion });
+      if (requestId !== requestIdRef.current) return;
 
-			if (result.success) {
-				setState((s) => ({ ...s, versionCheck: result.data }));
-			}
+      if (result.success) {
+        setState((s) => ({ ...s, versionCheck: result.data }));
+      }
 
-			const registryResult = await fetchPackageRegistry();
-			if (requestId !== requestIdRef.current) return;
+      const registryResult = await fetchPackageRegistry();
+      if (requestId !== requestIdRef.current) return;
 
-			if (registryResult.success) {
-				const registryPackages: [string, string][] =
-					registryResult.data.packages.map((p) => [p.name, p.version]);
-				const updates = await checkPackageUpdates(sdMount, registryPackages);
-				if (requestId !== requestIdRef.current) return;
+      if (registryResult.success) {
+        const registryPackages: [string, string][] =
+          registryResult.data.packages.map((p) => [p.name, p.version]);
+        const updates = await checkPackageUpdates(sdMount, registryPackages);
+        if (requestId !== requestIdRef.current) return;
 
-				setState((s) => ({
-					...s,
-					packageUpdates: updates.filter((u) => u.update_available),
-				}));
-			}
-		} catch {
-			// Version check failure is non-fatal
-		} finally {
-			if (requestId === requestIdRef.current) {
-				setState((s) => ({ ...s, isChecking: false }));
-			}
-		}
-	}, []);
+        setState((s) => ({
+          ...s,
+          packageUpdates: updates.filter((u) => u.update_available),
+        }));
+      }
+    } catch {
+      // Version check failure is non-fatal
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setState((s) => ({ ...s, isChecking: false }));
+      }
+    }
+  }, []);
 
-	const reset = useCallback(() => {
-		requestIdRef.current++;
-		setState({ isChecking: false, versionCheck: null, packageUpdates: [] });
-	}, []);
+  const reset = useCallback(() => {
+    requestIdRef.current++;
+    setState({ isChecking: false, versionCheck: null, packageUpdates: [] });
+  }, []);
 
-	return { ...state, check, reset };
+  return { ...state, check, reset };
 }
