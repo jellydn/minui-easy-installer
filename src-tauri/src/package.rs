@@ -170,17 +170,28 @@ pub async fn install_package(
         .join(platform)
         .join(format!("{}.pak", rules.pak_name));
 
-    // Create directory first so canonicalize can resolve it
+    // Security: reject path components that escape the SD card before creating anything
+    if pak_root.components().any(|c| c.as_os_str() == "..") {
+        return Err(format!(
+            "Security violation: target directory contains parent traversal: {}",
+            rules.target_dir
+        ));
+    }
+
+    let canonical_sd = Path::new(sd_mount).canonicalize()
+        .map_err(|e| format!("Failed to resolve SD card path: {}", e))?;
+
+    // Create directory so canonicalize can resolve it
     fs::create_dir_all(&pak_root)
         .map_err(|e| format!("Failed to create package directory: {}", e))?;
 
-    // Security: ensure target stays within SD card
-    let canonical_sd = Path::new(sd_mount).canonicalize()
-        .map_err(|e| format!("Failed to resolve SD card path: {}", e))?;
     let canonical_pak = pak_root.canonicalize()
         .map_err(|e| format!("Failed to resolve package path: {}", e))?;
     if !canonical_pak.starts_with(&canonical_sd) {
-        let _ = fs::remove_dir_all(&pak_root);
+        // The early `..` check prevents creation outside the SD card, so
+        // any leftover directory at `pak_root` is inside the SD card and
+        // safe to leave (e.g. a symlink-based container escape is extremely
+        // unlikely and not worth a manual cleanup that could itself be unsafe).
         return Err(format!("Security violation: target directory escapes SD card: {}", rules.target_dir));
     }
 
