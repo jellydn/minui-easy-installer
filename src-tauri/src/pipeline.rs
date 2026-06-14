@@ -135,14 +135,17 @@ pub fn create_target_within(
         .join(format!("{}.pak", pak_name));
 
     // Validate the target is inside canonical_sd BEFORE creating anything.
-    // We canonicalize the parent (which must exist for create_dir_all to
-    // succeed) and check the parent is within the SD card root. If the
-    // parent itself escapes, the leaf will too, so this is sufficient.
+    // We walk up to the first existing ancestor and canonicalize that, then
+    // check it stays within the SD card root. Walking up is required because
+    // on a fresh install the parent directory tree may not exist yet --
+    // a plain `parent.canonicalize()` would fail with NotFound before
+    // create_dir_all has a chance to run. If a symlink at any non-existing
+    // intermediate path resolves to outside the SD card, the canonical
+    // ancestor check will still catch it.
     let parent = target
         .parent()
         .ok_or_else(|| "Target path has no parent directory".to_string())?;
-    let canonical_parent = parent
-        .canonicalize()
+    let canonical_parent = canonicalize_existing_ancestor(parent)
         .map_err(|e| format!("Failed to resolve target parent: {}", e))?;
 
     if !canonical_parent.starts_with(&canonical_sd) {
@@ -184,4 +187,33 @@ pub fn create_target_within(
     }
 
     Ok(canonical)
+}
+
+/// Walk up `path` until we find an existing ancestor, then canonicalize it.
+///
+/// `Path::canonicalize` requires every component to exist. On a fresh
+/// install, the target parent directory tree may not exist yet (e.g. SD
+/// card just formatted). This helper finds the highest existing ancestor
+/// and canonicalizes that, so the caller can still reason about the path's
+/// location relative to the SD card root.
+///
+/// Symlink-safety: if any existing ancestor is a symlink pointing outside
+/// the SD card, `canonicalize` resolves through the symlink and the caller's
+/// `starts_with(canonical_sd)` check will reject it. So this helper does
+/// not weaken the security boundary -- it just makes the fresh-install
+/// case work.
+fn canonicalize_existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
+    let mut current: &Path = path;
+    loop {
+        match current.canonicalize() {
+            Ok(canonical) => return Ok(canonical),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                match current.parent() {
+                    Some(parent) => current = parent,
+                    None => return Err(e),
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
 }
