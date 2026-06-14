@@ -20,7 +20,7 @@ const mockRegistry: PackageRegistry = {
     {
       name: "Wifi.pak",
       version: "1.0.0",
-      category: "Emulators",
+      category: "Network",
       description: "WiFi connectivity tool",
       repository: "https://github.com/example/wifi",
       downloads: 1000,
