@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useScrollToBottom } from "./hooks/useScrollToBottom";
 import type { InstallPhase, InstallProgressEvent } from "./types/install";
 
 interface InstallProgressProps {
@@ -33,11 +33,7 @@ function InstallProgressUI({
 	error,
 	onDismiss,
 }: InstallProgressProps) {
-	const logEnd = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		logEnd.current?.scrollIntoView({ behavior: "smooth" });
-	}, [log]);
+	const { containerRef, sentinelRef } = useScrollToBottom(log);
 
 	return (
 		<div className="install-progress">
@@ -50,14 +46,14 @@ function InstallProgressUI({
 			{message && <p className="install-message">{message}</p>}
 
 			{log.length > 0 && (
-				<div className="install-log">
+				<div className="install-log" ref={containerRef}>
 					{log.map((entry, i) => (
 						<div key={i} className={`log-line log-${entry.step}`}>
 							<span className="log-step">{STEP_ICON[entry.step] ?? "•"}</span>
 							<span className="log-details">{entry.details}</span>
 						</div>
 					))}
-					<div ref={logEnd} />
+					<div ref={sentinelRef} />
 				</div>
 			)}
 

@@ -4,19 +4,16 @@ import ConfirmDialog from "./ConfirmDialog";
 import DeviceSelector from "./DeviceSelector";
 import DriveSelector from "./DriveSelector";
 import HealthCheck from "./HealthCheck";
+import { useVersionCheck } from "./hooks/useVersionCheck";
 import InstallProgressUI from "./InstallProgress";
 import { getDeviceProfile } from "./types/device";
 import type { RemovableDrive } from "./types/drive";
 import { formatSize } from "./types/drive";
 import type { InstallPhase, InstallProgressEvent } from "./types/install";
 import { installMinui } from "./types/install";
-import type { PackageUpdateInfo } from "./types/package";
-import { checkPackageUpdates, fetchPackageRegistry } from "./types/package";
 import { fetchMinUIRelease } from "./types/release";
 import type { ValidationResult } from "./types/validate";
 import { validateInstallation } from "./types/validate";
-import type { VersionCheckResult } from "./types/version";
-import { checkMinuiVersion } from "./types/version";
 import ValidationReportUI from "./ValidationReport";
 
 interface HomeProps {
@@ -33,82 +30,45 @@ function Home({
 	onSelectDrive,
 }: HomeProps) {
 	const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-	const [installPhase, setInstallPhase] = useState<InstallPhase>("idle");
-	const [installMessage, setInstallMessage] = useState("");
-	const [installLog, setInstallLog] = useState<InstallProgressEvent[]>([]);
-	const [installError, setInstallError] = useState<string | null>(null);
-	const [baseFilesCopied, setBaseFilesCopied] = useState(0);
-	const [extrasFilesCopied, setExtrasFilesCopied] = useState(0);
-	const [romDirsCreated, setRomDirsCreated] = useState(0);
-	const [extrasWarning, setExtrasWarning] = useState<string | null>(null);
-	const [validationResult, setValidationResult] =
-		useState<ValidationResult | null>(null);
-	const [versionCheck, setVersionCheck] = useState<VersionCheckResult | null>(
-		null,
-	);
-	const [isCheckingVersion, setIsCheckingVersion] = useState(false);
-	const [packageUpdates, setPackageUpdates] = useState<PackageUpdateInfo[]>([]);
+	const version = useVersionCheck();
 	const [isUpdatingAll, setIsUpdatingAll] = useState(false);
 	const [updateAllMessage, setUpdateAllMessage] = useState("");
 	const [updateAllError, setUpdateAllError] = useState<string | null>(null);
 
-	// Check installed version when drive is selected
+	interface InstallState {
+		phase: InstallPhase;
+		message: string;
+		log: InstallProgressEvent[];
+		error: string | null;
+		baseFilesCopied: number;
+		extrasFilesCopied: number;
+		romDirsCreated: number;
+		extrasWarning: string | null;
+		validationResult: ValidationResult | null;
+	}
+
+	const initialInstallState: InstallState = {
+		phase: "idle",
+		message: "",
+		log: [],
+		error: null,
+		baseFilesCopied: 0,
+		extrasFilesCopied: 0,
+		romDirsCreated: 0,
+		extrasWarning: null,
+		validationResult: null,
+	};
+
+	const [install, setInstall] = useState<InstallState>(initialInstallState);
+
+	// Check installed version when drive changes (event-driven, not effect-driven)
 	useEffect(() => {
-		if (!selectedDrive) {
-			setVersionCheck(null);
-			setPackageUpdates([]);
-			return;
+		if (selectedDrive) {
+			version.check(selectedDrive.mount_path);
+		} else {
+			version.reset();
 		}
-
-		let cancelled = false;
-
-		async function checkVersion() {
-			setIsCheckingVersion(true);
-			try {
-				// First fetch latest release to get version
-				const releaseResult = await fetchMinUIRelease();
-				const latestVersion = releaseResult.success
-					? releaseResult.data.version
-					: undefined;
-
-				// Then check installed version
-				const result = await checkMinuiVersion({
-					sdMount: selectedDrive!.mount_path,
-					latestVersion,
-				});
-
-				if (!cancelled && result.success) {
-					setVersionCheck(result.data);
-				}
-
-				// Check for package updates
-				const registryResult = await fetchPackageRegistry();
-				if (!cancelled && registryResult.success) {
-					const registryPackages: [string, string][] =
-						registryResult.data.packages.map((p) => [p.name, p.version]);
-					const updates = await checkPackageUpdates(
-						selectedDrive!.mount_path,
-						registryPackages,
-					);
-					if (!cancelled) {
-						setPackageUpdates(updates.filter((u) => u.update_available));
-					}
-				}
-			} catch {
-				// Version check failure is non-fatal
-			} finally {
-				if (!cancelled) {
-					setIsCheckingVersion(false);
-				}
-			}
-		}
-
-		checkVersion();
-
-		return () => {
-			cancelled = true;
-		};
-	}, [selectedDrive]);
+	}, [selectedDrive, version.check, version.reset]);
 
 	const handleInstallClick = () => {
 		setShowConfirmDialog(true);
@@ -125,31 +85,44 @@ function Home({
 
 		const profile = getDeviceProfile(selectedDevice);
 		if (!profile) {
-			setInstallError("Unknown device profile");
-			setInstallPhase("error");
+			setInstall((s) => ({
+				...s,
+				error: "Unknown device profile",
+				phase: "error",
+			}));
 			return;
 		}
 
 		// Start installation flow
-		setInstallPhase("downloading");
-		setInstallMessage("");
-		setInstallLog([]);
-		setInstallError(null);
+		setInstall((s) => ({
+			...s,
+			phase: "downloading",
+			message: "",
+			log: [],
+			error: null,
+		}));
 
 		// Listen for progress events from the Rust backend
 		const unlisten = await listen<InstallProgressEvent>(
 			"install-progress",
 			(event) => {
-				setInstallLog((prev) => [...prev, event.payload]);
 				const { step, details } = event.payload;
-				if (step === "download") {
-					setInstallPhase("downloading");
-				} else if (step === "extract") {
-					setInstallPhase("extracting");
-				} else if (step === "copy") {
-					setInstallPhase("copying");
-				}
-				setInstallMessage(details);
+				setInstall((s) => {
+					const phase =
+						step === "download"
+							? "downloading"
+							: step === "extract"
+								? "extracting"
+								: step === "copy"
+									? "copying"
+									: s.phase;
+					return {
+						...s,
+						phase,
+						message: details,
+						log: [...s.log, event.payload],
+					};
+				});
 			},
 		);
 
@@ -157,21 +130,25 @@ function Home({
 			// Step 1: Fetch release metadata
 			const releaseResult = await fetchMinUIRelease();
 			if (!releaseResult.success) {
-				setInstallError(
-					`Failed to fetch release: ${releaseResult.error.message}`,
-				);
-				setInstallPhase("error");
+				setInstall((s) => ({
+					...s,
+					error: `Failed to fetch release: ${releaseResult.error.message}`,
+					phase: "error",
+				}));
 				return;
 			}
 
 			const release = releaseResult.data;
-			setInstallLog((prev) => [
-				...prev,
-				{
-					step: "fetch",
-					details: `Found MinUI v${release.version} (${release.baseArchiveUrl.split("/").pop()})`,
-				},
-			]);
+			setInstall((s) => ({
+				...s,
+				log: [
+					...s.log,
+					{
+						step: "fetch",
+						details: `Found MinUI v${release.version} (${release.baseArchiveUrl.split("/").pop()})`,
+					},
+				],
+			}));
 
 			// Step 2: Run the full install
 			const result = await installMinui({
@@ -186,49 +163,43 @@ function Home({
 			});
 
 			if (result.success) {
-				setBaseFilesCopied(result.data.base_files_copied);
-				setExtrasFilesCopied(result.data.extras_files_copied);
-				setRomDirsCreated(result.data.rom_dirs_created);
-				setExtrasWarning(result.data.extras_warning);
-				setInstallPhase("complete");
-				setInstallMessage("Installation completed successfully!");
-
 				// Run validation after successful install
 				const valResult = await validateInstallation({
 					sdMount: selectedDrive.mount_path,
 					hasExtras: result.data.extras_files_copied > 0,
 					extrasDir: profile.installPathRules.extrasDir,
 				});
-				if (valResult.success) {
-					setValidationResult(valResult.data);
-				}
+				setInstall((s) => ({
+					...s,
+					phase: "complete",
+					message: "Installation completed successfully!",
+					baseFilesCopied: result.data.base_files_copied,
+					extrasFilesCopied: result.data.extras_files_copied,
+					romDirsCreated: result.data.rom_dirs_created,
+					extrasWarning: result.data.extras_warning,
+					validationResult: valResult.success ? valResult.data : null,
+				}));
 			} else {
-				setInstallError(result.error.message);
-				setInstallPhase("error");
+				setInstall((s) => ({
+					...s,
+					error: result.error.message,
+					phase: "error",
+				}));
 			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Unknown error";
-			setInstallError(message);
-			setInstallPhase("error");
+			setInstall((s) => ({ ...s, error: message, phase: "error" }));
 		} finally {
 			unlisten();
 		}
 	}, [selectedDevice, selectedDrive]);
 
 	const handleDismissInstall = () => {
-		setInstallPhase("idle");
-		setInstallMessage("");
-		setInstallLog([]);
-		setInstallError(null);
-		setBaseFilesCopied(0);
-		setExtrasFilesCopied(0);
-		setRomDirsCreated(0);
-		setExtrasWarning(null);
-		setValidationResult(null);
+		setInstall(initialInstallState);
 	};
 
 	const handleDismissValidation = () => {
-		setValidationResult(null);
+		setInstall((s) => ({ ...s, validationResult: null }));
 	};
 
 	const handleRetryValidation = useCallback(async () => {
@@ -238,17 +209,18 @@ function Home({
 
 		const valResult = await validateInstallation({
 			sdMount: selectedDrive.mount_path,
-			hasExtras: extrasFilesCopied > 0,
+			hasExtras: install.extrasFilesCopied > 0,
 			extrasDir: profile.installPathRules.extrasDir,
 		});
 		if (valResult.success) {
-			setValidationResult(valResult.data);
+			setInstall((s) => ({ ...s, validationResult: valResult.data }));
 		}
-	}, [selectedDevice, selectedDrive, extrasFilesCopied]);
+	}, [selectedDevice, selectedDrive, install.extrasFilesCopied]);
 
 	const hasUpdates =
-		(versionCheck?.update_available && versionCheck?.installed != null) ||
-		packageUpdates.length > 0;
+		(version.versionCheck?.update_available &&
+			version.versionCheck?.installed != null) ||
+		version.packageUpdates.length > 0;
 
 	const handleUpdateAll = useCallback(async () => {
 		if (!selectedDevice || !selectedDrive) return;
@@ -262,7 +234,7 @@ function Home({
 
 		try {
 			// Step 1: Update MinUI if available
-			if (versionCheck?.update_available) {
+			if (version.versionCheck?.update_available) {
 				setUpdateAllMessage("Updating MinUI...");
 
 				const releaseResult = await fetchMinUIRelease();
@@ -294,8 +266,10 @@ function Home({
 			}
 
 			// Step 2: Update packages if available
-			if (packageUpdates.length > 0) {
-				setUpdateAllMessage(`Updating ${packageUpdates.length} package(s)...`);
+			if (version.packageUpdates.length > 0) {
+				setUpdateAllMessage(
+					`Updating ${version.packageUpdates.length} package(s)...`,
+				);
 
 				// Package updates would be handled here
 				// For now, we'll just show the message
@@ -305,28 +279,24 @@ function Home({
 			setIsUpdatingAll(false);
 
 			// Refresh version check
-			const releaseResult = await fetchMinUIRelease();
-			const latestVersion = releaseResult.success
-				? releaseResult.data.version
-				: undefined;
-			const versionResult = await checkMinuiVersion({
-				sdMount: selectedDrive.mount_path,
-				latestVersion,
-			});
-			if (versionResult.success) {
-				setVersionCheck(versionResult.data);
-			}
+			await version.check(selectedDrive.mount_path);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Unknown error";
 			setUpdateAllError(message);
 			setIsUpdatingAll(false);
 		}
-	}, [selectedDevice, selectedDrive, versionCheck, packageUpdates]);
+	}, [
+		selectedDevice,
+		selectedDrive,
+		version.check,
+		version.versionCheck,
+		version.packageUpdates,
+	]);
 
 	const isInstalling =
-		installPhase !== "idle" &&
-		installPhase !== "complete" &&
-		installPhase !== "error";
+		install.phase !== "idle" &&
+		install.phase !== "complete" &&
+		install.phase !== "error";
 
 	return (
 		<div className="screen">
@@ -335,24 +305,24 @@ function Home({
 				The easiest way to install and manage MinUI on retro handheld devices.
 			</p>
 
-			{installPhase !== "idle" ? (
+			{install.phase !== "idle" ? (
 				<div className="card">
-					{validationResult ? (
+					{install.validationResult ? (
 						<ValidationReportUI
-							result={validationResult}
+							result={install.validationResult}
 							onDismiss={handleDismissValidation}
 							onRetry={handleRetryValidation}
 						/>
 					) : (
 						<InstallProgressUI
-							phase={installPhase}
-							message={installMessage}
-							log={installLog}
-							baseFilesCopied={baseFilesCopied}
-							extrasFilesCopied={extrasFilesCopied}
-							romDirsCreated={romDirsCreated}
-							extrasWarning={extrasWarning}
-							error={installError}
+							phase={install.phase}
+							message={install.message}
+							log={install.log}
+							baseFilesCopied={install.baseFilesCopied}
+							extrasFilesCopied={install.extrasFilesCopied}
+							romDirsCreated={install.romDirsCreated}
+							extrasWarning={install.extrasWarning}
+							error={install.error}
 							onDismiss={handleDismissInstall}
 						/>
 					)}
@@ -394,35 +364,36 @@ function Home({
 								)}
 							</div>
 
-							{isCheckingVersion ? (
+							{version.isChecking ? (
 								<p className="checking">Checking version...</p>
-							) : versionCheck ? (
+							) : version.versionCheck ? (
 								<div className="version-info">
-									{versionCheck.installed ? (
+									{version.versionCheck.installed ? (
 										<p className="installed-version">
-											<strong>MinUI:</strong> v{versionCheck.installed.version}
+											<strong>MinUI:</strong> v
+											{version.versionCheck.installed.version}
 										</p>
 									) : (
 										<p className="no-version">
 											<strong>MinUI:</strong> Not detected
 										</p>
 									)}
-									{versionCheck.update_available ? (
+									{version.versionCheck.update_available ? (
 										<p className="update-available">
-											Update available: v{versionCheck.latest}
+											Update available: v{version.versionCheck.latest}
 										</p>
-									) : versionCheck.installed ? (
+									) : version.versionCheck.installed ? (
 										<p className="up-to-date">MinUI is up to date</p>
 									) : null}
 
-									{packageUpdates.length > 0 && (
+									{version.packageUpdates.length > 0 && (
 										<div className="package-updates">
 											<h3>
-												{packageUpdates.length} Package Update
-												{packageUpdates.length > 1 ? "s" : ""} Available
+												{version.packageUpdates.length} Package Update
+												{version.packageUpdates.length > 1 ? "s" : ""} Available
 											</h3>
 											<ul>
-												{packageUpdates.map((update) => (
+												{version.packageUpdates.map((update) => (
 													<li key={update.name}>
 														{update.name}:{" "}
 														{update.installed_version || "unknown"} &rarr;{" "}
@@ -453,7 +424,7 @@ function Home({
 									<h2>
 										{hasUpdates
 											? "Updates Available"
-											: versionCheck?.installed
+											: version.versionCheck?.installed
 												? "Update MinUI"
 												: "Install MinUI"}
 									</h2>
@@ -472,7 +443,7 @@ function Home({
 										onClick={handleInstallClick}
 										disabled={isInstalling}
 									>
-										{versionCheck?.installed
+										{version.versionCheck?.installed
 											? "Update MinUI Only"
 											: "Install MinUI"}
 									</button>
