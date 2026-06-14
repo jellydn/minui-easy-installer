@@ -179,8 +179,11 @@ fn parse_airport_output(output: &str) -> Vec<String> {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if !parts.is_empty() {
             let ssid = parts[0].trim();
-            if !ssid.is_empty() {
-                // Skip BSSIDs (contain colons)
+            // Skip BSSIDs (MAC addresses: 17 chars, 5 colons, hex digits)
+            let is_bssid = ssid.len() == 17
+                && ssid.split(':').count() == 6
+                && ssid.chars().all(|c| c.is_ascii_hexdigit() || c == ':');
+            if !ssid.is_empty() && !is_bssid {
                 ssids.push(ssid.to_string());
             }
         }

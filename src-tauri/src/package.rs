@@ -170,16 +170,19 @@ pub async fn install_package(
         .join(platform)
         .join(format!("{}.pak", rules.pak_name));
 
+    // Create directory first so canonicalize can resolve it
+    fs::create_dir_all(&pak_root)
+        .map_err(|e| format!("Failed to create package directory: {}", e))?;
+
     // Security: ensure target stays within SD card
     let canonical_sd = Path::new(sd_mount).canonicalize()
         .map_err(|e| format!("Failed to resolve SD card path: {}", e))?;
-    let canonical_pak = pak_root.canonicalize().unwrap_or_else(|_| pak_root.clone());
+    let canonical_pak = pak_root.canonicalize()
+        .map_err(|e| format!("Failed to resolve package path: {}", e))?;
     if !canonical_pak.starts_with(&canonical_sd) {
+        let _ = fs::remove_dir_all(&pak_root);
         return Err(format!("Security violation: target directory escapes SD card: {}", rules.target_dir));
     }
-
-    fs::create_dir_all(&pak_root)
-        .map_err(|e| format!("Failed to create package directory: {}", e))?;
 
     let extracted = Path::new(&extracted_path);
     let files_copied = fs_utils::copy_dir_recursive(extracted, &pak_root, &|_s, _d| false)?;

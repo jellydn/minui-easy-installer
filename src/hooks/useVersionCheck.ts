@@ -22,10 +22,10 @@ export function useVersionCheck() {
 		versionCheck: null,
 		packageUpdates: [],
 	});
-	const cancelledRef = useRef(false);
+	const requestIdRef = useRef(0);
 
 	const check = useCallback(async (sdMount: string) => {
-		cancelledRef.current = false;
+		const requestId = ++requestIdRef.current;
 		setState((s) => ({
 			...s,
 			isChecking: true,
@@ -35,38 +35,44 @@ export function useVersionCheck() {
 
 		try {
 			const releaseResult = await fetchMinUIRelease();
+			if (requestId !== requestIdRef.current) return;
+
 			const latestVersion = releaseResult.success
 				? releaseResult.data.version
 				: undefined;
 
 			const result = await checkMinuiVersion({ sdMount, latestVersion });
-			if (!cancelledRef.current && result.success) {
+			if (requestId !== requestIdRef.current) return;
+
+			if (result.success) {
 				setState((s) => ({ ...s, versionCheck: result.data }));
 			}
 
 			const registryResult = await fetchPackageRegistry();
-			if (!cancelledRef.current && registryResult.success) {
+			if (requestId !== requestIdRef.current) return;
+
+			if (registryResult.success) {
 				const registryPackages: [string, string][] =
 					registryResult.data.packages.map((p) => [p.name, p.version]);
 				const updates = await checkPackageUpdates(sdMount, registryPackages);
-				if (!cancelledRef.current) {
-					setState((s) => ({
-						...s,
-						packageUpdates: updates.filter((u) => u.update_available),
-					}));
-				}
+				if (requestId !== requestIdRef.current) return;
+
+				setState((s) => ({
+					...s,
+					packageUpdates: updates.filter((u) => u.update_available),
+				}));
 			}
 		} catch {
 			// Version check failure is non-fatal
 		} finally {
-			if (!cancelledRef.current) {
+			if (requestId === requestIdRef.current) {
 				setState((s) => ({ ...s, isChecking: false }));
 			}
 		}
 	}, []);
 
 	const reset = useCallback(() => {
-		cancelledRef.current = true;
+		requestIdRef.current++;
 		setState({ isChecking: false, versionCheck: null, packageUpdates: [] });
 	}, []);
 
