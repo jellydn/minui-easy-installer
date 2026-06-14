@@ -12,11 +12,17 @@
 
 # package-store
 
-- Use the pakman registry at `https://raw.githubusercontent.com/josegonzalez/pakman/refs/heads/main/paks.json` as the package store source. Confidence: 0.70
+- Store registry is served from `assets/store.json` with `emu_paks` and `tool_paks` arrays; entries can have `device` (array of device IDs, e.g. `["brick"]`) and/or `download_url` (custom artifact URL override). Confidence: 0.70
 
 # wifi-config
 
 - Wifi config file format uses colon-separated `SSID:PASSWORD` entries; SSIDs can contain spaces; lines starting with `#` are comments and ignored. Confidence: 0.70
+
+# store
+
+- Use actual descriptions from `store.json` data instead of auto-generated placeholder descriptions like `${pak.name} tool for MinUI`. Confidence: 0.72
+
+- For package author attribution, use the actual author name with a link to their repo instead of hardcoding "Community"; keep it simple (KISS). Confidence: 0.70
 
 # ui
 
