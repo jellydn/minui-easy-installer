@@ -624,4 +624,119 @@ mod tests {
             Some("MS-DOS FAT32".to_string())
         );
     }
+
+    /// Integration test against a real mounted SD card.
+    ///
+    /// This test calls the production `list_removable_drives()` function —
+    /// which shells out to `df` and `diskutil` — and asserts that the SD
+    /// card mounted at the configured mount path is returned with the
+    /// expected fields. It guards against regressions of the bug where
+    /// the detection logic excluded real SD cards because `diskutil info`
+    /// output does not contain an `Internal:` field for removable media.
+    ///
+    /// Marked `#[ignore]` because it requires physical hardware (an SD card
+    /// inserted into the Mac) and a specific mount path. To run:
+    ///
+    /// ```sh
+    /// cargo test --lib drives -- --ignored list_removable_drives_finds_real_sd_card
+    /// ```
+    ///
+    /// If the configured volume is not currently mounted, the test returns
+    /// early with a printed message instead of failing — making it safe to
+    /// run on a developer machine that doesn't have the SD card inserted
+    /// at the moment.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "requires a real SD card mounted at the configured path; run with `cargo test -- --ignored`"]
+    fn test_list_removable_drives_finds_real_sd_card() {
+        // The SD card volume name used during development of the fix.
+        // Compared case-insensitively because macOS HFS+/APFS is
+        // case-insensitive, so `Path::exists("/Volumes/MinUI")` returns
+        // true even when `df` reports the volume as `/Volumes/MINUI`.
+        const SD_CARD_NAME: &str = "MinUI";
+        const SD_CARD_PROBE_PATH: &str = "/Volumes/MinUI";
+
+        if !Path::new(SD_CARD_PROBE_PATH).exists() {
+            eprintln!(
+                "test_list_removable_drives_finds_real_sd_card: {SD_CARD_PROBE_PATH} \
+                 is not mounted on this machine — skipping assertion. \
+                 Insert the SD card and re-run to verify the fix end-to-end."
+            );
+            return;
+        }
+
+        let drives = list_removable_drives().unwrap_or_else(|err| {
+            panic!(
+                "list_removable_drives() failed with \"{err}\" even though \
+                 {SD_CARD_PROBE_PATH} is mounted. This is the regression we \
+                 are guarding against: the SD card should be detected."
+            )
+        });
+
+        eprintln!("list_removable_drives() returned {} drive(s):", drives.len());
+        for drive in &drives {
+            eprintln!(
+                "  - name={:?} mount={:?} fs={:?} size={:?} avail={:?}",
+                drive.name,
+                drive.mount_path,
+                drive.filesystem,
+                drive.size_bytes,
+                drive.available_bytes
+            );
+        }
+
+        // Match by volume name case-insensitively. `d.name` is derived
+        // from the leaf of `d.mount_path`, so a single check is enough.
+        let sd_card = drives
+            .iter()
+            .find(|d| d.name.eq_ignore_ascii_case(SD_CARD_NAME))
+            .unwrap_or_else(|| {
+                panic!(
+                    "SD card with volume name {SD_CARD_NAME:?} (case-insensitive) \
+                     was not returned by list_removable_drives(). This is the \
+                     bug the test guards against: real SD cards were \
+                     incorrectly excluded because their `diskutil info` \
+                     output lacks an `Internal:` field."
+                )
+            });
+
+        // The function's other contract: internal drives like
+        // "Macintosh HD" must NOT appear in the results. Catches a
+        // regression where someone "fixes" inclusion by dropping the
+        // internal-drive exclusion entirely.
+        for drive in &drives {
+            assert!(
+                !drive.name.starts_with("Macintosh HD"),
+                "internal drive {:?} was incorrectly returned by \
+                 list_removable_drives() (mount={:?})",
+                drive.name, drive.mount_path
+            );
+        }
+
+        // The MinUI SD card is formatted as FAT32. The function reports
+        // it as `MS-DOS FAT32` (matching the diskutil personality string).
+        let fs = sd_card
+            .filesystem
+            .as_deref()
+            .unwrap_or_else(|| panic!("filesystem should be populated for the SD card"));
+        let fs_upper = fs.to_uppercase();
+        assert!(
+            fs_upper.contains("FAT32") || fs_upper.contains("MS-DOS"),
+            "expected FAT32/MS-DOS filesystem for the SD card, got: {fs:?}"
+        );
+
+        // The `df`-derived free space should be populated and smaller than
+        // the total size.
+        let size = sd_card
+            .size_bytes
+            .unwrap_or_else(|| panic!("size_bytes should be populated for the SD card"));
+        let avail = sd_card.available_bytes.unwrap_or_else(|| {
+            panic!("available_bytes should be populated for the SD card")
+        });
+        assert!(
+            avail <= size,
+            "available_bytes ({avail}) should be <= size_bytes ({size})"
+        );
+        assert!(size > 0, "size_bytes should be > 0 for a real SD card");
+    }
 }
