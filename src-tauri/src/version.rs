@@ -51,6 +51,32 @@ pub fn detect_installed_version(sd_mount: &str) -> Option<InstalledVersion> {
     None
 }
 
+/// Returns true if `s` looks like a release version string.
+///
+/// Accepts:
+/// - 2 or 3 dot-separated numeric segments: "2024.12.25", "0.12.0", "1.2.3", "2024.12", "1.0"
+/// - Optional leading "v" or "V" prefix
+///
+/// Rejects free-form text like "Created by MinUI Team 2024" and
+/// dash-separated versions like "v2024-12-25".
+fn looks_like_version(s: &str) -> bool {
+    let s = s
+        .trim()
+        .trim_start_matches('v')
+        .trim_start_matches('V')
+        .trim();
+    if s.is_empty() {
+        return false;
+    }
+    let segments: Vec<&str> = s.split('.').collect();
+    if segments.len() < 2 || segments.len() > 3 {
+        return false;
+    }
+    segments
+        .iter()
+        .all(|seg| !seg.is_empty() && seg.chars().all(|c| c.is_ascii_digit()))
+}
+
 /// Parse version from minui.txt content.
 ///
 /// Expected format:
@@ -80,10 +106,11 @@ fn parse_minui_version(content: &str) -> Option<String> {
         }
     }
 
-    // If line looks like a version (contains dots or numbers), use it directly
-    if !first_line.is_empty()
-        && (first_line.contains('.') || first_line.chars().any(|c| c.is_ascii_digit()))
-    {
+    // Raw fallback: only accept strict version-shaped strings.
+    // We deliberately do NOT accept free-form text like
+    // "Created by MinUI Team 2024" — see CONCERNS.md
+    // "Fragile Areas" → "Version Detection from minui.txt".
+    if looks_like_version(first_line) {
         return Some(first_line.to_string());
     }
 
@@ -190,6 +217,61 @@ mod tests {
     #[test]
     fn test_parse_minui_version_empty() {
         assert_eq!(parse_minui_version(""), None);
+    }
+
+    #[test]
+    fn test_looks_like_version_accepts_three_segments() {
+        assert!(looks_like_version("2024.12.25"));
+        assert!(looks_like_version("0.12.0"));
+        assert!(looks_like_version("1.2.3"));
+    }
+
+    #[test]
+    fn test_looks_like_version_accepts_two_segments() {
+        assert!(looks_like_version("2024.12"));
+        assert!(looks_like_version("1.0"));
+    }
+
+    #[test]
+    fn test_looks_like_version_accepts_optional_v_prefix() {
+        assert!(looks_like_version("v2024.12.25"));
+        assert!(looks_like_version("V2024.12.25"));
+    }
+
+    #[test]
+    fn test_looks_like_version_rejects_free_form_text() {
+        assert!(!looks_like_version("Created by MinUI Team 2024"));
+        assert!(!looks_like_version("MinUI"));
+        assert!(!looks_like_version(""));
+        assert!(!looks_like_version("v2024-12-25"));
+        assert!(!looks_like_version("2024"));
+        assert!(!looks_like_version("2024.12.25.1"));
+    }
+
+    #[test]
+    fn test_parse_minui_version_rejects_free_form_text() {
+        // Regression for the "Created by MinUI Team 2024" failure mode.
+        assert_eq!(
+            parse_minui_version("Created by MinUI Team 2024\n"),
+            None
+        );
+        assert_eq!(
+            parse_minui_version("Released 2024-12-25 by the team\n"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_parse_minui_version_accepts_strict_raw_version() {
+        // The raw fallback should still accept a clean version-only line.
+        assert_eq!(
+            parse_minui_version("2024.12.25\n"),
+            Some("2024.12.25".to_string())
+        );
+        assert_eq!(
+            parse_minui_version("v2024.12.25\n"),
+            Some("2024.12.25".to_string())
+        );
     }
 
     #[test]
