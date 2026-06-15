@@ -2,8 +2,10 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
+use tokio_util::sync::CancellationToken;
+
 use crate::fs_utils;
-use crate::pipeline::{InstallSession, Pipeline};
+use crate::pipeline::{DownloadProgressCallback, InstallSession, Pipeline};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallResult {
@@ -96,9 +98,12 @@ pub fn copy_base_files(
 ) -> Result<u32, String> {
     let base_dir = Path::new(extracted_base_path);
     let sd_root = Path::new(sd_mount);
-    fs_utils::copy_dir_recursive(base_dir, sd_root, &|_src, dst| {
-        is_preserved_path(dst, sd_root)
-    })
+    fs_utils::copy_dir_recursive(
+        base_dir,
+        sd_root,
+        &|_src, dst| is_preserved_path(dst, sd_root),
+        &|| false,
+    )
 }
 
 /// Copies a subdirectory tree from src_root/subpath to dst_root/subpath.
@@ -111,7 +116,7 @@ fn copy_subtree(src_root: &Path, dst_root: &Path, subpath: &str) -> Result<u32, 
     let dst = dst_root.join(subpath);
     fs::create_dir_all(&dst)
         .map_err(|e| format!("Failed to create {} directory: {}", subpath, e))?;
-    fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false)
+    fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false, &|| false)
 }
 
 /// Copies Extras files to the SD card, filtering by platform.
@@ -174,6 +179,8 @@ pub struct InstallOptions {
 async fn try_install_extras(
     options: &InstallOptions,
     progress: ProgressCallback,
+    download_progress: DownloadProgressCallback,
+    cancel: CancellationToken,
     session: &mut InstallSession,
 ) -> Result<u32, String> {
     let extras_url = options
@@ -187,6 +194,8 @@ async fn try_install_extras(
         options.extras_checksum.as_deref(),
         |p| copy_extras_files(p.to_str().unwrap(), &options.sd_mount, &options.extras_platform),
         progress,
+        download_progress,
+        cancel,
         session,
     )
     .await
@@ -198,6 +207,20 @@ async fn try_install_extras(
 pub async fn install_minui(
     options: &InstallOptions,
     progress: ProgressCallback,
+) -> Result<InstallResult, String> {
+    install_minui_with_cancel(options, progress, Arc::new(|_, _| {}), CancellationToken::new()).await
+}
+
+/// Full installation flow with cancellation support.
+///
+/// Identical to `install_minui` but accepts a `CancellationToken` so the
+/// caller (typically a Tauri command) can abort mid-pipeline. Also accepts
+/// a byte-level download progress callback.
+pub async fn install_minui_with_cancel(
+    options: &InstallOptions,
+    progress: ProgressCallback,
+    download_progress: DownloadProgressCallback,
+    cancel: CancellationToken,
 ) -> Result<InstallResult, String> {
     let mut session = InstallSession::new();
 
@@ -213,6 +236,8 @@ pub async fn install_minui(
         options.base_checksum.as_deref(),
         |p| copy_base_files(p.to_str().unwrap(), &options.sd_mount),
         progress.clone(),
+        download_progress.clone(),
+        cancel.clone(),
         &mut session,
     )
     .await?;
@@ -222,7 +247,15 @@ pub async fn install_minui(
     let mut extras_warning: Option<String> = None;
 
     if options.extras_url.is_some() {
-        match try_install_extras(options, progress.clone(), &mut session).await {
+        match try_install_extras(
+            options,
+            progress.clone(),
+            download_progress,
+            cancel.clone(),
+            &mut session,
+        )
+        .await
+        {
             Ok(copied) => extras_files_copied = copied,
             Err(e) => extras_warning = Some(e),
         }
@@ -303,7 +336,7 @@ mod tests {
         f.write_all(b"hello").unwrap();
         drop(f);
 
-        let copied = fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false).unwrap();
+        let copied = fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false, &|| false).unwrap();
         assert_eq!(copied, 1);
         assert!(dst.join("test.txt").exists());
     }
@@ -323,9 +356,12 @@ mod tests {
         fs::write(src.join("Saves/save.sav"), "save").unwrap();
         fs::write(src.join("Tools/tool.pak"), "tool").unwrap();
 
-        let copied = fs_utils::copy_dir_recursive(&src, &sd_root, &|_src, dst| {
-            is_preserved_path(dst, &sd_root)
-        })
+        let copied = fs_utils::copy_dir_recursive(
+            &src,
+            &sd_root,
+            &|_src, dst| is_preserved_path(dst, &sd_root),
+            &|| false,
+        )
         .unwrap();
         assert_eq!(copied, 1); // Only tool.pak
         assert!(!sd_root.join("ROMS").exists());
@@ -428,9 +464,12 @@ mod tests {
         fs::write(base_src.join("Tools/wifi.pak"), "new_wifi").unwrap();
         fs::write(base_src.join("minui.txt"), "MinUI v2025.01.01").unwrap();
 
-        let copied = fs_utils::copy_dir_recursive(&base_src, &sd_root, &|_src, dst| {
-            is_preserved_path(dst, &sd_root)
-        })
+        let copied = fs_utils::copy_dir_recursive(
+            &base_src,
+            &sd_root,
+            &|_src, dst| is_preserved_path(dst, &sd_root),
+            &|| false,
+        )
         .unwrap();
 
         // Only minui.txt and Tools/wifi.pak should be copied — ROMs and Saves skipped
