@@ -268,6 +268,11 @@ pub fn format_drive(_mount_path: &str, _volume_name: &str) -> Result<(), String>
 }
 
 #[cfg(target_os = "macos")]
+fn parse_filesystem_from_info(info: &str) -> Option<String> {
+    find_field_value(info, "File System Personality").map(|s| s.to_string())
+}
+
+#[cfg(target_os = "macos")]
 fn get_filesystem(mount_path: &str) -> Option<String> {
     let output = Command::new("diskutil")
         .args(["info", mount_path])
@@ -279,12 +284,7 @@ fn get_filesystem(mount_path: &str) -> Option<String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if line.contains("File System Personality:") {
-            return line.split(':').nth(1).map(|s| s.trim().to_string());
-        }
-    }
-    None
+    parse_filesystem_from_info(&stdout)
 }
 
 #[cfg(target_os = "macos")]
@@ -582,6 +582,46 @@ mod tests {
         assert_eq!(
             find_field_value(info, "Device Location"),
             Some("External")
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_parse_filesystem_fat32() {
+        let info = "   File System Personality:  MS-DOS FAT32\n";
+        assert_eq!(
+            parse_filesystem_from_info(info),
+            Some("MS-DOS FAT32".to_string())
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_parse_filesystem_apfs() {
+        let info = "   File System Personality:    APFS\n";
+        assert_eq!(
+            parse_filesystem_from_info(info),
+            Some("APFS".to_string())
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_parse_filesystem_missing() {
+        let info = "   Volume Name:        MinUI\n";
+        assert_eq!(parse_filesystem_from_info(info), None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_parse_filesystem_from_real_sd_card_output() {
+        // Real `diskutil info` output snippet from /Volumes/MinUI.
+        let info = "   File System Personality:  MS-DOS FAT32\n\
+                    Type (Bundle):            msdos\n\
+                    Name (User Visible):      MS-DOS (FAT32)\n";
+        assert_eq!(
+            parse_filesystem_from_info(info),
+            Some("MS-DOS FAT32".to_string())
         );
     }
 }
