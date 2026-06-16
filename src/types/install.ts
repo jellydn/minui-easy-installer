@@ -28,6 +28,10 @@ export type InstallPhase =
 export interface InstallProgressEvent {
   step: string;
   details: string;
+  /** Optional byte-level download progress (set when `step === "download"`). */
+  currentBytes?: number;
+  /** Optional total bytes (None when server didn't send Content-Length). */
+  totalBytes?: number | null;
 }
 
 /**
@@ -84,4 +88,40 @@ export async function installMinui(options: {
       error: { message, code: "UNKNOWN_ERROR" },
     };
   }
+}
+
+/**
+ * Start a cancellable install. The Rust backend spawns the install in a
+ * background task and emits `install-complete` / `install-error` events
+ * when done. Call `cancelInstall()` to abort mid-flight.
+ */
+export async function startInstall(options: {
+  baseUrl: string;
+  extrasUrl?: string;
+  baseChecksum?: string;
+  extrasChecksum?: string;
+  sdMount: string;
+  platform: string;
+  extrasPlatform: string;
+  version: string;
+}): Promise<string> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return await invoke<string>("start_install", {
+    baseUrl: options.baseUrl,
+    extrasUrl: options.extrasUrl || null,
+    baseChecksum: options.baseChecksum || null,
+    extrasChecksum: options.extrasChecksum || null,
+    sdMount: options.sdMount,
+    platform: options.platform,
+    extrasPlatform: options.extrasPlatform,
+    version: options.version,
+  });
+}
+
+/**
+ * Cancel the in-flight install, if any. No-op when no install is running.
+ */
+export async function cancelInstall(): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("cancel_install");
 }

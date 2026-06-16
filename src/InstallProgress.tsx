@@ -11,6 +11,7 @@ interface InstallProgressProps {
   extrasWarning: string | null;
   error: string | null;
   onDismiss: () => void;
+  onCancel?: () => void;
 }
 
 const PHASE_LABELS: Record<InstallPhase, string> = {
@@ -32,8 +33,13 @@ function InstallProgressUI({
   extrasWarning,
   error,
   onDismiss,
+  onCancel,
 }: InstallProgressProps) {
   const { containerRef, sentinelRef } = useScrollToBottom(log);
+
+  const cancellable =
+    onCancel != null &&
+    (phase === "downloading" || phase === "extracting" || phase === "copying");
 
   return (
     <div className="install-progress">
@@ -44,6 +50,18 @@ function InstallProgressUI({
       )}
 
       {message && <p className="install-message">{message}</p>}
+
+      {cancellable && (
+        <div className="install-cancel-row">
+          <button
+            type="button"
+            className="install-cancel-button"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {log.length > 0 && (
         <div className="install-log" ref={containerRef}>

@@ -2,8 +2,12 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
+use tokio_util::sync::CancellationToken;
+
 use crate::fs_utils;
-use crate::pipeline::{create_target_within, InstallSession, Pipeline};
+use crate::pipeline::{
+    create_target_within, DownloadProgressCallback, InstallSession, Pipeline,
+};
 use crate::version;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -120,6 +124,28 @@ pub async fn install_package(
     rules: &PackageInstallPathRules,
     platform: &str,
 ) -> Result<PackageInstallResult, String> {
+    install_package_with_cancel(
+        artifact_url,
+        checksum,
+        sd_mount,
+        rules,
+        platform,
+        Arc::new(|_, _| {}),
+        CancellationToken::new(),
+    )
+    .await
+}
+
+/// Package install with cancellation and download progress support.
+pub async fn install_package_with_cancel(
+    artifact_url: &str,
+    checksum: Option<&str>,
+    sd_mount: &str,
+    rules: &PackageInstallPathRules,
+    platform: &str,
+    download_progress: DownloadProgressCallback,
+    cancel: CancellationToken,
+) -> Result<PackageInstallResult, String> {
     let mut session = InstallSession::new();
 
     // Pipeline handles download + extract, returns extracted path
@@ -128,6 +154,8 @@ pub async fn install_package(
         artifact_url,
         checksum,
         Arc::new(|_| {}),
+        download_progress,
+        cancel,
         &mut session,
     )
     .await?;
@@ -140,7 +168,8 @@ pub async fn install_package(
         &rules.pak_name,
     )?;
 
-    let files_copied = fs_utils::copy_dir_recursive(&extracted, &pak_root, &|_s, _d| false)?;
+    let files_copied =
+        fs_utils::copy_dir_recursive(&extracted, &pak_root, &|_s, _d| false, &|| false)?;
 
     Ok(PackageInstallResult {
         success: true,
@@ -163,7 +192,8 @@ mod tests {
         fs::write(src.join("file1.txt"), "content1").unwrap();
         fs::write(src.join("subdir/file2.txt"), "content2").unwrap();
 
-        let copied = fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false).unwrap();
+        let copied =
+            fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false, &|| false).unwrap();
         assert_eq!(copied, 2);
         assert!(dst.join("file1.txt").exists());
         assert!(dst.join("subdir/file2.txt").exists());

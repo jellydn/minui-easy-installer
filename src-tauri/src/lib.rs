@@ -1,5 +1,7 @@
 use std::sync::Arc;
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
+use tokio_util::sync::CancellationToken;
 
 mod download;
 mod drives;
@@ -87,6 +89,110 @@ async fn install_minui(
         version,
     };
     install::install_minui(&options, progress).await
+}
+
+/// Registry of in-flight install cancellation tokens.
+///
+/// The UI never runs concurrent installs in a single window, so we keep
+/// at most one token at a time. A new install replaces the previous
+/// (cancelling the old one — safer than letting it run orphaned).
+pub struct InstallRegistry {
+    pub token: Mutex<Option<CancellationToken>>,
+}
+
+impl InstallRegistry {
+    pub fn new() -> Self {
+        Self {
+            token: Mutex::new(None),
+        }
+    }
+}
+
+/// Start a cancellable install. Returns immediately with the install id
+/// (currently always "current" since we support one install at a time).
+/// The actual install runs in a background task; the result is emitted
+/// as a `install-complete` or `install-error` event.
+#[tauri::command]
+async fn start_install(
+    app_handle: AppHandle,
+    registry: tauri::State<'_, Arc<InstallRegistry>>,
+    base_url: String,
+    extras_url: Option<String>,
+    base_checksum: Option<String>,
+    extras_checksum: Option<String>,
+    sd_mount: String,
+    platform: String,
+    extras_platform: String,
+    version: String,
+) -> Result<String, String> {
+    let token = CancellationToken::new();
+    {
+        let mut slot = registry.token.lock().unwrap();
+        // Cancel any prior install before replacing.
+        if let Some(old) = slot.take() {
+            old.cancel();
+        }
+        *slot = Some(token.clone());
+    }
+
+    let handle = app_handle.clone();
+    let progress = Arc::new(move |event: install::InstallProgressEvent| {
+        if let Err(e) = handle.emit("install-progress", event) {
+            eprintln!("Warning: failed to emit install progress event: {}", e);
+        }
+    });
+    let download_progress: pipeline::DownloadProgressCallback =
+        Arc::new(move |_bytes, _total| {
+            // Byte-level progress events are emitted via the existing
+            // install-progress channel with the `step: "download"` label.
+            // Future enhancement: extend InstallProgressEvent with
+            // currentBytes / totalBytes and emit them here.
+        });
+    let options = install::InstallOptions {
+        base_url,
+        extras_url,
+        base_checksum,
+        extras_checksum,
+        sd_mount,
+        platform,
+        extras_platform,
+        version,
+    };
+
+    let registry_for_task = registry.inner().clone();
+    let result_handle = app_handle.clone();
+    tokio::spawn(async move {
+        let res = install::install_minui_with_cancel(
+            &options,
+            progress,
+            download_progress,
+            token,
+        )
+        .await;
+        // Clear the slot on completion.
+        if let Ok(mut slot) = registry_for_task.token.lock() {
+            *slot = None;
+        }
+        match res {
+            Ok(r) => {
+                let _ = result_handle.emit("install-complete", r);
+            }
+            Err(e) => {
+                let _ = result_handle.emit("install-error", e);
+            }
+        }
+    });
+
+    Ok("current".to_string())
+}
+
+/// Cancel an in-flight install. No-op if no install is running.
+#[tauri::command]
+fn cancel_install(registry: tauri::State<'_, Arc<InstallRegistry>>) -> Result<(), String> {
+    if let Some(token) = registry.token.lock().unwrap().as_ref() {
+        token.cancel();
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -194,7 +300,9 @@ async fn fetch_url(url: String) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let registry = Arc::new(InstallRegistry::new());
     tauri::Builder::default()
+        .manage(registry)
         .invoke_handler(tauri::generate_handler![
             get_removable_drives,
             format_drive,
@@ -202,6 +310,8 @@ pub fn run() {
             verify_archive_checksum,
             extract_archive_to_directory,
             install_minui,
+            start_install,
+            cancel_install,
             validate_installation,
             format_validation_report,
             check_minui_version,

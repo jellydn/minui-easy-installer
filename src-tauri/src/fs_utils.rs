@@ -38,10 +38,18 @@ pub fn get_free_space(mount: &str) -> Option<u64> {
 
 /// Copies a directory tree from src to dst, optionally skipping entries via a predicate.
 /// The skip function receives both the source and destination paths.
+/// The cancel function is checked once per file; if it returns true, the
+/// function returns Err("cancelled"). Pass `&|_| false` to disable.
 /// Returns the number of files copied.
-pub fn copy_dir_recursive<F>(src: &Path, dst: &Path, skip: &F) -> Result<u32, String>
+pub fn copy_dir_recursive<F, C>(
+    src: &Path,
+    dst: &Path,
+    skip: &F,
+    cancel: &C,
+) -> Result<u32, String>
 where
     F: Fn(&Path, &Path) -> bool,
+    C: Fn() -> bool,
 {
     let mut files_copied = 0u32;
 
@@ -49,6 +57,9 @@ where
         .map_err(|e| format!("Failed to read directory {}: {}", src.display(), e))?;
 
     for entry in entries {
+        if cancel() {
+            return Err("cancelled".to_string());
+        }
         let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
@@ -60,7 +71,7 @@ where
         if src_path.is_dir() {
             fs::create_dir_all(&dst_path)
                 .map_err(|e| format!("Failed to create directory {}: {}", dst_path.display(), e))?;
-            files_copied += copy_dir_recursive(&src_path, &dst_path, skip)?;
+            files_copied += copy_dir_recursive(&src_path, &dst_path, skip, cancel)?;
         } else {
             if let Some(parent) = dst_path.parent() {
                 fs::create_dir_all(parent)
