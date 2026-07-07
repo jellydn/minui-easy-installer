@@ -42,7 +42,11 @@ export function useVersionCheck(fork: ForkConfig) {
         ? releaseResult.data.version
         : undefined;
 
-      const result = await checkMinuiVersion({ sdMount, latestVersion });
+      const result = await checkMinuiVersion({
+        sdMount,
+        latestVersion,
+        expectedPrefix: fork.versionPrefix,
+      });
       if (requestId !== requestIdRef.current) return;
 
       if (result.success) {

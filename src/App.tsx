@@ -4,7 +4,7 @@ import PackageStore from "./PackageStore";
 import Settings from "./Settings";
 import type { RemovableDrive } from "./types/drive";
 import type { ForkConfig } from "./types/fork";
-import { FORK_PRESETS } from "./types/fork";
+import { FORK_PRESETS, rehydrateFork } from "./types/fork";
 import WifiWizard from "./WifiWizard";
 
 type Screen = "home" | "store" | "wifi" | "settings";
@@ -14,18 +14,8 @@ function loadPersistedFork(): ForkConfig {
   try {
     const raw = localStorage.getItem("selectedFork");
     if (raw) {
-      const parsed = JSON.parse(raw);
-      // Prefer preset lookup for consistency
-      if (parsed.owner && parsed.repo) {
-        const key = `${parsed.owner}/${parsed.repo}`;
-        for (const preset of Object.values(FORK_PRESETS)) {
-          if (`${preset.owner}/${preset.repo}` === key) {
-            return preset;
-          }
-        }
-        // Custom fork not in presets
-        return parsed as ForkConfig;
-      }
+      const fork = rehydrateFork(JSON.parse(raw));
+      if (fork) return fork;
     }
   } catch {
     // Corrupt localStorage — fall through to default

@@ -59,3 +59,25 @@ export function buildCustomFork(raw: string): ForkConfig | null {
     versionPrefix: parts[1],
   };
 }
+
+/**
+ * Rehydrate a ForkConfig from a raw stored value (e.g. from localStorage).
+ * Returns the matching preset when possible, or the custom fork as-is.
+ */
+export function rehydrateFork(stored: unknown): ForkConfig | null {
+  if (!stored || typeof stored !== "object") return null;
+  const parsed = stored as Record<string, unknown>;
+  const owner = typeof parsed.owner === "string" ? parsed.owner : "";
+  const repo = typeof parsed.repo === "string" ? parsed.repo : "";
+  if (!owner || !repo) return null;
+
+  // Prefer preset lookup for consistency
+  for (const preset of Object.values(FORK_PRESETS)) {
+    if (preset.owner === owner && preset.repo === repo) {
+      return preset;
+    }
+  }
+
+  // Custom fork not in presets
+  return buildCustomFork(`${owner}/${repo}`);
+}

@@ -207,4 +207,64 @@ describe("useVersionCheck race-condition guard", () => {
 
     expect(result.current.versionCheck).toBeNull();
   });
+
+  it("re-issues check when fork prop changes", async () => {
+    const { fetchPackageRegistry, checkPackageUpdates } = await import(
+      "../types/package"
+    );
+    const { fetchMinUIRelease } = await import("../types/release");
+    const { checkMinuiVersion } = await import("../types/version");
+
+    let callCount = 0;
+    (fetchMinUIRelease as Mock).mockImplementation(async (fork: { label: string }) => {
+      callCount += 1;
+      return {
+        success: true,
+        data: {
+          version: "1.0.0",
+          baseArchiveUrl: "",
+          extrasArchiveUrl: null,
+          checksums: null,
+          fork,
+        },
+      };
+    });
+    (checkMinuiVersion as Mock).mockResolvedValue({
+      success: true,
+      data: {
+        installed: null,
+        latest: "1.0.0",
+        update_available: false,
+      },
+    });
+    (fetchPackageRegistry as Mock).mockResolvedValue({
+      success: true,
+      data: { version: "1.0", packages: [] },
+    });
+    (checkPackageUpdates as Mock).mockResolvedValue([]);
+
+    const { result, rerender } = renderHook(
+      ({ fork }) => useVersionCheck(fork),
+      { initialProps: { fork: FORK_PRESETS.official } },
+    );
+
+    await act(async () => {
+      await result.current.check("/sd-1");
+    });
+
+    expect(callCount).toBe(1);
+
+    // Rerender with a different fork — the check callback should be
+    // recreated and the new fetch should use the new fork.
+    rerender({ fork: FORK_PRESETS["minui-zero"] });
+
+    await act(async () => {
+      await result.current.check("/sd-1");
+    });
+
+    // Two fetches because the fork changed (callCount increments inside
+    // the mock). With a fresh Map cache the first fetch for each fork
+    // actually goes through.
+    expect(callCount).toBe(2);
+  });
 });

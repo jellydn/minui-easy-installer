@@ -217,8 +217,13 @@ fn format_validation_report(result: validate::ValidationResult) -> String {
 async fn check_minui_version(
     sd_mount: String,
     latest_version: Option<String>,
+    expected_prefix: Option<String>,
 ) -> version::VersionCheckResult {
-    version::check_for_updates(&sd_mount, latest_version.as_deref())
+    version::check_for_updates_with_prefix(
+        &sd_mount,
+        latest_version.as_deref(),
+        expected_prefix.as_deref(),
+    )
 }
 
 #[tauri::command]

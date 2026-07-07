@@ -18,14 +18,29 @@ pub struct VersionCheckResult {
 ///
 /// MinUI stores version info in `/minui.txt` on the SD card root.
 /// The file format is simple text with version on the first line.
-pub fn detect_installed_version(sd_mount: &str) -> Option<InstalledVersion> {
+///
+/// When `expected_prefix` is provided (e.g. "MinUI", "MinUI-Zero"),
+/// the prefix in minui.txt must match — otherwise the installation is
+/// treated as belonging to a different fork and `None` is returned.
+pub fn detect_installed_version(
+    sd_mount: &str,
+    expected_prefix: Option<&str>,
+) -> Option<InstalledVersion> {
     let sd_root = Path::new(sd_mount);
 
     // Check for minui.txt in root
     let minui_txt = sd_root.join("minui.txt");
     if minui_txt.exists() {
         if let Ok(content) = fs::read_to_string(&minui_txt) {
-            if let Some(version) = parse_minui_version(&content) {
+            if let Some((prefix, version)) = parse_minui_version_with_prefix(&content) {
+                // If the caller expects a specific fork, verify the prefix matches.
+                // This prevents showing "MinUI-Zero: v2024.12.25" when minui.txt
+                // was written by official MinUI (or vice versa).
+                if let Some(expected) = expected_prefix {
+                    if prefix.as_deref() != Some(expected) {
+                        return None;
+                    }
+                }
                 return Some(InstalledVersion {
                     version,
                     source: "minui.txt".to_string(),
@@ -87,16 +102,21 @@ fn looks_like_version(s: &str) -> bool {
 /// ```text
 /// 2024.12.25
 /// ```
-fn parse_minui_version(content: &str) -> Option<String> {
+///
+/// Returns `(prefix, version)` where prefix is the detected fork name
+/// (e.g. "MinUI", "MinUI-Zero") or `None` if no prefix was present.
+fn parse_minui_version_with_prefix(content: &str) -> Option<(Option<String>, String)> {
     let first_line = content.lines().next()?.trim();
 
     // If the line contains a space, try extracting the last word as the
-    // version. This handles any prefix: "MinUI v2024.12.25",
+    // version and everything before it as the prefix.
+    // This handles any prefix: "MinUI v2024.12.25",
     // "MinUI-Zero 20250525", "MyFork v1.2.3", etc.
-    if let Some((_prefix, candidate)) = first_line.rsplit_once(' ') {
+    if let Some((prefix_raw, candidate)) = first_line.rsplit_once(' ') {
         let version = candidate.trim().trim_start_matches('v').trim();
         if looks_like_version(version) {
-            return Some(version.to_string());
+            let prefix = prefix_raw.trim().trim_end_matches('v').trim().to_string();
+            return Some((Some(prefix), version.to_string()));
         }
     }
 
@@ -104,16 +124,21 @@ fn parse_minui_version(content: &str) -> Option<String> {
     if let Some(version) = first_line.strip_prefix('v') {
         let version = version.trim();
         if looks_like_version(version) {
-            return Some(version.to_string());
+            return Some((None, version.to_string()));
         }
     }
 
     // Raw fallback: only accept strict version-shaped strings.
     if looks_like_version(first_line) {
-        return Some(first_line.to_string());
+        return Some((None, first_line.to_string()));
     }
 
     None
+}
+
+/// Parse version from minui.txt content (backwards-compat wrapper).
+fn parse_minui_version(content: &str) -> Option<String> {
+    parse_minui_version_with_prefix(content).map(|(_, v)| v)
 }
 
 /// Try to parse a version string as semver, normalizing leading zeros first.
@@ -173,7 +198,18 @@ pub fn is_update_available(installed: &str, latest: &str) -> bool {
 
 /// Check for version updates by comparing installed version with latest release.
 pub fn check_for_updates(sd_mount: &str, latest_version: Option<&str>) -> VersionCheckResult {
-    let installed = detect_installed_version(sd_mount);
+    // Backwards compat: no prefix filter by default.
+    check_for_updates_with_prefix(sd_mount, latest_version, None)
+}
+
+/// Check for version updates, only accepting installations where the
+/// minui.txt prefix matches `expected_prefix` (e.g. "MinUI", "MinUI-Zero").
+pub fn check_for_updates_with_prefix(
+    sd_mount: &str,
+    latest_version: Option<&str>,
+    expected_prefix: Option<&str>,
+) -> VersionCheckResult {
+    let installed = detect_installed_version(sd_mount, expected_prefix);
 
     let update_available = match (&installed, latest_version) {
         (Some(installed_ver), Some(latest_ver)) => {
@@ -344,7 +380,7 @@ mod tests {
         f.write_all(b"MinUI v2024.12.25").unwrap();
         drop(f);
 
-        let result = detect_installed_version(sd_root.to_str().unwrap());
+        let result = detect_installed_version(sd_root.to_str().unwrap(), None);
         assert!(result.is_some());
         let version = result.unwrap();
         assert_eq!(version.version, "2024.12.25");
@@ -354,8 +390,53 @@ mod tests {
     #[test]
     fn test_detect_installed_version_no_metadata() {
         let temp = tempfile::tempdir().unwrap();
-        let result = detect_installed_version(temp.path().to_str().unwrap());
+        let result = detect_installed_version(temp.path().to_str().unwrap(), None);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_installed_version_ignores_wrong_fork_prefix() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        // Write minui.txt with official MinUI prefix
+        let mut f = fs::File::create(sd_root.join("minui.txt")).unwrap();
+        f.write_all(b"MinUI v2024.12.25").unwrap();
+        drop(f);
+
+        // When expecting MinUI-Zero, the official prefix should NOT match
+        let result = detect_installed_version(sd_root.to_str().unwrap(), Some("MinUI-Zero"));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_installed_version_matches_correct_fork_prefix() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        let mut f = fs::File::create(sd_root.join("minui.txt")).unwrap();
+        f.write_all(b"MinUI-Zero 20250525").unwrap();
+        drop(f);
+
+        let result = detect_installed_version(sd_root.to_str().unwrap(), Some("MinUI-Zero"));
+        assert!(result.is_some());
+        let version = result.unwrap();
+        assert_eq!(version.version, "20250525");
+    }
+
+    #[test]
+    fn test_detect_installed_version_no_prefix_filter() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        let mut f = fs::File::create(sd_root.join("minui.txt")).unwrap();
+        f.write_all(b"MinUI-Zero 20250525").unwrap();
+        drop(f);
+
+        // No expected_prefix → accepts any fork's minui.txt
+        let result = detect_installed_version(sd_root.to_str().unwrap(), None);
+        assert!(result.is_some());
+    }
     }
 
     #[test]
