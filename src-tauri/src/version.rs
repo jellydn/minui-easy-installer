@@ -49,11 +49,21 @@ pub fn detect_installed_version(
         }
     }
 
-    // Check for .minui/version file (alternative location).
-    // When a fork prefix is expected, skip this path — .minui/version
-    // carries no fork metadata, so we cannot verify it belongs to the
-    // selected fork.
-    if expected_prefix.is_none() {
+    // .minui/version is the legacy fallback. It carries no fork prefix,
+    // so we cannot verify the fork directly. Strategy:
+    //   - If minui.txt exists (above), it takes precedence; do not fall
+    //     through to .minui/version.
+    //   - If minui.txt is missing and a prefix is expected, accept
+    //     .minui/version only when the expected prefix is the canonical
+    //     "MinUI". Legacy official MinUI installs (which never wrote a
+    //     prefix) are the only installs that produce this file, so this
+    //     preserves detection. Custom forks (e.g. MinUI-Zero) always
+    //     write minui.txt via the installer, so this rule does not
+    //     under-attribute them.
+    //   - If a non-canonical prefix is expected, skip .minui/version.
+    //   - If no prefix is expected, accept .minui/version as before.
+    let canonical_prefix = expected_prefix == Some("MinUI");
+    if (expected_prefix.is_none() || canonical_prefix) && !minui_txt.exists() {
         let dot_minui_version = sd_root.join(".minui").join("version");
         if dot_minui_version.exists() {
             if let Ok(content) = fs::read_to_string(&dot_minui_version) {
@@ -491,6 +501,49 @@ mod tests {
         let version = result.unwrap();
         assert_eq!(version.version, "2024.12.25");
         assert_eq!(version.source, ".minui/version");
+    }
+
+    #[test]
+    fn test_detect_installed_version_accepts_dot_minui_when_canonical_prefix() {
+        // Legacy official MinUI installs only write .minui/version, no
+        // minui.txt. The canonical-prefix rule accepts the legacy file
+        // when the expected prefix is "MinUI".
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        fs::create_dir_all(sd_root.join(".minui")).unwrap();
+        let mut f = fs::File::create(sd_root.join(".minui").join("version")).unwrap();
+        f.write_all(b"2024.12.25").unwrap();
+        drop(f);
+
+        let result = detect_installed_version(sd_root.to_str().unwrap(), Some("MinUI"));
+        assert!(result.is_some());
+        let version = result.unwrap();
+        assert_eq!(version.version, "2024.12.25");
+        assert_eq!(version.source, ".minui/version");
+    }
+
+    #[test]
+    fn test_detect_installed_version_skips_dot_minui_when_minui_txt_present() {
+        // When both files exist, minui.txt takes precedence and the
+        // fallback is not used.
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        let mut a = fs::File::create(sd_root.join("minui.txt")).unwrap();
+        a.write_all(b"MinUI v2025.01.01").unwrap();
+        drop(a);
+        fs::create_dir_all(sd_root.join(".minui")).unwrap();
+        let mut b = fs::File::create(sd_root.join(".minui").join("version")).unwrap();
+        b.write_all(b"2024.12.25").unwrap();
+        drop(b);
+
+        let result = detect_installed_version(sd_root.to_str().unwrap(), Some("MinUI"));
+        assert!(result.is_some());
+        let version = result.unwrap();
+        // minui.txt version wins
+        assert_eq!(version.version, "2025.01.01");
+        assert_eq!(version.source, "minui.txt");
     }
 
     #[test]
