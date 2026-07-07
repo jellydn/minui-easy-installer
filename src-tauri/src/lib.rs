@@ -71,6 +71,7 @@ async fn install_minui(
     platform: String,
     extras_platform: String,
     version: String,
+    fork_name: Option<String>,
 ) -> Result<install::InstallResult, String> {
     let handle = app_handle.clone();
     let progress = Arc::new(move |event: install::InstallProgressEvent| {
@@ -87,6 +88,7 @@ async fn install_minui(
         platform,
         extras_platform,
         version,
+        fork_name,
     };
     install::install_minui(&options, progress).await
 }
@@ -124,6 +126,7 @@ async fn start_install(
     platform: String,
     extras_platform: String,
     version: String,
+    fork_name: Option<String>,
 ) -> Result<String, String> {
     let token = CancellationToken::new();
     {
@@ -157,6 +160,7 @@ async fn start_install(
         platform,
         extras_platform,
         version,
+        fork_name,
     };
 
     let registry_for_task = registry.inner().clone();
@@ -390,6 +394,7 @@ mod tests {
             platform: "trimui-brick".to_string(),
             extras_platform: "trimui-brick".to_string(),
             version: "test".to_string(),
+            fork_name: None,
         };
         let result = install::install_minui(
             &options,

@@ -6,6 +6,14 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+/** Expected IPC payload keys shared by all installMinui calls. */
+const IPC_KEYS = {
+  extrasUrl: null,
+  baseChecksum: null,
+  extrasChecksum: null,
+  forkName: null,
+};
+
 describe("installMinui", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,13 +47,11 @@ describe("installMinui", () => {
     }
     expect(invoke).toHaveBeenCalledWith("install_minui", {
       baseUrl: "https://example.com/base.zip",
-      extrasUrl: null,
-      baseChecksum: null,
-      extrasChecksum: null,
       sdMount: "/Volumes/SDCARD",
       platform: "miyoo-mini-plus",
       extrasPlatform: "/Tools",
       version: "2025.01.01",
+      ...IPC_KEYS,
     });
   });
 
@@ -212,6 +218,43 @@ describe("installMinui", () => {
       platform: "miyoo-mini-plus",
       extrasPlatform: "/Tools",
       version: "2025.01.01",
+      forkName: null,
+    });
+  });
+
+  it("passes forkName when provided", async () => {
+    const mockResult: InstallResult = {
+      success: true,
+      error: null,
+      base_files_copied: 10,
+      extras_files_copied: 5,
+      extras_warning: null,
+      rom_dirs_created: 0,
+    };
+
+    const { invoke } = await import("@tauri-apps/api/core");
+    (invoke as Mock).mockResolvedValue(mockResult);
+
+    const result = await installMinui({
+      baseUrl: "https://example.com/base.zip",
+      sdMount: "/Volumes/SDCARD",
+      platform: "miyoo-mini-plus",
+      extrasPlatform: "/Tools",
+      version: "20250525",
+      forkName: "MinUI-Zero",
+    });
+
+    expect(result.success).toBe(true);
+    expect(invoke).toHaveBeenCalledWith("install_minui", {
+      baseUrl: "https://example.com/base.zip",
+      extrasUrl: null,
+      baseChecksum: null,
+      extrasChecksum: null,
+      sdMount: "/Volumes/SDCARD",
+      platform: "miyoo-mini-plus",
+      extrasPlatform: "/Tools",
+      version: "20250525",
+      forkName: "MinUI-Zero",
     });
   });
 });

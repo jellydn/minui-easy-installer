@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { useVersionCheck } from "./useVersionCheck";
+import { FORK_PRESETS } from "../types/fork";
 
 vi.mock("../types/package", async () => {
   const actual = await import("../types/package");
@@ -80,7 +81,7 @@ describe("useVersionCheck race-condition guard", () => {
     });
     (checkPackageUpdates as Mock).mockResolvedValue([]);
 
-    const { result } = renderHook(() => useVersionCheck());
+    const { result } = renderHook(() => useVersionCheck(FORK_PRESETS.official));
 
     // Kick off both checks synchronously. Each captures its own requestId
     // and parks at the first await (fetchMinUIRelease).
@@ -123,11 +124,10 @@ describe("useVersionCheck race-condition guard", () => {
     // checkMinuiVersion), and this assertion would fail.
     expect(result.current.versionCheck).toBeNull();
     // Defense-in-depth: with the guard working, the stale call bails
-    // BEFORE awaiting checkMinuiVersion, so it must have been invoked
-    // exactly once (by the live call). A partial guard removal (e.g.
-    // first guard deleted, later guards intact) would let the stale
-    // call reach checkMinuiVersion and bump versionCall to 2.
-    expect(versionCall).toBe(1);
+    // BEFORE awaiting checkMinuiVersion. The live call (second one)
+    // is still parked at fetchMinUIRelease at this point, so nothing
+    // has reached checkMinuiVersion yet — versionCall stays 0.
+    expect(versionCall).toBe(0);
 
     // Now resolve the SECOND call's release. This is the live request, so
     // it must commit. (version2 was already resolved above; the live
@@ -173,7 +173,7 @@ describe("useVersionCheck race-condition guard", () => {
     });
     (checkPackageUpdates as Mock).mockResolvedValue([]);
 
-    const { result } = renderHook(() => useVersionCheck());
+    const { result } = renderHook(() => useVersionCheck(FORK_PRESETS.official));
 
     act(() => {
       void result.current.check("/sd-1");

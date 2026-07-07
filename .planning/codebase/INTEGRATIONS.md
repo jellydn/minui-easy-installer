@@ -1,178 +1,117 @@
-# External Integrations
+# Integrations
 
-**Analysis Date:** 2026-06-14
+This project is a Tauri v2 desktop app. Most "integrations" are outbound HTTP calls to fetch MinUI release artifacts and a package registry, with everything else operating on the local SD card via the OS.
 
-## APIs & External Services
+## External HTTP APIs
 
-**GitHub Releases (MinUI):**
+### 1. GitHub Releases API — MinUI fork release metadata
 
-- GitHub API — Fetch latest MinUI release metadata
-- Endpoint: `https://api.github.com/repos/shauninman/MinUI/releases/latest`
-- Client: Frontend `fetch()` with `Accept: application/vnd.github+json` header
-- Defined in: `src/types/release.ts` (line 22-23, 77-116)
-- Auth: None (public API, rate-limited to 60 req/hr unauthenticated)
+- **Endpoint template**: `https://api.github.com/repos/{owner}/{repo}/releases/latest`
+- **Built by**: `buildReleaseUrl(fork)` — `src/types/fork.ts:24-26`
+- **Default fork (Official)**: `https://api.github.com/repos/shauninman/MinUI/releases/latest` — also kept as the legacy constant `GITHUB_API_URL` in `src/types/release.ts:29` (marked `@deprecated`)
+- **Preset forks** (`src/types/fork.ts:7-19`):
+  - `official` → `shauninman/MinUI`
+  - `minui-zero` → `danklammer/MinUI-Zero`
+- **Custom forks**: any `owner/repo` string via `buildCustomFork()` — `src/types/fork.ts:39-47`
+- **Caller**: `fetchMinUIRelease(fork, fetchFn?)` — `src/types/release.ts:85-138`
+  - Header: `Accept: application/vnd.github+json`
+  - Returns `MinUIRelease { version, baseArchiveUrl, extrasArchiveUrl, checksums, fork }`
+  - Session-scoped cache keyed by `owner/repo` via `getForkCacheKey()` — `src/types/release.ts:77-83`
+  - Testable: accepts a `fetchFn` for dependency injection (`src/types/release.ts:88`)
+- **Error codes** (`src/types/release.ts:11-14`): `NETWORK_ERROR`, `PARSE_ERROR`, `NOT_FOUND`
+- **Parser**: `parseGitHubRelease()` — `src/types/release.ts:32-69` — extracts `tag_name` (strips leading `v`), then scans assets for names containing `base` and `extras` keywords to pick `browser_download_url` per asset
 
-**GitHub Releases (Package Artifacts):**
+### 2. GitHub Releases — package artifact downloads
 
-- GitHub Releases — Download `.pak.zip` archives for packages
-- Pattern: `https://github.com/{repo}/releases/download/{version}/{pak_name}.pak.zip`
-- Client: Rust `reqwest` 0.12 (async HTTP GET)
-- Defined in: `src-tauri/src/download.rs` (line 37-97)
-- Auth: None (public releases)
+- **URL pattern**: `https://github.com/{owner}/{repo}/releases/download/{version}/{fileName}.pak.zip`
+- **Built by**: `resolveArtifactUrl()` — `src/types/package.ts:154-161`
+- **Source**: `repository` + `version` + `pakName` from each package entry
+- **Override path**: any package can supply an explicit `download_url` field (`src/types/package.ts:280-285`) — the registry entries in `src/types/store.json:229` use this for `Grout` (RomM): `https://github.com/rommapp/grout/releases/download/v4.8.1.0/Grout-MinUI.zip`
+- **Downloaded by Rust backend**: `src-tauri/src/download.rs` via `reqwest` with `stream` feature; consumed by `install_package` (`src-tauri/src/lib.rs:189-204`) and the install pipeline (`src-tauri/src/pipeline.rs`)
+- **Verified via SHA-256** — `src-tauri/src/download.rs` + `verify_archive_checksum` command (`src-tauri/src/lib.rs:48-50`)
 
-**Package Registry (Static JSON):**
+### 3. MinUI package registry
 
-- Local static JSON — Package store catalog
-- Source: `src/types/store.json` (imported at build time)
-- Client: TypeScript import (no network fetch)
-- Defined in: `src/types/package.ts` (line 258-278)
-- Auth: N/A (local file)
+- **Endpoint**: `https://packages.minui.dev/registry/index.json`
+- **Constant**: `REGISTRY_URL` — `src/types/package.ts:46`
+- **Caller**: `fetchPackageRegistry()` — `src/types/package.ts:316-364`
+  - **Primary path**: invoked through the Rust `fetch_url` Tauri command (`src-tauri/src/lib.rs:268-291`) — passes the URL to `reqwest::Client` with a 10s timeout
+  - **Fallback path**: bundled `src/types/store.json` (32 packages) when remote fails or `fetch_url` errors (`src/types/package.ts:344-362`)
+  - Session cache: `cachedRegistry` module-level variable (`src/types/package.ts:49-55`)
+  - Errors: `INVALID_ENTRY`, `VALIDATION_ERROR`, `PARSE_ERROR`, `NETWORK_ERROR`, `NOT_FOUND` (`src/types/package.ts:34-41`)
+- **Schema contract** (validated by `parseRegistryFromJson` + `isStoreRegistry` + `validateStoreEntry` — `src/types/package.ts:182-323`):
+  - Top-level: `{ emu_paks: [...], tool_paks: [...] }`
+  - Each entry must have `name`, `repository` (must start with `https://github.com/`), `version`, `pak_name`
+  - Emu paks require `rom_folder`; tool paks may have `device[]`, `download_url`, `checksum` (64-char hex)
+  - Validation is strict — invalid entries are dropped with logged reasons (`src/types/package.ts:294-322`)
+- **Allow-listed in CSP** (`src-tauri/tauri.conf.json:24`): `connect-src ... https://packages.minui.dev ...`
 
-## Data Storage
+## Local OS / Hardware Integrations (Rust backend)
 
-**Databases:**
+These are not "external services" but are first-class integrations with the host OS — documented here for completeness.
 
-- None — No database in use
+### Removable drive enumeration & formatting
 
-**File Storage:**
+- **macOS path** (`src-tauri/src/drives.rs:17-77`):
+  - `df -k` to list volumes, then filter `/Volumes/*` excluding `Macintosh HD*`
+  - `diskutil info` via `is_removable_volume()` to confirm external/removable
+  - `diskutil eraseDisk` via `format_drive` command (`src-tauri/src/lib.rs:22-24`)
+- **Windows path**: `windows-sys` `Win32_Storage_FileSystem` (`src-tauri/Cargo.toml:28-30`) — used to enumerate drives / format via Win32 APIs (implementation in `src-tauri/src/drives.rs` cfg-gated sections)
+- **Linux**: not in MVP per `AGENTS.md:5` — no integration present
+- IPC commands: `get_removable_drives`, `format_drive` (`src-tauri/src/lib.rs:18-25`)
 
-- Local filesystem only — All data stored on user's SD card or temp directories
-- Temporary directories: `tempfile` crate creates temp dirs for downloads/extractions
-- SD card writes: MinUI files, WiFi config (`wifi.txt`), package PAKs
+### WiFi scanning & configuration (macOS only)
 
-**Caching:**
+- `src-tauri/src/wifi.rs`
+  - `get_current_wifi_ssid()` — uses `system_profiler SPAirPortDataType` on macOS (`src-tauri/src/wifi.rs:75-99`); returns `None` on Windows
+  - `scan_wifi_networks()` — platform-specific shell-out (cfg-gated)
+  - `write_wifi_config(sd_mount, ssid, password)` — writes `<sd_root>/wifi.txt` in MinUI format `SSID:PASSWORD` per line, comments with `#`, deduplicates existing SSID
+- IPC commands: `scan_wifi_networks`, `get_current_wifi_ssid`, `write_wifi_config` (`src-tauri/src/lib.rs:217-235`)
 
-- None — No caching layer; archives downloaded fresh each time
+### Filesystem operations on SD card
 
-## Authentication & Identity
+- `src-tauri/src/fs_utils.rs` — `get_disk_space`, path helpers
+- `src-tauri/src/install.rs`, `extract.rs` — archive extraction with `zip` crate
+- `src-tauri/src/validate.rs` — post-install validation by checking expected files on SD
+- `src-tauri/src/health.rs` — SD card health check (free space, required folders)
 
-**Auth Provider:**
+### Tauri IPC events (in-process, not external)
 
-- None — No user authentication system
-- GitHub API accessed unauthenticated (public endpoints only)
+The backend emits events to the frontend over Tauri's event bus:
+- `install-progress` — `InstallProgressEvent` payloads (`src-tauri/src/lib.rs:67-73`)
+- `install-complete` — `InstallResult` (`src-tauri/src/lib.rs:174-176`)
+- `install-error` — error string (`src-tauri/src/lib.rs:178-180`)
 
-## Monitoring & Observability
+## Authentication
 
-**Error Tracking:**
+**None.** The app makes unauthenticated requests to public GitHub APIs and the public MinUI registry. There is no user auth, no token storage, no OAuth flow. Note: GitHub's API has an unauthenticated rate limit (60 req/h/IP) that the app accepts (`src/types/release.ts:97-127` shows only the public endpoint with no Authorization header).
 
-- None — No Sentry, Bugsnag, or similar error tracking service
+## Webhooks
 
-**Logs:**
+**None.** The app does not register, send, or receive webhooks. All calls are outbound from the desktop client to public REST endpoints.
 
-- Tauri debug console — DevTools open automatically in debug builds (`src-tauri/src/lib.rs` line 185-189)
-- Rust `println!`/`eprintln!` — Standard output/error logging
-- Frontend console — Browser console via WebView
+## Tauri Capability Surface
 
-## CI/CD & Deployment
+- Single capability: `default.json` (`src-tauri/capabilities/default.json`) — grants only `core:default` to the `main` window
+- No filesystem, dialog, shell, or HTTP permissions explicitly granted (the Rust backend handles all of these server-side)
+- `withGlobalTauri: false` in `tauri.conf.json:13` — frontend uses dynamic `await import("@tauri-apps/api/core")` to call `invoke` (e.g. `src/types/package.ts:62, 75, 89, 332`)
 
-**Hosting:**
+## Data Assets Bundled With the App
 
-- Not yet configured — No CI/CD files detected (no `.github/workflows/`, no `Jenkinsfile`, etc.)
+These are static JSON shipped inside the binary — no network fetch needed at runtime:
+- `src/types/store.json` — 32-package fallback catalog (6 emu paks + 26 tool paks) — see `src/types/store.json:1-234`
+- `src/types/device-install-map.json` — 17-device install map with `devicePaks` and `sharedBios` list — `src/types/device-install-map.json:1-217`
 
-**CI Pipeline:**
+## Network Surface Summary (for security review)
 
-- `just pre-commit` — Runs `prek run --all-files` (pre-commit hook runner)
-- `just check` — Full check: `bun run lint` + `bun run typecheck` + `cargo fmt --check` + `cargo clippy -- -D warnings`
+| Direction | Host | Purpose | Auth |
+|-----------|------|---------|------|
+| Outbound HTTPS GET | `api.github.com` | Latest release metadata for MinUI / MinUI-Zero / custom fork | None |
+| Outbound HTTPS GET | `github.com/.../releases/download/...` | MinUI base + extras zip downloads | None |
+| Outbound HTTPS GET | `github.com/.../releases/download/...` | Per-package `.pak.zip` artifact downloads | None |
+| Outbound HTTPS GET | `packages.minui.dev` | Package registry `index.json` | None |
+| Outbound | `system_profiler`, `df`, `diskutil` (macOS) | Local OS shell-outs | OS-level |
+| Inbound | None | — | — |
+| Webhooks | None | — | — |
 
-## OS-Level Integrations
-
-**Drive Detection (macOS):**
-
-- Command: `df -k` — Lists volumes mounted under `/Volumes/`
-- Command: `diskutil info` — Gets filesystem type per volume
-- C FFI: `libc::statvfs` — Gets total disk size via syscall
-- Defined in: `src-tauri/src/drives.rs` (line 14-66)
-
-**Drive Detection (Windows):**
-
-- Command: `powershell Get-CimInstance Win32_LogicalDisk` — Lists removable drives (DriveType=2)
-- Defined in: `src-tauri/src/drives.rs` (line 238-298)
-
-**Drive Formatting (macOS):**
-
-- Command: `diskutil info` — Finds device node and partition info
-- Command: `diskutil unmount` — Unmounts partition before format
-- Command: `diskutil eraseDisk FAT32` — Formats drive to FAT32 (max 11-char volume label)
-- Defined in: `src-tauri/src/drives.rs` (line 75-150)
-- NOTE: Formatting NOT supported on Windows (stub returns error)
-
-**WiFi Scanning (macOS):**
-
-- Command: `/System/Library/PrivateFrameworks/Apple80211.framework/.../airport -s` — Scans available networks
-- Fallback: `system_profiler SPAirPortDataType` — Gets currently connected SSID (macOS 14.4+ compatible)
-- Defined in: `src-tauri/src/wifi.rs` (line 141-166, 77-113)
-
-**WiFi Scanning (Windows):**
-
-- Command: `netsh wlan show networks mode=bssid` — Scans available WiFi networks
-- Defined in: `src-tauri/src/wifi.rs` (line 217-255)
-
-**WiFi Scanning (Linux):**
-
-- Command: `nmcli -t -f SSID dev wifi` — Scans via NetworkManager
-- Defined in: `src-tauri/src/wifi.rs` (line 189-215)
-
-**WiFi Config Writing:**
-
-- File write: `{sd_mount}/wifi.txt` — MinUI WiFi config format (`SSID:PASSWORD` per line)
-- Handles: SSIDs with spaces, comment preservation, SSID deduplication on update
-- Defined in: `src-tauri/src/wifi.rs` (line 18-59)
-
-**Free Space Detection:**
-
-- macOS/Unix: `libc::statvfs` — Gets available bytes from filesystem
-- Fallback: `diskutil info` — Parses "Total Size" / "Disk Size" lines
-- Defined in: `src-tauri/src/validate.rs` (line 353-374)
-
-**Filesystem Detection:**
-
-- macOS: `diskutil info` — Parses "File System Personality" line
-- Defined in: `src-tauri/src/validate.rs` (line 330-351)
-
-## Tauri Command Surface (IPC)
-
-All 16 registered commands (registered in `src-tauri/src/lib.rs` line 166-183):
-
-| #   | Command                        | Frontend Consumer  | Purpose                                 |
-| --- | ------------------------------ | ------------------ | --------------------------------------- |
-| 1   | `get_removable_drives`         | Drive selection UI | Lists removable drives                  |
-| 2   | `format_drive`                 | Drive format UI    | Formats drive to FAT32                  |
-| 3   | `download_and_verify_archive`  | Install flow       | Downloads + checksums archive           |
-| 4   | `verify_archive_checksum`      | Install flow       | Verifies SHA-256 of local file          |
-| 5   | `extract_archive_to_directory` | Install flow       | Extracts ZIP to temp dir                |
-| 6   | `install_minui`                | Install flow       | Full MinUI install with progress events |
-| 7   | `validate_installation`        | Post-install       | Validates MinUI files on SD card        |
-| 8   | `format_validation_report`     | Post-install       | Formats validation result to text       |
-| 9   | `check_minui_version`          | Update check       | Checks installed vs latest version      |
-| 10  | `install_package`              | Package store      | Downloads + installs a package PAK      |
-| 11  | `write_wifi_config`            | WiFi setup         | Writes SSID:PASSWORD to wifi.txt        |
-| 12  | `scan_wifi_networks`           | WiFi setup         | Scans nearby WiFi networks              |
-| 13  | `get_current_wifi_ssid`        | WiFi setup         | Gets currently connected SSID           |
-| 14  | `detect_installed_packages`    | Package store      | Lists packages already on SD card       |
-| 15  | `check_package_updates`        | Package store      | Compares installed vs registry versions |
-| 16  | `check_sd_card_health`         | Diagnostics        | Comprehensive SD card health check      |
-
-**Progress Events:**
-
-- `install-progress` — Emitted during `install_minui` with `InstallProgressEvent` payloads (`src-tauri/src/install.rs`)
-
-## Environment Configuration
-
-**Required env vars:**
-
-- `TAURI_DEV_HOST` — Optional; Vite dev server HMR host for remote debugging (`vite.config.ts` line 4)
-
-**Secrets location:**
-
-- None — No secrets, API keys, or tokens required
-- GitHub API accessed without authentication
-
-## Webhooks & Callbacks
-
-**Incoming:**
-
-- None — No webhook endpoints
-
-**Outgoing:**
-
-- None — No outbound webhooks or callbacks
+All hosts are pinned in CSP `connect-src` (`src-tauri/tauri.conf.json:24`): `https://packages.minui.dev https://api.github.com https://github.com https://*.githubusercontent.com`.

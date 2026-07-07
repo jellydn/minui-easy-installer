@@ -68,7 +68,7 @@ describe("Home", () => {
   it("renders the home screen title and device selector", () => {
     render(<Home {...defaultProps} />);
 
-    expect(screen.getByText("MinUI Easy Installer")).toBeInTheDocument();
+    expect(screen.getByText("MinUI (Official) Easy Installer")).toBeInTheDocument();
     expect(screen.getByText("Select Your Device")).toBeInTheDocument();
   });
 
@@ -115,7 +115,7 @@ describe("Home", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "Install MinUI" }),
+        screen.getByRole("button", { name: "Install MinUI (Official)" }),
       ).toBeInTheDocument();
     });
   });
@@ -205,12 +205,12 @@ describe("Home", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "Install MinUI" }),
+        screen.getByRole("button", { name: "Install MinUI (Official)" }),
       ).toBeInTheDocument();
     });
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Install MinUI" }),
+      screen.getByRole("button", { name: "Install MinUI (Official)" }),
     );
 
     expect(screen.getByText(/Confirm Installation/)).toBeInTheDocument();

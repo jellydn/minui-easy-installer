@@ -13,6 +13,8 @@ import type { InstallPhase, InstallProgressEvent } from "./types/install";
 import { installMinui } from "./types/install";
 import { fetchPackageRegistry, installPackage } from "./types/package";
 import { fetchMinUIRelease } from "./types/release";
+import type { ForkConfig } from "./types/fork";
+import { FORK_PRESETS } from "./types/fork";
 import type { ValidationResult } from "./types/validate";
 import { validateInstallation } from "./types/validate";
 import ValidationReportUI from "./ValidationReport";
@@ -56,9 +58,10 @@ function Home({
   onSelectDevice,
   selectedDrive,
   onSelectDrive,
-}: HomeProps) {
+  fork = FORK_PRESETS.official,
+}: HomeProps & { fork?: ForkConfig }) {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const version = useVersionCheck();
+  const version = useVersionCheck(fork);
   const [isUpdatingAll, setIsUpdatingAll] = useState(false);
   const [updateAllMessage, setUpdateAllMessage] = useState("");
   const [updateAllError, setUpdateAllError] = useState<string | null>(null);
@@ -132,7 +135,7 @@ function Home({
 
     try {
       // Step 1: Fetch release metadata
-      const releaseResult = await fetchMinUIRelease();
+      const releaseResult = await fetchMinUIRelease(fork);
       if (!releaseResult.success) {
         setInstall((s) => ({
           ...s,
@@ -149,7 +152,7 @@ function Home({
           ...s.log,
           {
             step: "fetch",
-            details: `Found MinUI v${release.version} (${release.baseArchiveUrl.split("/").pop()})`,
+            details: `Found ${fork.label} v${release.version} (${release.baseArchiveUrl.split("/").pop()})`,
           },
         ],
       }));
@@ -164,6 +167,7 @@ function Home({
         platform: profile.platform,
         extrasPlatform: profile.extrasPlatform,
         version: release.version,
+        forkName: fork.versionPrefix,
       });
 
       if (result.success) {
@@ -237,14 +241,14 @@ function Home({
     setUpdateAllMessage("Starting updates...");
 
     try {
-      // Step 1: Update MinUI if available
+      // Step 1: Update {fork.label} if available
       if (version.versionCheck?.update_available) {
-        setUpdateAllMessage("Updating MinUI...");
+        setUpdateAllMessage(`Updating ${fork.label}...`);
 
-        const releaseResult = await fetchMinUIRelease();
+        const releaseResult = await fetchMinUIRelease(fork);
         if (!releaseResult.success) {
           setUpdateAllError(
-            `Failed to fetch MinUI release: ${releaseResult.error.message}`,
+            `Failed to fetch ${fork.label} release: ${releaseResult.error.message}`,
           );
           setIsUpdatingAll(false);
           return;
@@ -260,10 +264,11 @@ function Home({
           platform: profile.platform,
           extrasPlatform: profile.extrasPlatform,
           version: release.version,
+          forkName: fork.versionPrefix,
         });
 
         if (!result.success) {
-          setUpdateAllError(`MinUI update failed: ${result.error.message}`);
+          setUpdateAllError(`${fork.label} update failed: ${result.error.message}`);
           setIsUpdatingAll(false);
           return;
         }
@@ -343,6 +348,7 @@ function Home({
   }, [
     selectedDevice,
     selectedDrive,
+    fork,
     version.check,
     version.versionCheck,
     version.packageUpdates,
@@ -355,9 +361,9 @@ function Home({
 
   return (
     <div className="screen">
-      <h1>MinUI Easy Installer</h1>
+      <h1>{fork.label} Easy Installer</h1>
       <p className="subtitle">
-        The easiest way to install and manage MinUI on retro handheld devices.
+        The easiest way to install and manage {fork.label} on retro handheld devices.
       </p>
 
       {install.phase !== "idle" ? (
@@ -425,12 +431,12 @@ function Home({
                 <div className="version-info">
                   {version.versionCheck.installed ? (
                     <p className="installed-version">
-                      <strong>MinUI:</strong> v
+                      <strong>{fork.label}:</strong> v
                       {version.versionCheck.installed.version}
                     </p>
                   ) : (
                     <p className="no-version">
-                      <strong>MinUI:</strong> Not detected
+                      <strong>{fork.label}:</strong> Not detected
                     </p>
                   )}
                   {version.versionCheck.update_available ? (
@@ -438,7 +444,7 @@ function Home({
                       Update available: v{version.versionCheck.latest}
                     </p>
                   ) : version.versionCheck.installed ? (
-                    <p className="up-to-date">MinUI is up to date</p>
+                    <p className="up-to-date">{fork.label} is up to date</p>
                   ) : null}
 
                   {version.packageUpdates.length > 0 && (
@@ -480,8 +486,8 @@ function Home({
                     {hasUpdates
                       ? "Updates Available"
                       : version.versionCheck?.installed
-                        ? "Update MinUI"
-                        : "Install MinUI"}
+                        ? `Update ${fork.label}`
+                        : `Install ${fork.label}`}
                   </h2>
                   {hasUpdates && (
                     <button
@@ -499,8 +505,8 @@ function Home({
                     disabled={isInstalling}
                   >
                     {version.versionCheck?.installed
-                      ? "Update MinUI Only"
-                      : "Install MinUI"}
+                      ? `Update ${fork.label} Only`
+                      : `Install ${fork.label}`}
                   </button>
                 </>
               )}

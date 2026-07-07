@@ -90,26 +90,25 @@ fn looks_like_version(s: &str) -> bool {
 fn parse_minui_version(content: &str) -> Option<String> {
     let first_line = content.lines().next()?.trim();
 
-    // Try to extract version after "MinUI" prefix
-    if let Some(rest) = first_line.strip_prefix("MinUI ") {
-        let version = rest.trim().trim_start_matches('v').trim();
-        if !version.is_empty() {
+    // If the line contains a space, try extracting the last word as the
+    // version. This handles any prefix: "MinUI v2024.12.25",
+    // "MinUI-Zero 20250525", "MyFork v1.2.3", etc.
+    if let Some((_prefix, candidate)) = first_line.rsplit_once(' ') {
+        let version = candidate.trim().trim_start_matches('v').trim();
+        if looks_like_version(version) {
             return Some(version.to_string());
         }
     }
 
-    // Try to extract version after "v" prefix
+    // Try to extract version after "v" prefix (no space prefix)
     if let Some(version) = first_line.strip_prefix('v') {
         let version = version.trim();
-        if !version.is_empty() {
+        if looks_like_version(version) {
             return Some(version.to_string());
         }
     }
 
     // Raw fallback: only accept strict version-shaped strings.
-    // We deliberately do NOT accept free-form text like
-    // "Created by MinUI Team 2024" — see CONCERNS.md
-    // "Fragile Areas" → "Version Detection from minui.txt".
     if looks_like_version(first_line) {
         return Some(first_line.to_string());
     }
@@ -200,6 +199,32 @@ mod tests {
     fn test_parse_minui_version_with_prefix() {
         let content = "MinUI v2024.12.25\nSome other content";
         assert_eq!(parse_minui_version(content), Some("2024.12.25".to_string()));
+    }
+
+    #[test]
+    fn test_parse_minui_version_fork_prefix_minui_zero() {
+        let content = "MinUI-Zero 20250525\n";
+        assert_eq!(parse_minui_version(content), Some("20250525".to_string()));
+    }
+
+    #[test]
+    fn test_parse_minui_version_fork_prefix_with_v() {
+        let content = "MinUI-Zero v20250525\n";
+        assert_eq!(parse_minui_version(content), Some("20250525".to_string()));
+    }
+
+    #[test]
+    fn test_parse_minui_version_arbitrary_prefix_two_segment() {
+        let content = "MyCustomFork 2025.01\n";
+        assert_eq!(parse_minui_version(content), Some("2025.01".to_string()));
+    }
+
+    #[test]
+    fn test_parse_minui_version_prefix_rejects_non_version_after_space() {
+        // "MyFork not.a.version" — rsplit_once gives "not.a.version" after space
+        // but looks_like_version rejects it because "not" and "a" are non-numeric
+        let content = "MyFork not.a.version\n";
+        assert_eq!(parse_minui_version(content), None);
     }
 
     #[test]

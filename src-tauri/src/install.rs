@@ -172,6 +172,9 @@ pub struct InstallOptions {
     pub platform: String,
     pub extras_platform: String,
     pub version: String,
+    /// Name of the fork (e.g. "MinUI", "MinUI-Zero"). Written into
+    /// minui.txt as "{fork_name} {version}". Defaults to "MinUI".
+    pub fork_name: Option<String>,
 }
 
 /// Runs extras download → extract → copy, returning the number of files copied.
@@ -269,12 +272,13 @@ pub async fn install_minui_with_cancel(
     let rom_dirs_created = create_rom_dirs(&options.sd_mount).unwrap_or(0);
 
     // Write version metadata after successful install
+    let fork_label = options.fork_name.as_deref().unwrap_or("MinUI");
     progress(InstallProgressEvent {
         step: "finish".to_string(),
-        details: format!("Writing version metadata (MinUI {})", options.version),
+        details: format!("Writing version metadata ({} {})", fork_label, options.version),
     });
     let minui_txt_path = Path::new(&options.sd_mount).join("minui.txt");
-    if let Err(e) = fs::write(&minui_txt_path, format!("MinUI {}\n", options.version)) {
+    if let Err(e) = fs::write(&minui_txt_path, format!("{} {}\n", fork_label, options.version)) {
         eprintln!("Warning: Failed to write version metadata: {}", e);
     }
 
@@ -535,5 +539,34 @@ mod tests {
 
         // Verify Bios was copied
         assert!(sd_root.join("Bios/gba_bios.bin").exists());
+    }
+
+    #[test]
+    fn test_minui_txt_writes_fork_name() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        // Simulate what install_minui_with_cancel writes after copying
+        let fork_label = "MinUI-Zero";
+        let version = "20250525";
+        let minui_txt_path = sd_root.join("minui.txt");
+        fs::write(&minui_txt_path, format!("{} {}\n", fork_label, version)).unwrap();
+
+        let content = fs::read_to_string(&minui_txt_path).unwrap();
+        assert_eq!(content, "MinUI-Zero 20250525\n");
+    }
+
+    #[test]
+    fn test_minui_txt_defaults_to_minui_when_no_fork_name() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        let fork_label = "MinUI"; // default when fork_name is None
+        let version = "2025.01.01";
+        let minui_txt_path = sd_root.join("minui.txt");
+        fs::write(&minui_txt_path, format!("{} {}\n", fork_label, version)).unwrap();
+
+        let content = fs::read_to_string(&minui_txt_path).unwrap();
+        assert_eq!(content, "MinUI 2025.01.01\n");
     }
 }

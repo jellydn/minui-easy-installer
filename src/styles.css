@@ -1221,3 +1221,130 @@ select option {
   color: #999999;
   font-weight: 500;
 }
+
+/* ===== Settings / Fork Selector ===== */
+
+.settings-description {
+  color: #999;
+  font-size: 0.875rem;
+  margin-bottom: 1.25rem;
+  line-height: 1.5;
+}
+
+.fork-selector h3 {
+  font-size: 0.8125rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+  margin-top: 1rem;
+}
+
+.fork-selector h3:first-of-type {
+  margin-top: 0;
+}
+
+.fork-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.fork-preset-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 0.875rem;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.fork-preset-btn:hover {
+  border-color: #555;
+  background: #222;
+}
+
+.fork-preset-btn.active {
+  border-color: #888;
+  background: #2a2a2a;
+}
+
+.fork-preset-label {
+  font-weight: 500;
+}
+
+.fork-preset-repo {
+  color: #666;
+  font-size: 0.75rem;
+  font-family: monospace;
+}
+
+.custom-fork-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.custom-fork-input input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #fff;
+  font-family: monospace;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.custom-fork-input input:focus {
+  border-color: #666;
+}
+
+.custom-fork-input input::placeholder {
+  color: #444;
+}
+
+.custom-fork-input button {
+  padding: 0.5rem 1rem;
+  background: #333;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.custom-fork-input button:hover:not(:disabled) {
+  background: #444;
+}
+
+.custom-fork-input button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.custom-error {
+  color: #e74c3c;
+  font-size: 0.8125rem;
+  margin-top: 0.375rem;
+}
+
+.active-fork {
+  color: #999;
+  font-size: 0.8125rem;
+  margin-top: 1rem;
+}
+
+.active-fork strong {
+  color: #ccc;
+}

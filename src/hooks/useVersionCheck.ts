@@ -4,6 +4,7 @@ import { checkPackageUpdates, fetchPackageRegistry } from "../types/package";
 import { fetchMinUIRelease } from "../types/release";
 import type { VersionCheckResult } from "../types/version";
 import { checkMinuiVersion } from "../types/version";
+import type { ForkConfig } from "../types/fork";
 
 interface VersionCheckState {
   isChecking: boolean;
@@ -16,7 +17,7 @@ interface VersionCheckState {
  * in Home.tsx. Returns state and a `check` function to call explicitly
  * when the drive changes — converting the effect into an event-driven pattern.
  */
-export function useVersionCheck() {
+export function useVersionCheck(fork: ForkConfig) {
   const [state, setState] = useState<VersionCheckState>({
     isChecking: false,
     versionCheck: null,
@@ -34,7 +35,7 @@ export function useVersionCheck() {
     }));
 
     try {
-      const releaseResult = await fetchMinUIRelease();
+      const releaseResult = await fetchMinUIRelease(fork);
       if (requestId !== requestIdRef.current) return;
 
       const latestVersion = releaseResult.success
@@ -69,7 +70,7 @@ export function useVersionCheck() {
         setState((s) => ({ ...s, isChecking: false }));
       }
     }
-  }, []);
+  }, [fork]);
 
   const reset = useCallback(() => {
     requestIdRef.current++;
