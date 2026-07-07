@@ -3,10 +3,11 @@ export interface ForkConfig {
   owner: string;
   repo: string;
   /**
-   * Prefix written into minui.txt on the SD card.
-   * TODO(phase-2): Consume this in install.rs when writing version metadata.
+   * String written into minui.txt on the SD card and matched against
+   * when reading minui.txt back. Single source of truth for both the
+   * write side (installer) and the read side (version detection).
    */
-  versionPrefix: string;
+  minuiTxtPrefix: string;
 }
 
 export const FORK_PRESETS: Record<string, ForkConfig> = {
@@ -14,13 +15,13 @@ export const FORK_PRESETS: Record<string, ForkConfig> = {
     label: "MinUI (Official)",
     owner: "shauninman",
     repo: "MinUI",
-    versionPrefix: "MinUI",
+    minuiTxtPrefix: "MinUI",
   },
   "minui-zero": {
     label: "MinUI-Zero",
     owner: "danklammer",
     repo: "MinUI-Zero",
-    versionPrefix: "MinUI-Zero",
+    minuiTxtPrefix: "MinUI-Zero",
   },
 };
 
@@ -59,7 +60,7 @@ export function buildCustomFork(raw: string): ForkConfig | null {
     label: trimmed,
     owner: parts[0],
     repo: parts[1],
-    versionPrefix: parts[1],
+    minuiTxtPrefix: parts[1],
   };
 }
 

@@ -26,13 +26,14 @@ describe("parseGitHubRelease", () => {
       ],
     };
 
-    const result = parseGitHubRelease(input) as MinUIRelease;
+    const result = parseGitHubRelease(input, OFFICIAL_FORK) as MinUIRelease;
 
     expect(result).toEqual({
       version: "25.06.12",
       baseArchiveUrl: expect.stringContaining("base.zip"),
       extrasArchiveUrl: expect.stringContaining("extras.zip"),
       checksums: null,
+      fork: OFFICIAL_FORK,
     });
   });
 
@@ -47,7 +48,7 @@ describe("parseGitHubRelease", () => {
       ],
     };
 
-    const result = parseGitHubRelease(input) as MinUIRelease;
+    const result = parseGitHubRelease(input, OFFICIAL_FORK) as MinUIRelease;
 
     expect(result.version).toBe("25.06.12");
     expect(result.baseArchiveUrl).toContain("base.zip");
@@ -64,18 +65,18 @@ describe("parseGitHubRelease", () => {
       ],
     };
 
-    const result = parseGitHubRelease(input) as MinUIRelease;
+    const result = parseGitHubRelease(input, OFFICIAL_FORK) as MinUIRelease;
     expect(result.version).toBe("1.2.3");
   });
 
   it("returns error for null input", () => {
-    const result = parseGitHubRelease(null) as ReleaseFetchError;
+    const result = parseGitHubRelease(null, OFFICIAL_FORK) as ReleaseFetchError;
     expect(result.code).toBe("PARSE_ERROR");
   });
 
   it("returns error for missing tag_name", () => {
     const input = { assets: [] };
-    const result = parseGitHubRelease(input) as ReleaseFetchError;
+    const result = parseGitHubRelease(input, OFFICIAL_FORK) as ReleaseFetchError;
     expect(result.code).toBe("PARSE_ERROR");
     expect(result.message).toContain("tag_name");
   });
@@ -90,14 +91,14 @@ describe("parseGitHubRelease", () => {
       ],
     };
 
-    const result = parseGitHubRelease(input) as ReleaseFetchError;
+    const result = parseGitHubRelease(input, OFFICIAL_FORK) as ReleaseFetchError;
     expect(result.code).toBe("NOT_FOUND");
     expect(result.message).toContain("base archive");
   });
 
   it("handles empty assets array", () => {
     const input = { tag_name: "v1.0.0", assets: [] };
-    const result = parseGitHubRelease(input) as ReleaseFetchError;
+    const result = parseGitHubRelease(input, OFFICIAL_FORK) as ReleaseFetchError;
     expect(result.code).toBe("NOT_FOUND");
   });
 });

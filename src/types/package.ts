@@ -16,11 +16,7 @@ export interface PackageRegistryEntry {
   installPathRules: PackageInstallPathRules;
 }
 
-export type PackageCategory =
-  | "Utilities"
-  | "Emulators"
-  | "Network"
-  | "Community";
+export type PackageCategory = "Utilities" | "Emulators";
 
 export interface PackageInstallPathRules {
   targetDir: string;

@@ -10,11 +10,17 @@ import {
   type Mock,
   vi,
 } from "vitest";
+import type { ReactElement } from "react";
+import { ForkProvider } from "./contexts/ForkContext";
 import Home from "./Home";
 import type { RemovableDrive } from "./types/drive";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
 }));
 
 vi.mock("./types/release", () => ({
@@ -47,6 +53,8 @@ vi.mock("./types/validate", () => ({
   checkSdCardHealth: vi.fn(),
 }));
 
+const renderWithFork = (ui: ReactElement) => render(<ForkProvider>{ui}</ForkProvider>);
+
 const mockDrive: RemovableDrive = {
   name: "SD_CARD",
   mount_path: "/Volumes/SD_CARD",
@@ -74,7 +82,7 @@ describe("Home", () => {
   });
 
   it("renders the home screen title and device selector", () => {
-    render(<Home {...defaultProps} />);
+    renderWithFork(<Home {...defaultProps} />);
 
     expect(
       screen.getByText("MinUI (Official) Easy Installer"),
@@ -115,7 +123,7 @@ describe("Home", () => {
     });
     (checkPackageUpdates as Mock).mockResolvedValue([]);
 
-    render(
+    renderWithFork(
       <Home
         {...defaultProps}
         selectedDevice="miyoo-mini-plus"
@@ -160,7 +168,7 @@ describe("Home", () => {
     });
     (checkPackageUpdates as Mock).mockResolvedValue([]);
 
-    render(
+    renderWithFork(
       <Home
         {...defaultProps}
         selectedDevice="miyoo-mini-plus"
@@ -205,7 +213,7 @@ describe("Home", () => {
     });
     (checkPackageUpdates as Mock).mockResolvedValue([]);
 
-    render(
+    renderWithFork(
       <Home
         {...defaultProps}
         selectedDevice="miyoo-mini-plus"

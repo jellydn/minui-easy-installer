@@ -28,7 +28,7 @@ const mockRegistry: PackageRegistry = {
     {
       name: "Wifi.pak",
       version: "1.0.0",
-      category: "Network",
+      category: "Utilities",
       description: "WiFi connectivity tool",
       repository: "https://github.com/example/wifi",
       downloads: 1000,
@@ -41,7 +41,7 @@ const mockRegistry: PackageRegistry = {
     {
       name: "SSH.pak",
       version: "2.0.0",
-      category: "Utilities",
+      category: "Emulators",
       description: "SSH remote access",
       repository: "https://github.com/example/ssh",
       downloads: 500,
@@ -182,7 +182,7 @@ describe("PackageStore", () => {
       expect(screen.getByText("Wifi.pak")).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Network" }));
+    await userEvent.click(screen.getByRole("button", { name: "Utilities" }));
 
     expect(screen.getByText("Wifi.pak")).toBeInTheDocument();
     expect(screen.queryByText("SSH.pak")).not.toBeInTheDocument();

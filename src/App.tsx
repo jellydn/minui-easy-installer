@@ -1,45 +1,28 @@
 import { useState } from "react";
+import { ForkProvider, useFork } from "./contexts/ForkContext";
 import Home from "./Home";
 import PackageStore from "./PackageStore";
 import Settings from "./Settings";
 import type { RemovableDrive } from "./types/drive";
-import type { ForkConfig } from "./types/fork";
-import { FORK_PRESETS, rehydrateFork } from "./types/fork";
 import WifiWizard from "./WifiWizard";
 
 type Screen = "home" | "store" | "wifi" | "settings";
 
-/** Load the persisted fork selection from localStorage, or default to official. */
-function loadPersistedFork(): ForkConfig {
-  try {
-    const raw = localStorage.getItem("selectedFork");
-    if (raw) {
-      const fork = rehydrateFork(JSON.parse(raw));
-      if (fork) return fork;
-    }
-  } catch {
-    // Corrupt localStorage — fall through to default
-  }
-  return FORK_PRESETS.official;
+function App() {
+  return (
+    <ForkProvider>
+      <AppShell />
+    </ForkProvider>
+  );
 }
 
-function App() {
+function AppShell() {
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [selectedDrive, setSelectedDrive] = useState<RemovableDrive | null>(
     null,
   );
-  const [selectedFork, setSelectedFork] =
-    useState<ForkConfig>(loadPersistedFork);
-
-  const handleSelectFork = (fork: ForkConfig) => {
-    setSelectedFork(fork);
-    try {
-      localStorage.setItem("selectedFork", JSON.stringify(fork));
-    } catch {
-      // localStorage write failed — non-fatal
-    }
-  };
+  const { fork, setFork } = useFork();
 
   return (
     <main className="container">
@@ -80,7 +63,6 @@ function App() {
           onSelectDevice={setSelectedDevice}
           selectedDrive={selectedDrive}
           onSelectDrive={setSelectedDrive}
-          fork={selectedFork}
         />
       )}
 
@@ -129,10 +111,7 @@ function App() {
 
       {screen === "settings" && (
         <div className="screen">
-          <Settings
-            selectedFork={selectedFork}
-            onSelectFork={handleSelectFork}
-          />
+          <Settings selectedFork={fork} onSelectFork={setFork} />
         </div>
       )}
     </main>

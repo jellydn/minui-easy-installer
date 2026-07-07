@@ -1,0 +1,370 @@
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useFork } from "../contexts/ForkContext";
+import { getDeviceProfile } from "../types/device";
+import type { ForkConfig } from "../types/fork";
+import type {
+  InstallPhase,
+  InstallProgressEvent,
+} from "../types/install";
+import { installMinui } from "../types/install";
+import { fetchPackageRegistry, installPackage } from "../types/package";
+import { fetchMinUIRelease } from "../types/release";
+import type { VersionCheckResult } from "../types/version";
+import { validateInstallation } from "../types/validate";
+import type { ValidationResult } from "../types/validate";
+
+interface InstallState {
+  phase: InstallPhase;
+  message: string;
+  log: InstallProgressEvent[];
+  error: string | null;
+  baseFilesCopied: number;
+  extrasFilesCopied: number;
+  romDirsCreated: number;
+  extrasWarning: string | null;
+  validationResult: ValidationResult | null;
+}
+
+export interface UseForkInstallOptions {
+  selectedDevice: string | null;
+  selectedDriveMount: string | null;
+  /** Version check result; needed to gate update-all. */
+  versionCheck: VersionCheckResult | null;
+  /** Pending package updates; needed for update-all. */
+  packageUpdates: { name: string; installed_version: string | null; latest_version: string }[];
+  /** Refresh the version check after update-all completes. */
+  onAfterUpdate: (sdMount: string) => Promise<void> | void;
+}
+
+export interface UseForkInstallResult {
+  install: InstallState;
+  isInstalling: boolean;
+  /** Run a single MinUI install (called from the Confirm dialog). */
+  installMinUI: () => Promise<void>;
+  /** Update MinUI + all pending packages concurrently. */
+  updateAll: () => Promise<void>;
+  /** Status of the "update all" flow, surfaced separately from `install`. */
+  isUpdatingAll: boolean;
+  updateAllMessage: string;
+  updateAllError: string | null;
+  dismissInstall: () => void;
+  dismissValidation: () => void;
+  retryValidation: () => Promise<void>;
+}
+
+const INITIAL_STATE: InstallState = {
+  phase: "idle",
+  message: "",
+  log: [],
+  error: null,
+  baseFilesCopied: 0,
+  extrasFilesCopied: 0,
+  romDirsCreated: 0,
+  extrasWarning: null,
+  validationResult: null,
+};
+
+/**
+ * Owns the MinUI install + update-all orchestration: release fetch,
+ * install IPC, Tauri progress event listener, validation, and the
+ * per-package update batch.
+ *
+ * Lives in a hook so Home.tsx stays presentational and so the install
+ * pipeline is unit-testable without rendering the whole Home tree.
+ */
+export function useForkInstall(
+  options: UseForkInstallOptions,
+): UseForkInstallResult {
+  const { fork } = useFork();
+  const {
+    selectedDevice,
+    selectedDriveMount,
+    versionCheck,
+    packageUpdates,
+    onAfterUpdate,
+  } = options;
+
+  const [install, setInstall] = useState<InstallState>(INITIAL_STATE);
+  const [isUpdatingAll, setIsUpdatingAll] = useState(false);
+  const [updateAllMessage, setUpdateAllMessage] = useState("");
+  const [updateAllError, setUpdateAllError] = useState<string | null>(null);
+
+  // Hold the latest fork in a ref so the install callback stays stable
+  // and we don't capture a stale value across fork changes.
+  const forkRef = useRef<ForkConfig>(fork);
+  useEffect(() => {
+    forkRef.current = fork;
+  }, [fork]);
+
+  const dismissInstall = useCallback(
+    () => setInstall(INITIAL_STATE),
+    [],
+  );
+  const dismissValidation = useCallback(
+    () => setInstall((s) => ({ ...s, validationResult: null })),
+    [],
+  );
+
+  const installMinUI = useCallback(async () => {
+    if (!selectedDevice || !selectedDriveMount) return;
+
+    const profile = getDeviceProfile(selectedDevice);
+    if (!profile) {
+      setInstall((s) => ({
+        ...s,
+        error: "Unknown device profile",
+        phase: "error",
+      }));
+      return;
+    }
+
+    setInstall((s) => ({
+      ...s,
+      phase: "downloading",
+      message: "",
+      log: [],
+      error: null,
+    }));
+
+    const unlisten = await attachProgressListener(setInstall);
+
+    try {
+      const releaseResult = await fetchMinUIRelease(forkRef.current);
+      if (!releaseResult.success) {
+        setInstall((s) => ({
+          ...s,
+          error: `Failed to fetch release: ${releaseResult.error.message}`,
+          phase: "error",
+        }));
+        return;
+      }
+
+      const release = releaseResult.data;
+      const fileName = release.baseArchiveUrl.split("/").pop();
+      setInstall((s) => ({
+        ...s,
+        log: [
+          ...s.log,
+          {
+            step: "fetch",
+            details: `Found ${forkRef.current.label} v${release.version} (${fileName})`,
+          },
+        ],
+      }));
+
+      const result = await installMinui({
+        baseUrl: release.baseArchiveUrl,
+        extrasUrl: release.extrasArchiveUrl || undefined,
+        baseChecksum: release.checksums?.base || undefined,
+        extrasChecksum: release.checksums?.extras || undefined,
+        sdMount: selectedDriveMount,
+        platform: profile.platform,
+        extrasPlatform: profile.extrasPlatform,
+        version: release.version,
+        forkName: forkRef.current.minuiTxtPrefix,
+      });
+
+      if (!result.success) {
+        setInstall((s) => ({
+          ...s,
+          error: result.error.message,
+          phase: "error",
+        }));
+        return;
+      }
+
+      const valResult = await validateInstallation({
+        sdMount: selectedDriveMount,
+        hasExtras: result.data.extras_files_copied > 0,
+        extrasDir: profile.installPathRules.extrasDir,
+      });
+      setInstall((s) => ({
+        ...s,
+        phase: "complete",
+        message: "Installation completed successfully!",
+        baseFilesCopied: result.data.base_files_copied,
+        extrasFilesCopied: result.data.extras_files_copied,
+        romDirsCreated: result.data.rom_dirs_created,
+        extrasWarning: result.data.extras_warning,
+        validationResult: valResult.success ? valResult.data : null,
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setInstall((s) => ({ ...s, error: message, phase: "error" }));
+    } finally {
+      unlisten();
+    }
+  }, [selectedDevice, selectedDriveMount]);
+
+  const retryValidation = useCallback(async () => {
+    if (!selectedDevice || !selectedDriveMount) return;
+    const profile = getDeviceProfile(selectedDevice);
+    if (!profile) return;
+    const valResult = await validateInstallation({
+      sdMount: selectedDriveMount,
+      hasExtras: install.extrasFilesCopied > 0,
+      extrasDir: profile.installPathRules.extrasDir,
+    });
+    if (valResult.success) {
+      setInstall((s) => ({ ...s, validationResult: valResult.data }));
+    }
+  }, [selectedDevice, selectedDriveMount, install.extrasFilesCopied]);
+
+  const updateAll = useCallback(async () => {
+    if (!selectedDevice || !selectedDriveMount) return;
+
+    const profile = getDeviceProfile(selectedDevice);
+    if (!profile) return;
+
+    setIsUpdatingAll(true);
+    setUpdateAllError(null);
+    setUpdateAllMessage("Starting updates...");
+
+    const finish = (err: string | null, message: string) => {
+      if (err) setUpdateAllError(err);
+      setUpdateAllMessage(message);
+      setIsUpdatingAll(false);
+    };
+
+    try {
+      if (versionCheck?.update_available) {
+        setUpdateAllMessage(`Updating ${forkRef.current.label}...`);
+
+        const releaseResult = await fetchMinUIRelease(forkRef.current);
+        if (!releaseResult.success) {
+          finish(
+            `Failed to fetch ${forkRef.current.label} release: ${releaseResult.error.message}`,
+            "",
+          );
+          return;
+        }
+
+        const release = releaseResult.data;
+        const result = await installMinui({
+          baseUrl: release.baseArchiveUrl,
+          extrasUrl: release.extrasArchiveUrl || undefined,
+          baseChecksum: release.checksums?.base || undefined,
+          extrasChecksum: release.checksums?.extras || undefined,
+          sdMount: selectedDriveMount,
+          platform: profile.platform,
+          extrasPlatform: profile.extrasPlatform,
+          version: release.version,
+          forkName: forkRef.current.minuiTxtPrefix,
+        });
+        if (!result.success) {
+          finish(
+            `${forkRef.current.label} update failed: ${result.error.message}`,
+            "",
+          );
+          return;
+        }
+      }
+
+      if (packageUpdates.length > 0) {
+        setUpdateAllMessage(
+          `Updating ${packageUpdates.length} package(s)...`,
+        );
+
+        const registryResult = await fetchPackageRegistry();
+        if (!registryResult.success) {
+          finish(
+            `Failed to fetch package registry: ${registryResult.error.message}`,
+            "",
+          );
+          return;
+        }
+
+        const packageByName = new Map(
+          registryResult.data.packages.map((p) => [p.name, p]),
+        );
+
+        // Package updates are independent — run them concurrently to
+        // minimise wall-clock time. Each IPC call hits the Rust backend
+        // independently.
+        const installResults = await Promise.all(
+          packageUpdates.map(async (update) => {
+            const entry = packageByName.get(update.name);
+            if (!entry) return `${update.name}: not found in registry`;
+            const result = await installPackage({
+              artifactUrl: entry.artifactUrl,
+              checksum: entry.checksum || undefined,
+              sdMount: selectedDriveMount,
+              targetDir: entry.installPathRules.targetDir,
+              extractToRoot: entry.installPathRules.extractToRoot,
+              pakName: entry.installPathRules.pakName || update.name,
+              platform: profile.platform,
+            });
+            if (!result.success) {
+              return `${update.name}: ${result.error?.message || "install failed"}`;
+            }
+            return null;
+          }),
+        );
+
+        const errors = installResults.filter((e): e is string => e !== null);
+        if (errors.length > 0) {
+          finish(`Package update errors:\n${errors.join("\n")}`, "");
+          return;
+        }
+      }
+
+      finish(null, "All updates completed!");
+      await onAfterUpdate(selectedDriveMount);
+    } catch (err) {
+      finish(err instanceof Error ? err.message : "Unknown error", "");
+    }
+  }, [
+    selectedDevice,
+    selectedDriveMount,
+    versionCheck?.update_available,
+    packageUpdates,
+    onAfterUpdate,
+  ]);
+
+  const isInstalling =
+    install.phase !== "idle" &&
+    install.phase !== "complete" &&
+    install.phase !== "error";
+
+  return {
+    install,
+    isInstalling,
+    installMinUI,
+    updateAll,
+    isUpdatingAll,
+    updateAllMessage,
+    updateAllError,
+    dismissInstall,
+    dismissValidation,
+    retryValidation,
+  };
+}
+
+async function attachProgressListener(
+  setInstall: React.Dispatch<React.SetStateAction<InstallState>>,
+): Promise<UnlistenFn> {
+  return listen<InstallProgressEvent>("install-progress", (event) => {
+    const { step, details } = event.payload;
+    setInstall((s) => {
+      const phase = stepToInstallPhase(step, s.phase);
+      return { ...s, phase, message: details, log: [...s.log, event.payload] };
+    });
+  });
+}
+
+function stepToInstallPhase(
+  step: string,
+  current: InstallPhase,
+): InstallPhase {
+  switch (step) {
+    case "download":
+      return "downloading";
+    case "extract":
+      return "extracting";
+    case "copy":
+      return "copying";
+    default:
+      return current;
+  }
+}

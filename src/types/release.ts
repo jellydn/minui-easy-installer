@@ -6,8 +6,8 @@ export interface MinUIRelease {
   baseArchiveUrl: string;
   extrasArchiveUrl: string | null;
   checksums: ReleaseChecksums | null;
-  /** The fork that this release came from. Set by fetchMinUIRelease. */
-  fork?: ForkConfig;
+  /** The fork that this release came from. */
+  fork: ForkConfig;
 }
 
 export interface ReleaseChecksums {
@@ -26,6 +26,7 @@ export type ReleaseFetchResult =
 
 export function parseGitHubRelease(
   data: unknown,
+  fork: ForkConfig,
 ): MinUIRelease | ReleaseFetchError {
   if (!data || typeof data !== "object") {
     return { message: "Invalid release data", code: "PARSE_ERROR" };
@@ -73,6 +74,7 @@ export function parseGitHubRelease(
     baseArchiveUrl,
     extrasArchiveUrl,
     checksums: null,
+    fork,
   };
 }
 
@@ -123,14 +125,11 @@ export async function fetchMinUIRelease(
     }
 
     const data = await response.json();
-    const result = parseGitHubRelease(data);
+    const result = parseGitHubRelease(data, fork);
 
     if ("code" in result) {
       return { success: false, error: result };
     }
-
-    // Attach the fork that produced this result
-    result.fork = fork;
 
     releaseCache.set(cacheKey, result);
     return { success: true, data: result };

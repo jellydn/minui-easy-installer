@@ -50,35 +50,39 @@ pub fn detect_installed_version(
     }
 
     // .minui/version is the legacy fallback. It carries no fork prefix,
-    // so we cannot verify the fork directly. Strategy:
-    //   - If minui.txt exists (above), it takes precedence; do not fall
-    //     through to .minui/version.
-    //   - If minui.txt is missing and a prefix is expected, accept
-    //     .minui/version only when the expected prefix is the canonical
-    //     "MinUI". Legacy official MinUI installs (which never wrote a
-    //     prefix) are the only installs that produce this file, so this
-    //     preserves detection. Custom forks (e.g. MinUI-Zero) always
-    //     write minui.txt via the installer, so this rule does not
-    //     under-attribute them.
-    //   - If a non-canonical prefix is expected, skip .minui/version.
-    //   - If no prefix is expected, accept .minui/version as before.
-    let canonical_prefix = expected_prefix == Some("MinUI");
-    if (expected_prefix.is_none() || canonical_prefix) && !minui_txt.exists() {
-        let dot_minui_version = sd_root.join(".minui").join("version");
-        if dot_minui_version.exists() {
-            if let Ok(content) = fs::read_to_string(&dot_minui_version) {
-                let version = content.trim().to_string();
-                if !version.is_empty() {
-                    return Some(InstalledVersion {
-                        version,
-                        source: ".minui/version".to_string(),
-                    });
-                }
-            }
+    // so we cannot verify the fork directly. The rules:
+    //   - minui.txt present (any case) — already returned above, never
+    //     reach this branch.
+    //   - minui.txt missing + canonical "MinUI" expected — accept
+    //     .minui/version (legacy official installs only ever wrote this
+    //     file, and they always wrote it for the canonical MinUI).
+    //   - minui.txt missing + non-canonical fork expected — skip. The
+    //     file cannot be proven to belong to a fork we don't recognise.
+    //   - minui.txt missing + no prefix expected — accept as before.
+    let minui_txt_present = minui_txt.exists();
+    if matches!(
+        (minui_txt_present, expected_prefix),
+        (false, None) | (false, Some("MinUI"))
+    ) {
+        if let Some(installed) = read_dot_minui_version(sd_root) {
+            return Some(installed);
         }
     }
 
     None
+}
+
+fn read_dot_minui_version(sd_root: &Path) -> Option<InstalledVersion> {
+    let path = sd_root.join(".minui").join("version");
+    let content = fs::read_to_string(&path).ok()?;
+    let version = content.trim().to_string();
+    if version.is_empty() {
+        return None;
+    }
+    Some(InstalledVersion {
+        version,
+        source: ".minui/version".to_string(),
+    })
 }
 
 /// Returns true if `s` looks like a release version string.
@@ -86,16 +90,11 @@ pub fn detect_installed_version(
 /// Accepts:
 /// - A single numeric run of 6+ digits: "20250525" (date-only, e.g. MinUI-Zero)
 /// - 2 or 3 dot-separated numeric segments: "2024.12.25", "0.12.0", "1.2.3", "2024.12", "1.0"
-/// - Optional leading "v" or "V" prefix
 ///
 /// Rejects free-form text like "Created by MinUI Team 2024" and
 /// dash-separated versions like "v2024-12-25".
 fn looks_like_version(s: &str) -> bool {
-    let s = s
-        .trim()
-        .trim_start_matches('v')
-        .trim_start_matches('V')
-        .trim();
+    let s = s.trim().trim_start_matches(['v', 'V']).trim();
     if s.is_empty() {
         return false;
     }
@@ -130,38 +129,26 @@ fn looks_like_version(s: &str) -> bool {
 fn parse_minui_version_with_prefix(content: &str) -> Option<(Option<String>, String)> {
     let first_line = content.lines().next()?.trim();
 
-    // If the line contains a space, try extracting the last word as the
-    // version and everything before it as the prefix.
-    // This handles any prefix: "MinUI v2024.12.25",
-    // "MinUI-Zero 20250525", "MyFork v1.2.3", etc.
-    if let Some((prefix_raw, candidate)) = first_line.rsplit_once(' ') {
-        let version = candidate.trim().trim_start_matches('v').trim();
-        if looks_like_version(version) {
-            let prefix = prefix_raw.trim().to_string();
-            return Some((Some(prefix), version.to_string()));
-        }
+    // Split into prefix and version candidate if a space is present.
+    // Handles custom forks/prefixes (e.g., "MinUI v2024.12.25", "MinUI-Zero 20250525")
+    let (prefix, version_raw) = if let Some((p, v)) = first_line.rsplit_once(' ') {
+        (Some(p.trim().to_string()), v)
+    } else {
+        (None, first_line)
+    };
+
+    // Normalize the version by stripping leading v/V prefix and wrapping spaces
+    let version = version_raw
+        .trim()
+        .trim_start_matches(['v', 'V'])
+        .trim()
+        .to_string();
+
+    if looks_like_version(&version) {
+        Some((prefix, version))
+    } else {
+        None
     }
-
-    // Try to extract version after "v" prefix (no space prefix)
-    if let Some(version) = first_line.strip_prefix('v') {
-        let version = version.trim();
-        if looks_like_version(version) {
-            return Some((None, version.to_string()));
-        }
-    }
-
-    // Raw fallback: only accept strict version-shaped strings.
-    if looks_like_version(first_line) {
-        return Some((None, first_line.to_string()));
-    }
-
-    None
-}
-
-/// Parse version from minui.txt content (backwards-compat wrapper).
-#[allow(dead_code)]
-fn parse_minui_version(content: &str) -> Option<String> {
-    parse_minui_version_with_prefix(content).map(|(_, v)| v)
 }
 
 /// Try to parse a version string as semver, normalizing leading zeros first.
@@ -257,13 +244,13 @@ mod tests {
     #[test]
     fn test_parse_minui_version_with_prefix() {
         let content = "MinUI v2024.12.25\nSome other content";
-        assert_eq!(parse_minui_version(content), Some("2024.12.25".to_string()));
+        assert_eq!(parse_minui_version_with_prefix(content).map(|(_, v)| v), Some("2024.12.25".to_string()));
     }
 
     #[test]
     fn test_parse_minui_version_fork_prefix_minui_zero() {
         let content = "MinUI-Zero 20250525\n";
-        assert_eq!(parse_minui_version(content), Some("20250525".to_string()));
+        assert_eq!(parse_minui_version_with_prefix(content).map(|(_, v)| v), Some("20250525".to_string()));
     }
 
     #[test]
@@ -281,13 +268,13 @@ mod tests {
     #[test]
     fn test_parse_minui_version_fork_prefix_with_v() {
         let content = "MinUI-Zero v20250525\n";
-        assert_eq!(parse_minui_version(content), Some("20250525".to_string()));
+        assert_eq!(parse_minui_version_with_prefix(content).map(|(_, v)| v), Some("20250525".to_string()));
     }
 
     #[test]
     fn test_parse_minui_version_arbitrary_prefix_two_segment() {
         let content = "MyCustomFork 2025.01\n";
-        assert_eq!(parse_minui_version(content), Some("2025.01".to_string()));
+        assert_eq!(parse_minui_version_with_prefix(content).map(|(_, v)| v), Some("2025.01".to_string()));
     }
 
     #[test]
@@ -295,24 +282,24 @@ mod tests {
         // "MyFork not.a.version" — rsplit_once gives "not.a.version" after space
         // but looks_like_version rejects it because "not" and "a" are non-numeric
         let content = "MyFork not.a.version\n";
-        assert_eq!(parse_minui_version(content), None);
+        assert_eq!(parse_minui_version_with_prefix(content).map(|(_, v)| v), None);
     }
 
     #[test]
     fn test_parse_minui_version_without_prefix() {
         let content = "2024.12.25\nSome other content";
-        assert_eq!(parse_minui_version(content), Some("2024.12.25".to_string()));
+        assert_eq!(parse_minui_version_with_prefix(content).map(|(_, v)| v), Some("2024.12.25".to_string()));
     }
 
     #[test]
     fn test_parse_minui_version_with_v_prefix() {
         let content = "v2024.12.25";
-        assert_eq!(parse_minui_version(content), Some("2024.12.25".to_string()));
+        assert_eq!(parse_minui_version_with_prefix(content).map(|(_, v)| v), Some("2024.12.25".to_string()));
     }
 
     #[test]
     fn test_parse_minui_version_empty() {
-        assert_eq!(parse_minui_version(""), None);
+        assert_eq!(parse_minui_version_with_prefix("").map(|(_, v)| v), None);
     }
 
     #[test]
@@ -359,9 +346,9 @@ mod tests {
     #[test]
     fn test_parse_minui_version_rejects_free_form_text() {
         // Regression for the "Created by MinUI Team 2024" failure mode.
-        assert_eq!(parse_minui_version("Created by MinUI Team 2024\n"), None);
+        assert_eq!(parse_minui_version_with_prefix("Created by MinUI Team 2024\n").map(|(_, v)| v), None);
         assert_eq!(
-            parse_minui_version("Released 2024-12-25 by the team\n"),
+            parse_minui_version_with_prefix("Released 2024-12-25 by the team\n").map(|(_, v)| v),
             None
         );
     }
@@ -370,11 +357,11 @@ mod tests {
     fn test_parse_minui_version_accepts_strict_raw_version() {
         // The raw fallback should still accept a clean version-only line.
         assert_eq!(
-            parse_minui_version("2024.12.25\n"),
+            parse_minui_version_with_prefix("2024.12.25\n").map(|(_, v)| v),
             Some("2024.12.25".to_string())
         );
         assert_eq!(
-            parse_minui_version("v2024.12.25\n"),
+            parse_minui_version_with_prefix("v2024.12.25\n").map(|(_, v)| v),
             Some("2024.12.25".to_string())
         );
     }

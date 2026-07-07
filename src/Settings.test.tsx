@@ -78,7 +78,7 @@ describe("Settings", () => {
       label: "my-user/my-repo",
       owner: "my-user",
       repo: "my-repo",
-      versionPrefix: "my-repo",
+      minuiTxtPrefix: "my-repo",
     });
   });
 
@@ -102,7 +102,7 @@ describe("Settings", () => {
       label: "custom/thing",
       owner: "custom",
       repo: "thing",
-      versionPrefix: "thing",
+      minuiTxtPrefix: "thing",
     };
     render(<Settings selectedFork={customFork} onSelectFork={vi.fn()} />);
 

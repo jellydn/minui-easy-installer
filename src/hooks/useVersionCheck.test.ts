@@ -104,6 +104,7 @@ describe("useVersionCheck race-condition guard", () => {
           baseArchiveUrl: "",
           extrasArchiveUrl: null,
           checksums: null,
+          fork: FORK_PRESETS.official,
         },
       });
       version2.resolve({
@@ -139,6 +140,7 @@ describe("useVersionCheck race-condition guard", () => {
           baseArchiveUrl: "",
           extrasArchiveUrl: null,
           checksums: null,
+          fork: FORK_PRESETS.official,
         },
       });
       await second;
@@ -196,6 +198,7 @@ describe("useVersionCheck race-condition guard", () => {
           baseArchiveUrl: "",
           extrasArchiveUrl: null,
           checksums: null,
+          fork: FORK_PRESETS.official,
         },
       });
       // Let the microtask queue drain.

@@ -46,7 +46,7 @@ export function useVersionCheck(fork: ForkConfig) {
         const result = await checkMinuiVersion({
           sdMount,
           latestVersion,
-          expectedPrefix: fork.versionPrefix,
+          expectedPrefix: fork.minuiTxtPrefix,
         });
         if (requestId !== requestIdRef.current) return;
 

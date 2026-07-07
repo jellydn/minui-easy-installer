@@ -37,7 +37,7 @@ describe("buildCustomFork", () => {
       label: "my-user/my-repo",
       owner: "my-user",
       repo: "my-repo",
-      versionPrefix: "my-repo",
+      minuiTxtPrefix: "my-repo",
     });
   });
 
@@ -86,7 +86,7 @@ describe("rehydrateFork", () => {
       label: "custom/thing",
       owner: "custom",
       repo: "thing",
-      versionPrefix: "thing",
+      minuiTxtPrefix: "thing",
     });
   });
 
