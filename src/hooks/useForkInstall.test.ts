@@ -28,14 +28,7 @@ vi.mock("../types/package", () => ({
 
 /** Render the hook inside a ForkProvider so useFork() resolves. */
 function renderUseForkInstall(opts: Parameters<typeof useForkInstall>[0]) {
-  return renderHook(
-    () => {
-      const result = useForkInstall(opts);
-      // Force a stable snapshot of relevant fields for assertions.
-      return result;
-    },
-    { wrapper: ForkProvider },
-  );
+  return renderHook(() => useForkInstall(opts), { wrapper: ForkProvider });
 }
 
 describe("useForkInstall", () => {
@@ -46,7 +39,6 @@ describe("useForkInstall", () => {
   it("installMinUI surfaces an error when installMinui returns failure", async () => {
     const { fetchMinUIRelease } = await import("../types/release");
     const { installMinui } = await import("../types/install");
-    const { validateInstallation } = await import("../types/validate");
 
     (fetchMinUIRelease as Mock).mockResolvedValue({
       success: true,
@@ -65,10 +57,6 @@ describe("useForkInstall", () => {
       extras_files_copied: 0,
       extras_warning: null,
       rom_dirs_created: 0,
-    });
-    (validateInstallation as Mock).mockResolvedValue({
-      success: true,
-      data: { success: true, checks: [], passed_count: 0, failed_count: 0, free_space_bytes: null },
     });
 
     const { result } = renderUseForkInstall({
@@ -143,7 +131,6 @@ describe("useForkInstall", () => {
       onAfterUpdate: () => {},
     });
 
-    // No install was run, but dismiss should still leave it idle.
     act(() => {
       result.current.dismissInstall();
     });

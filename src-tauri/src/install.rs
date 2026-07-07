@@ -78,18 +78,16 @@ pub fn create_rom_dirs(sd_mount: &str) -> Result<u32, String> {
 const PRESERVED_FOLDERS: &[&str] = &["roms", "saves", "save", "bios", "cheats"];
 
 fn is_preserved_path(path: &Path, sd_root: &Path) -> bool {
-    if let Ok(relative) = path.strip_prefix(sd_root) {
-        let first_component = relative.iter().next();
-        if let Some(name) = first_component {
-            let name_str = name.to_string_lossy();
-            for preserved in PRESERVED_FOLDERS {
-                if name_str.eq_ignore_ascii_case(preserved) {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+    let Ok(relative) = path.strip_prefix(sd_root) else {
+        return false;
+    };
+    let Some(name) = relative.iter().next() else {
+        return false;
+    };
+    let name_str = name.to_string_lossy();
+    PRESERVED_FOLDERS
+        .iter()
+        .any(|preserved| name_str.eq_ignore_ascii_case(preserved))
 }
 
 pub fn copy_base_files(extracted_base_path: &str, sd_mount: &str) -> Result<u32, String> {
@@ -305,9 +303,8 @@ pub async fn install_minui_with_cancel(
         // Surface the failure as a non-fatal warning so the UI can
         // show it. The install itself succeeded; only the metadata
         // file is missing, so we don't downgrade success.
-        let message = format!("Failed to write version metadata: {}", e);
-        eprintln!("Warning: {}", message);
-        extras_warning = Some(message);
+        eprintln!("Warning: failed to write version metadata: {}", e);
+        extras_warning = Some(format!("Failed to write version metadata: {}", e));
     }
 
     // session drops here — temp dirs cleaned up after all operations complete

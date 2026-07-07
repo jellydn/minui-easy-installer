@@ -135,8 +135,7 @@ export function useForkInstall(
     try {
       unlisten = await attachProgressListener(setInstall);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setInstall((s) => ({ ...s, error: message, phase: "error" }));
+      setInstall((s) => ({ ...s, error: errorMessage(err), phase: "error" }));
       return;
     }
 
@@ -201,8 +200,7 @@ export function useForkInstall(
         validationResult: valResult.success ? valResult.data : null,
       }));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setInstall((s) => ({ ...s, error: message, phase: "error" }));
+      setInstall((s) => ({ ...s, error: errorMessage(err), phase: "error" }));
     } finally {
       unlisten?.();
     }
@@ -323,7 +321,7 @@ export function useForkInstall(
       finish(null, "All updates completed!");
       await onAfterUpdate(selectedDriveMount);
     } catch (err) {
-      finish(err instanceof Error ? err.message : "Unknown error", "");
+      finish(errorMessage(err), "");
     }
   }, [
     selectedDevice,
@@ -378,4 +376,8 @@ function stepToInstallPhase(
     default:
       return current;
   }
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Unknown error";
 }
