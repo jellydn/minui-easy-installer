@@ -27,7 +27,7 @@ function Settings({ selectedFork, onSelectFork }: SettingsProps) {
       setCustomError(null);
     } else {
       setCustomError(
-        'Invalid format. Use "owner/repo" (e.g. "myfork/MinUI-Mod").',
+        "Invalid format. Use \"owner/repo\" (e.g. \"myfork/MinUI-Mod\").",
       );
     }
   };
@@ -76,6 +76,7 @@ function Settings({ selectedFork, onSelectFork }: SettingsProps) {
             <input
               type="text"
               placeholder="owner/repo"
+              aria-label="Custom fork owner and repository"
               value={customInput}
               onChange={(e) => {
                 setCustomInput(e.target.value);
