@@ -1,11 +1,19 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use tempfile::TempDir;
+use tokio_util::sync::CancellationToken;
 
 use crate::download;
 use crate::extract;
 use crate::install::{InstallProgressEvent, ProgressCallback};
+
+/// Byte-level download progress callback.
+///
+/// Receives `(bytes_so_far, total_bytes)` after each streamed chunk.
+/// `total_bytes` is `None` when the server didn't send a Content-Length.
+pub type DownloadProgressCallback = Arc<dyn Fn(u64, Option<u64>) + Send + Sync>;
 
 /// Owns temp directories for the duration of an install pipeline.
 ///
@@ -58,18 +66,36 @@ pub struct Pipeline;
 
 impl Pipeline {
     /// Run download → extract → copy. Returns the number of files copied.
+    ///
+    /// `download_progress` is invoked with `(bytes_so_far, total_bytes)`
+    /// after each streamed chunk. Pass an `Arc::new(|_, _| {})` no-op if
+    /// you don't need byte-level progress.
+    ///
+    /// `cancel` is checked at the start of each phase. If cancelled,
+    /// the function returns `Err("Install cancelled".to_string())`.
     pub async fn run<Cp>(
         label: &str,
         url: &str,
         checksum: Option<&str>,
         copy: Cp,
         progress: ProgressCallback,
+        download_progress: DownloadProgressCallback,
+        cancel: CancellationToken,
         session: &mut InstallSession,
     ) -> Result<u32, String>
     where
         Cp: FnOnce(PathBuf) -> Result<u32, String>,
     {
-        let extracted = Self::run_to_extracted(label, url, checksum, progress.clone(), session).await?;
+        let extracted = Self::run_to_extracted(
+            label,
+            url,
+            checksum,
+            progress.clone(),
+            download_progress,
+            cancel,
+            session,
+        )
+        .await?;
         progress(InstallProgressEvent {
             step: "copy".to_string(),
             details: format!("Copying {} files", label),
@@ -84,28 +110,39 @@ impl Pipeline {
         url: &str,
         checksum: Option<&str>,
         progress: ProgressCallback,
+        download_progress: DownloadProgressCallback,
+        cancel: CancellationToken,
         session: &mut InstallSession,
     ) -> Result<PathBuf, String> {
+        if cancel.is_cancelled() {
+            return Err("Install cancelled".to_string());
+        }
         progress(InstallProgressEvent {
             step: "download".to_string(),
             details: format!("Downloading {} archive", label),
         });
-        let archive_path: PathBuf = download::download_archive_into(
+        let archive_path: PathBuf = download::download_archive_streaming(
             session.slot_archive(label),
             url,
             checksum,
+            move |bytes, total| download_progress(bytes, total),
+            &cancel,
         )
         .await?;
 
+        if cancel.is_cancelled() {
+            return Err("Install cancelled".to_string());
+        }
         progress(InstallProgressEvent {
             step: "extract".to_string(),
             details: format!("Extracting {} archive", label),
         });
-        extract::extract_archive_into(
+        let extracted = extract::extract_archive_into(
             session.slot_extracted(label),
             &archive_path,
             None,
-        )
+        )?;
+        Ok(extracted)
     }
 }
 
