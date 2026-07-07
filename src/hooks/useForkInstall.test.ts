@@ -72,7 +72,9 @@ describe("useForkInstall", () => {
     });
 
     expect(result.current.install.phase).toBe("error");
-    expect(result.current.install.error).toBe("SD card full");
+    expect(result.current.install.error).toBe(
+      "MinUI (Official) install failed: SD card full",
+    );
   });
 
   it("installMinUI surfaces the version-metadata warning via extrasWarning", async () => {

@@ -50,20 +50,14 @@ pub fn detect_installed_version(
     }
 
     // .minui/version is the legacy fallback. It carries no fork prefix,
-    // so we cannot verify the fork directly. The rules:
-    //   - minui.txt present (any case) — already returned above, never
-    //     reach this branch.
-    //   - minui.txt missing + canonical "MinUI" expected — accept
-    //     .minui/version (legacy official installs only ever wrote this
-    //     file, and they always wrote it for the canonical MinUI).
-    //   - minui.txt missing + non-canonical fork expected — skip. The
-    //     file cannot be proven to belong to a fork we don't recognise.
-    //   - minui.txt missing + no prefix expected — accept as before.
-    let minui_txt_present = minui_txt.exists();
-    if matches!(
-        (minui_txt_present, expected_prefix),
-        (false, None) | (false, Some("MinUI"))
-    ) {
+    // so we cannot verify the fork directly. Accept it only when no
+    // specific fork is expected, or when the canonical "MinUI" is
+    // expected — legacy official installs only ever wrote this file
+    // for the canonical MinUI. Custom forks (e.g. MinUI-Zero) always
+    // write minui.txt via the installer, so non-canonical forks skip
+    // this file because we cannot prove it belongs to a fork we
+    // don't recognise.
+    if expected_prefix.is_none() || expected_prefix == Some("MinUI") {
         if let Some(installed) = read_dot_minui_version(sd_root) {
             return Some(installed);
         }

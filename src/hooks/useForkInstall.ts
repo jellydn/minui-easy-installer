@@ -1,15 +1,16 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFork } from "../contexts/ForkContext";
-import { getDeviceProfile } from "../types/device";
+import { getDeviceProfile, type DeviceProfile } from "../types/device";
 import type { ForkConfig } from "../types/fork";
 import type {
   InstallPhase,
   InstallProgressEvent,
+  InstallResult,
 } from "../types/install";
 import { installMinui } from "../types/install";
 import { fetchPackageRegistry, installPackage } from "../types/package";
-import { fetchMinUIRelease } from "../types/release";
+import { fetchMinUIRelease, type MinUIRelease } from "../types/release";
 import type { VersionCheckResult } from "../types/version";
 import { validateInstallation } from "../types/validate";
 import type { ValidationResult } from "../types/validate";
@@ -106,6 +107,47 @@ export function useForkInstall(
     [],
   );
 
+  /**
+   * Fetch the release for the current fork and run the install IPC.
+   * Returns either the release + install result or a pre-formatted
+   * error message. Shared by `installMinUI` and the version-update
+   * phase of `updateAll` so the install contract is single-sourced.
+   */
+  async function fetchAndInstallRelease(
+    sdMount: string,
+    profile: DeviceProfile,
+  ): Promise<
+    | { kind: "ok"; release: MinUIRelease; data: InstallResult }
+    | { kind: "err"; message: string }
+  > {
+    const releaseResult = await fetchMinUIRelease(forkRef.current);
+    if (!releaseResult.success) {
+      return {
+        kind: "err",
+        message: `Failed to fetch ${forkRef.current.label} release: ${releaseResult.error.message}`,
+      };
+    }
+    const release = releaseResult.data;
+    const result = await installMinui({
+      baseUrl: release.baseArchiveUrl,
+      extrasUrl: release.extrasArchiveUrl || undefined,
+      baseChecksum: release.checksums?.base || undefined,
+      extrasChecksum: release.checksums?.extras || undefined,
+      sdMount,
+      platform: profile.platform,
+      extrasPlatform: profile.extrasPlatform,
+      version: release.version,
+      forkName: forkRef.current.minuiTxtPrefix,
+    });
+    if (!result.success) {
+      return {
+        kind: "err",
+        message: `${forkRef.current.label} install failed: ${result.error.message}`,
+      };
+    }
+    return { kind: "ok", release, data: result.data };
+  }
+
   const installMinUI = useCallback(async () => {
     if (!selectedDevice || !selectedDriveMount) return;
 
@@ -140,17 +182,13 @@ export function useForkInstall(
     }
 
     try {
-      const releaseResult = await fetchMinUIRelease(forkRef.current);
-      if (!releaseResult.success) {
-        setInstall((s) => ({
-          ...s,
-          error: `Failed to fetch release: ${releaseResult.error.message}`,
-          phase: "error",
-        }));
+      const fetched = await fetchAndInstallRelease(selectedDriveMount, profile);
+      if (fetched.kind === "err") {
+        setInstall((s) => ({ ...s, error: fetched.message, phase: "error" }));
         return;
       }
 
-      const release = releaseResult.data;
+      const { release, data } = fetched;
       const fileName = release.baseArchiveUrl.split("/").pop();
       setInstall((s) => ({
         ...s,
@@ -163,40 +201,19 @@ export function useForkInstall(
         ],
       }));
 
-      const result = await installMinui({
-        baseUrl: release.baseArchiveUrl,
-        extrasUrl: release.extrasArchiveUrl || undefined,
-        baseChecksum: release.checksums?.base || undefined,
-        extrasChecksum: release.checksums?.extras || undefined,
-        sdMount: selectedDriveMount,
-        platform: profile.platform,
-        extrasPlatform: profile.extrasPlatform,
-        version: release.version,
-        forkName: forkRef.current.minuiTxtPrefix,
-      });
-
-      if (!result.success) {
-        setInstall((s) => ({
-          ...s,
-          error: result.error.message,
-          phase: "error",
-        }));
-        return;
-      }
-
       const valResult = await validateInstallation({
         sdMount: selectedDriveMount,
-        hasExtras: result.data.extras_files_copied > 0,
+        hasExtras: data.extras_files_copied > 0,
         extrasDir: profile.installPathRules.extrasDir,
       });
       setInstall((s) => ({
         ...s,
         phase: "complete",
         message: "Installation completed successfully!",
-        baseFilesCopied: result.data.base_files_copied,
-        extrasFilesCopied: result.data.extras_files_copied,
-        romDirsCreated: result.data.rom_dirs_created,
-        extrasWarning: result.data.extras_warning,
+        baseFilesCopied: data.base_files_copied,
+        extrasFilesCopied: data.extras_files_copied,
+        romDirsCreated: data.rom_dirs_created,
+        extrasWarning: data.extras_warning,
         validationResult: valResult.success ? valResult.data : null,
       }));
     } catch (err) {
@@ -240,32 +257,9 @@ export function useForkInstall(
       if (versionCheck?.update_available) {
         setUpdateAllMessage(`Updating ${forkRef.current.label}...`);
 
-        const releaseResult = await fetchMinUIRelease(forkRef.current);
-        if (!releaseResult.success) {
-          finish(
-            `Failed to fetch ${forkRef.current.label} release: ${releaseResult.error.message}`,
-            "",
-          );
-          return;
-        }
-
-        const release = releaseResult.data;
-        const result = await installMinui({
-          baseUrl: release.baseArchiveUrl,
-          extrasUrl: release.extrasArchiveUrl || undefined,
-          baseChecksum: release.checksums?.base || undefined,
-          extrasChecksum: release.checksums?.extras || undefined,
-          sdMount: selectedDriveMount,
-          platform: profile.platform,
-          extrasPlatform: profile.extrasPlatform,
-          version: release.version,
-          forkName: forkRef.current.minuiTxtPrefix,
-        });
-        if (!result.success) {
-          finish(
-            `${forkRef.current.label} update failed: ${result.error.message}`,
-            "",
-          );
+        const fetched = await fetchAndInstallRelease(selectedDriveMount, profile);
+        if (fetched.kind === "err") {
+          finish(fetched.message, "");
           return;
         }
       }
