@@ -302,7 +302,12 @@ pub async fn install_minui_with_cancel(
         &minui_txt_path,
         format!("{} {}\n", fork_label, options.version),
     ) {
-        eprintln!("Warning: Failed to write version metadata: {}", e);
+        // Surface the failure as a non-fatal warning so the UI can
+        // show it. The install itself succeeded; only the metadata
+        // file is missing, so we don't downgrade success.
+        let message = format!("Failed to write version metadata: {}", e);
+        eprintln!("Warning: {}", message);
+        extras_warning = Some(message);
     }
 
     // session drops here — temp dirs cleaned up after all operations complete

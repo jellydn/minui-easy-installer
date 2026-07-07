@@ -127,7 +127,18 @@ export function useForkInstall(
       error: null,
     }));
 
-    const unlisten = await attachProgressListener(setInstall);
+    // Attach the progress listener before the try so the unlisten
+    // handle is always assigned when the finally runs, even if
+    // listen() itself rejects. Otherwise a failing listen would leave
+    // a dangling Tauri subscription.
+    let unlisten: UnlistenFn | undefined;
+    try {
+      unlisten = await attachProgressListener(setInstall);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setInstall((s) => ({ ...s, error: message, phase: "error" }));
+      return;
+    }
 
     try {
       const releaseResult = await fetchMinUIRelease(forkRef.current);
@@ -193,7 +204,7 @@ export function useForkInstall(
       const message = err instanceof Error ? err.message : "Unknown error";
       setInstall((s) => ({ ...s, error: message, phase: "error" }));
     } finally {
-      unlisten();
+      unlisten?.();
     }
   }, [selectedDevice, selectedDriveMount]);
 
