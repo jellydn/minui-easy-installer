@@ -25,56 +25,59 @@ export function useVersionCheck(fork: ForkConfig) {
   });
   const requestIdRef = useRef(0);
 
-  const check = useCallback(async (sdMount: string) => {
-    const requestId = ++requestIdRef.current;
-    setState((s) => ({
-      ...s,
-      isChecking: true,
-      versionCheck: null,
-      packageUpdates: [],
-    }));
+  const check = useCallback(
+    async (sdMount: string) => {
+      const requestId = ++requestIdRef.current;
+      setState((s) => ({
+        ...s,
+        isChecking: true,
+        versionCheck: null,
+        packageUpdates: [],
+      }));
 
-    try {
-      const releaseResult = await fetchMinUIRelease(fork);
-      if (requestId !== requestIdRef.current) return;
-
-      const latestVersion = releaseResult.success
-        ? releaseResult.data.version
-        : undefined;
-
-      const result = await checkMinuiVersion({
-        sdMount,
-        latestVersion,
-        expectedPrefix: fork.versionPrefix,
-      });
-      if (requestId !== requestIdRef.current) return;
-
-      if (result.success) {
-        setState((s) => ({ ...s, versionCheck: result.data }));
-      }
-
-      const registryResult = await fetchPackageRegistry();
-      if (requestId !== requestIdRef.current) return;
-
-      if (registryResult.success) {
-        const registryPackages: [string, string][] =
-          registryResult.data.packages.map((p) => [p.name, p.version]);
-        const updates = await checkPackageUpdates(sdMount, registryPackages);
+      try {
+        const releaseResult = await fetchMinUIRelease(fork);
         if (requestId !== requestIdRef.current) return;
 
-        setState((s) => ({
-          ...s,
-          packageUpdates: updates.filter((u) => u.update_available),
-        }));
+        const latestVersion = releaseResult.success
+          ? releaseResult.data.version
+          : undefined;
+
+        const result = await checkMinuiVersion({
+          sdMount,
+          latestVersion,
+          expectedPrefix: fork.versionPrefix,
+        });
+        if (requestId !== requestIdRef.current) return;
+
+        if (result.success) {
+          setState((s) => ({ ...s, versionCheck: result.data }));
+        }
+
+        const registryResult = await fetchPackageRegistry();
+        if (requestId !== requestIdRef.current) return;
+
+        if (registryResult.success) {
+          const registryPackages: [string, string][] =
+            registryResult.data.packages.map((p) => [p.name, p.version]);
+          const updates = await checkPackageUpdates(sdMount, registryPackages);
+          if (requestId !== requestIdRef.current) return;
+
+          setState((s) => ({
+            ...s,
+            packageUpdates: updates.filter((u) => u.update_available),
+          }));
+        }
+      } catch {
+        // Version check failure is non-fatal
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setState((s) => ({ ...s, isChecking: false }));
+        }
       }
-    } catch {
-      // Version check failure is non-fatal
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setState((s) => ({ ...s, isChecking: false }));
-      }
-    }
-  }, [fork]);
+    },
+    [fork],
+  );
 
   const reset = useCallback(() => {
     requestIdRef.current++;

@@ -92,10 +92,7 @@ fn is_preserved_path(path: &Path, sd_root: &Path) -> bool {
     false
 }
 
-pub fn copy_base_files(
-    extracted_base_path: &str,
-    sd_mount: &str,
-) -> Result<u32, String> {
+pub fn copy_base_files(extracted_base_path: &str, sd_mount: &str) -> Result<u32, String> {
     let base_dir = Path::new(extracted_base_path);
     let sd_root = Path::new(sd_mount);
     fs_utils::copy_dir_recursive(
@@ -155,8 +152,16 @@ pub fn copy_extras_files(
 
     let mut files_copied = 0u32;
     files_copied += copy_subtree(extras_src, sd_root, "Bios")?;
-    files_copied += copy_subtree(&extras_src.join("Emus"), &sd_root.join("Emus"), extras_platform)?;
-    files_copied += copy_subtree(&extras_src.join("Tools"), &sd_root.join("Tools"), extras_platform)?;
+    files_copied += copy_subtree(
+        &extras_src.join("Emus"),
+        &sd_root.join("Emus"),
+        extras_platform,
+    )?;
+    files_copied += copy_subtree(
+        &extras_src.join("Tools"),
+        &sd_root.join("Tools"),
+        extras_platform,
+    )?;
 
     Ok(files_copied)
 }
@@ -195,7 +200,13 @@ async fn try_install_extras(
         "extras",
         extras_url,
         options.extras_checksum.as_deref(),
-        |p| copy_extras_files(p.to_str().unwrap(), &options.sd_mount, &options.extras_platform),
+        |p| {
+            copy_extras_files(
+                p.to_str().unwrap(),
+                &options.sd_mount,
+                &options.extras_platform,
+            )
+        },
         progress,
         download_progress,
         cancel,
@@ -211,7 +222,13 @@ pub async fn install_minui(
     options: &InstallOptions,
     progress: ProgressCallback,
 ) -> Result<InstallResult, String> {
-    install_minui_with_cancel(options, progress, Arc::new(|_, _| {}), CancellationToken::new()).await
+    install_minui_with_cancel(
+        options,
+        progress,
+        Arc::new(|_, _| {}),
+        CancellationToken::new(),
+    )
+    .await
 }
 
 /// Full installation flow with cancellation support.
@@ -275,10 +292,16 @@ pub async fn install_minui_with_cancel(
     let fork_label = options.fork_name.as_deref().unwrap_or("MinUI");
     progress(InstallProgressEvent {
         step: "finish".to_string(),
-        details: format!("Writing version metadata ({} {})", fork_label, options.version),
+        details: format!(
+            "Writing version metadata ({} {})",
+            fork_label, options.version
+        ),
     });
     let minui_txt_path = Path::new(&options.sd_mount).join("minui.txt");
-    if let Err(e) = fs::write(&minui_txt_path, format!("{} {}\n", fork_label, options.version)) {
+    if let Err(e) = fs::write(
+        &minui_txt_path,
+        format!("{} {}\n", fork_label, options.version),
+    ) {
         eprintln!("Warning: Failed to write version metadata: {}", e);
     }
 
@@ -387,11 +410,8 @@ mod tests {
         fs::write(platform_dir.join("boot.sh"), "boot").unwrap();
 
         // copy_base_files now copies ALL contents of extracted to sd_root
-        let copied = copy_base_files(
-            extracted.to_str().unwrap(),
-            sd_root.to_str().unwrap(),
-        )
-        .unwrap();
+        let copied =
+            copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap()).unwrap();
 
         assert_eq!(copied, 2);
         assert!(sd_root.join("miyoo-mini-plus/minui.pak").exists());
@@ -511,11 +531,31 @@ mod tests {
         fs::create_dir_all(extras_src.join("Bios")).unwrap();
 
         fs::write(extras_src.join("Emus/rg35xxplus/mgba.pak/launch.sh"), "emu").unwrap();
-        fs::write(extras_src.join("Emus/rg35xxplus/gambatte.pak/launch.sh"), "emu").unwrap();
-        fs::write(extras_src.join("Tools/rg35xxplus/wifi.pak/launch.sh"), "tool").unwrap();
-        fs::write(extras_src.join("Tools/rg35xxplus/ssh.pak/launch.sh"), "tool").unwrap();
-        fs::write(extras_src.join("Tools/trimuismart/dc.pak/launch.sh"), "tool").unwrap();
-        fs::write(extras_src.join("Tools/trimuismart/wifi.pak/launch.sh"), "tool").unwrap();
+        fs::write(
+            extras_src.join("Emus/rg35xxplus/gambatte.pak/launch.sh"),
+            "emu",
+        )
+        .unwrap();
+        fs::write(
+            extras_src.join("Tools/rg35xxplus/wifi.pak/launch.sh"),
+            "tool",
+        )
+        .unwrap();
+        fs::write(
+            extras_src.join("Tools/rg35xxplus/ssh.pak/launch.sh"),
+            "tool",
+        )
+        .unwrap();
+        fs::write(
+            extras_src.join("Tools/trimuismart/dc.pak/launch.sh"),
+            "tool",
+        )
+        .unwrap();
+        fs::write(
+            extras_src.join("Tools/trimuismart/wifi.pak/launch.sh"),
+            "tool",
+        )
+        .unwrap();
         fs::write(extras_src.join("Bios/gba_bios.bin"), "bios").unwrap();
 
         let copied = copy_extras_files(
@@ -530,7 +570,9 @@ mod tests {
 
         // Verify rg35xxplus emus and tools were copied
         assert!(sd_root.join("Emus/rg35xxplus/mgba.pak/launch.sh").exists());
-        assert!(sd_root.join("Emus/rg35xxplus/gambatte.pak/launch.sh").exists());
+        assert!(sd_root
+            .join("Emus/rg35xxplus/gambatte.pak/launch.sh")
+            .exists());
         assert!(sd_root.join("Tools/rg35xxplus/wifi.pak/launch.sh").exists());
         assert!(sd_root.join("Tools/rg35xxplus/ssh.pak/launch.sh").exists());
 

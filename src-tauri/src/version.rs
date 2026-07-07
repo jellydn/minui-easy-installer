@@ -49,16 +49,21 @@ pub fn detect_installed_version(
         }
     }
 
-    // Check for .minui/version file (alternative location)
-    let dot_minui_version = sd_root.join(".minui").join("version");
-    if dot_minui_version.exists() {
-        if let Ok(content) = fs::read_to_string(&dot_minui_version) {
-            let version = content.trim().to_string();
-            if !version.is_empty() {
-                return Some(InstalledVersion {
-                    version,
-                    source: ".minui/version".to_string(),
-                });
+    // Check for .minui/version file (alternative location).
+    // When a fork prefix is expected, skip this path — .minui/version
+    // carries no fork metadata, so we cannot verify it belongs to the
+    // selected fork.
+    if expected_prefix.is_none() {
+        let dot_minui_version = sd_root.join(".minui").join("version");
+        if dot_minui_version.exists() {
+            if let Ok(content) = fs::read_to_string(&dot_minui_version) {
+                let version = content.trim().to_string();
+                if !version.is_empty() {
+                    return Some(InstalledVersion {
+                        version,
+                        source: ".minui/version".to_string(),
+                    });
+                }
             }
         }
     }
@@ -69,6 +74,7 @@ pub fn detect_installed_version(
 /// Returns true if `s` looks like a release version string.
 ///
 /// Accepts:
+/// - A single numeric run of 6+ digits: "20250525" (date-only, e.g. MinUI-Zero)
 /// - 2 or 3 dot-separated numeric segments: "2024.12.25", "0.12.0", "1.2.3", "2024.12", "1.0"
 /// - Optional leading "v" or "V" prefix
 ///
@@ -83,6 +89,12 @@ fn looks_like_version(s: &str) -> bool {
     if s.is_empty() {
         return false;
     }
+
+    // Single numeric run of 6+ digits: date-only format (e.g. MinUI-Zero "20250525")
+    if s.len() >= 6 && s.chars().all(|c| c.is_ascii_digit()) {
+        return true;
+    }
+
     let segments: Vec<&str> = s.split('.').collect();
     if segments.len() < 2 || segments.len() > 3 {
         return false;
@@ -115,7 +127,7 @@ fn parse_minui_version_with_prefix(content: &str) -> Option<(Option<String>, Str
     if let Some((prefix_raw, candidate)) = first_line.rsplit_once(' ') {
         let version = candidate.trim().trim_start_matches('v').trim();
         if looks_like_version(version) {
-            let prefix = prefix_raw.trim().trim_end_matches('v').trim().to_string();
+            let prefix = prefix_raw.trim().to_string();
             return Some((Some(prefix), version.to_string()));
         }
     }
@@ -137,6 +149,7 @@ fn parse_minui_version_with_prefix(content: &str) -> Option<(Option<String>, Str
 }
 
 /// Parse version from minui.txt content (backwards-compat wrapper).
+#[allow(dead_code)]
 fn parse_minui_version(content: &str) -> Option<String> {
     parse_minui_version_with_prefix(content).map(|(_, v)| v)
 }
@@ -173,8 +186,7 @@ pub fn compare_versions(installed: &str, latest: &str) -> bool {
     let latest = latest.trim().trim_start_matches('v').trim();
 
     // Try semver for both
-    if let (Some(inst_ver), Some(lat_ver)) =
-        (try_parse_semver(installed), try_parse_semver(latest))
+    if let (Some(inst_ver), Some(lat_ver)) = (try_parse_semver(installed), try_parse_semver(latest))
     {
         return lat_ver > inst_ver;
     }
@@ -197,6 +209,7 @@ pub fn is_update_available(installed: &str, latest: &str) -> bool {
 }
 
 /// Check for version updates by comparing installed version with latest release.
+#[allow(dead_code)]
 pub fn check_for_updates(sd_mount: &str, latest_version: Option<&str>) -> VersionCheckResult {
     // Backwards compat: no prefix filter by default.
     check_for_updates_with_prefix(sd_mount, latest_version, None)
@@ -241,6 +254,18 @@ mod tests {
     fn test_parse_minui_version_fork_prefix_minui_zero() {
         let content = "MinUI-Zero 20250525\n";
         assert_eq!(parse_minui_version(content), Some("20250525".to_string()));
+    }
+
+    #[test]
+    fn test_parse_minui_version_preserves_trailing_v_in_prefix() {
+        // A fork name ending in 'v' (e.g. "MyRev") must not have its
+        // trailing 'v' stripped — that was a bug in trim_end_matches('v').
+        // The trailing 'v' here is on the *prefix* side of rsplit_once(' ').
+        // The 'v' that gets stripped is on the *version* side ("v1.2.3" → "1.2.3").
+        let content = "MyRev 1.2.3\n";
+        let (prefix, version) = parse_minui_version_with_prefix(content).unwrap();
+        assert_eq!(prefix, Some("MyRev".to_string()));
+        assert_eq!(version, "1.2.3");
     }
 
     #[test]
@@ -300,6 +325,18 @@ mod tests {
     }
 
     #[test]
+    fn test_looks_like_version_accepts_date_only() {
+        // MinUI-Zero uses date-only versions like "20250525"
+        assert!(looks_like_version("20250525"));
+    }
+
+    #[test]
+    fn test_looks_like_version_rejects_short_numeric() {
+        // 5 digits is not a date (YYYYMMDD needs 8) and not a semver segment
+        assert!(!looks_like_version("12345"));
+    }
+
+    #[test]
     fn test_looks_like_version_rejects_free_form_text() {
         assert!(!looks_like_version("Created by MinUI Team 2024"));
         assert!(!looks_like_version("MinUI"));
@@ -312,10 +349,7 @@ mod tests {
     #[test]
     fn test_parse_minui_version_rejects_free_form_text() {
         // Regression for the "Created by MinUI Team 2024" failure mode.
-        assert_eq!(
-            parse_minui_version("Created by MinUI Team 2024\n"),
-            None
-        );
+        assert_eq!(parse_minui_version("Created by MinUI Team 2024\n"), None);
         assert_eq!(
             parse_minui_version("Released 2024-12-25 by the team\n"),
             None
@@ -425,6 +459,41 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_installed_version_skips_dot_minui_when_prefix_expected() {
+        // .minui/version has no fork prefix, so when a prefix is expected
+        // the install should NOT be attributed to the selected fork.
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        fs::create_dir_all(sd_root.join(".minui")).unwrap();
+        let mut f = fs::File::create(sd_root.join(".minui").join("version")).unwrap();
+        f.write_all(b"2024.12.25").unwrap();
+        drop(f);
+
+        let result = detect_installed_version(sd_root.to_str().unwrap(), Some("MinUI-Zero"));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_installed_version_accepts_dot_minui_when_no_prefix() {
+        // Backwards-compat: without an expected prefix, .minui/version
+        // is still used as the fallback detection path.
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        fs::create_dir_all(sd_root.join(".minui")).unwrap();
+        let mut f = fs::File::create(sd_root.join(".minui").join("version")).unwrap();
+        f.write_all(b"2024.12.25").unwrap();
+        drop(f);
+
+        let result = detect_installed_version(sd_root.to_str().unwrap(), None);
+        assert!(result.is_some());
+        let version = result.unwrap();
+        assert_eq!(version.version, "2024.12.25");
+        assert_eq!(version.source, ".minui/version");
+    }
+
+    #[test]
     fn test_detect_installed_version_no_prefix_filter() {
         let temp = tempfile::tempdir().unwrap();
         let sd_root = temp.path();
@@ -436,7 +505,6 @@ mod tests {
         // No expected_prefix → accepts any fork's minui.txt
         let result = detect_installed_version(sd_root.to_str().unwrap(), None);
         assert!(result.is_some());
-    }
     }
 
     #[test]

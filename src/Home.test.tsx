@@ -1,7 +1,15 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
 import Home from "./Home";
 import type { RemovableDrive } from "./types/drive";
 
@@ -68,7 +76,9 @@ describe("Home", () => {
   it("renders the home screen title and device selector", () => {
     render(<Home {...defaultProps} />);
 
-    expect(screen.getByText("MinUI (Official) Easy Installer")).toBeInTheDocument();
+    expect(
+      screen.getByText("MinUI (Official) Easy Installer"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Select Your Device")).toBeInTheDocument();
   });
 

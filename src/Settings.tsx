@@ -1,9 +1,6 @@
 import { useState } from "react";
 import type { ForkConfig } from "./types/fork";
-import {
-  buildCustomFork,
-  FORK_PRESETS,
-} from "./types/fork";
+import { buildCustomFork, FORK_PRESETS } from "./types/fork";
 
 interface SettingsProps {
   selectedFork: ForkConfig;
@@ -37,8 +34,7 @@ function Settings({ selectedFork, onSelectFork }: SettingsProps) {
 
   const currentKey =
     Object.entries(FORK_PRESETS).find(
-      ([, f]) =>
-        f.owner === selectedFork.owner && f.repo === selectedFork.repo,
+      ([, f]) => f.owner === selectedFork.owner && f.repo === selectedFork.repo,
     )?.[0] ?? null;
 
   const isCustom = currentKey === null;
@@ -53,8 +49,8 @@ function Settings({ selectedFork, onSelectFork }: SettingsProps) {
       <div className="card">
         <h2>Release Source</h2>
         <p className="settings-description">
-          Choose which fork of MinUI to install. The installer fetches
-          releases from the selected GitHub repository.
+          Choose which fork of MinUI to install. The installer fetches releases
+          from the selected GitHub repository.
         </p>
 
         <div className="fork-selector">

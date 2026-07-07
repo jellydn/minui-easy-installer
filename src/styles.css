@@ -1263,7 +1263,9 @@ select option {
   font-family: inherit;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .fork-preset-btn:hover {

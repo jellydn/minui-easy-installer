@@ -12,10 +12,7 @@ describe("Settings", () => {
 
   it("renders preset fork buttons", () => {
     render(
-      <Settings
-        selectedFork={FORK_PRESETS.official}
-        onSelectFork={vi.fn()}
-      />,
+      <Settings selectedFork={FORK_PRESETS.official} onSelectFork={vi.fn()} />,
     );
 
     expect(screen.getByText("MinUI (Official)")).toBeInTheDocument();
@@ -54,19 +51,14 @@ describe("Settings", () => {
 
   it("shows error for invalid custom input", async () => {
     render(
-      <Settings
-        selectedFork={FORK_PRESETS.official}
-        onSelectFork={vi.fn()}
-      />,
+      <Settings selectedFork={FORK_PRESETS.official} onSelectFork={vi.fn()} />,
     );
 
     const input = screen.getByPlaceholderText("owner/repo");
     await userEvent.type(input, "not valid");
     await userEvent.click(screen.getByText("Use"));
 
-    expect(
-      screen.getByText(/Invalid format/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Invalid format/)).toBeInTheDocument();
   });
 
   it("calls onSelectFork with valid custom fork", async () => {
@@ -112,9 +104,7 @@ describe("Settings", () => {
       repo: "thing",
       versionPrefix: "thing",
     };
-    render(
-      <Settings selectedFork={customFork} onSelectFork={vi.fn()} />,
-    );
+    render(<Settings selectedFork={customFork} onSelectFork={vi.fn()} />);
 
     expect(screen.getByText(/Active:/)).toBeInTheDocument();
     expect(screen.getByText("custom/thing")).toBeInTheDocument();
@@ -122,10 +112,7 @@ describe("Settings", () => {
 
   it("does not show active fork label for preset forks", () => {
     render(
-      <Settings
-        selectedFork={FORK_PRESETS.official}
-        onSelectFork={vi.fn()}
-      />,
+      <Settings selectedFork={FORK_PRESETS.official} onSelectFork={vi.fn()} />,
     );
 
     expect(screen.queryByText(/Active:/)).not.toBeInTheDocument();

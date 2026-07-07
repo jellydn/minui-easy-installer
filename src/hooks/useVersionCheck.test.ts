@@ -45,9 +45,8 @@ describe("useVersionCheck race-condition guard", () => {
   });
 
   it("drops the stale result when a newer check() supersedes it", async () => {
-    const { fetchPackageRegistry, checkPackageUpdates } = await import(
-      "../types/package"
-    );
+    const { fetchPackageRegistry, checkPackageUpdates } =
+      await import("../types/package");
     const { fetchMinUIRelease } = await import("../types/release");
     const { checkMinuiVersion } = await import("../types/version");
 
@@ -151,9 +150,8 @@ describe("useVersionCheck race-condition guard", () => {
   });
 
   it("reset() invalidates any in-flight check so the orphaned result cannot clobber state", async () => {
-    const { fetchPackageRegistry, checkPackageUpdates } = await import(
-      "../types/package"
-    );
+    const { fetchPackageRegistry, checkPackageUpdates } =
+      await import("../types/package");
     const { fetchMinUIRelease } = await import("../types/release");
     const { checkMinuiVersion } = await import("../types/version");
 
@@ -209,26 +207,27 @@ describe("useVersionCheck race-condition guard", () => {
   });
 
   it("re-issues check when fork prop changes", async () => {
-    const { fetchPackageRegistry, checkPackageUpdates } = await import(
-      "../types/package"
-    );
+    const { fetchPackageRegistry, checkPackageUpdates } =
+      await import("../types/package");
     const { fetchMinUIRelease } = await import("../types/release");
     const { checkMinuiVersion } = await import("../types/version");
 
     let callCount = 0;
-    (fetchMinUIRelease as Mock).mockImplementation(async (fork: { label: string }) => {
-      callCount += 1;
-      return {
-        success: true,
-        data: {
-          version: "1.0.0",
-          baseArchiveUrl: "",
-          extrasArchiveUrl: null,
-          checksums: null,
-          fork,
-        },
-      };
-    });
+    (fetchMinUIRelease as Mock).mockImplementation(
+      async (fork: { label: string }) => {
+        callCount += 1;
+        return {
+          success: true,
+          data: {
+            version: "1.0.0",
+            baseArchiveUrl: "",
+            extrasArchiveUrl: null,
+            checksums: null,
+            fork,
+          },
+        };
+      },
+    );
     (checkMinuiVersion as Mock).mockResolvedValue({
       success: true,
       data: {

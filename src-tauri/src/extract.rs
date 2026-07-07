@@ -137,8 +137,13 @@ pub fn extract_archive(
             {
                 use std::os::unix::fs::PermissionsExt;
                 if let Some(mode) = entry.unix_mode() {
-                    if let Err(e) = fs::set_permissions(&file_path, fs::Permissions::from_mode(mode)) {
-                        eprintln!("Warning: failed to set permissions on {}: {}", entry_path, e);
+                    if let Err(e) =
+                        fs::set_permissions(&file_path, fs::Permissions::from_mode(mode))
+                    {
+                        eprintln!(
+                            "Warning: failed to set permissions on {}: {}",
+                            entry_path, e
+                        );
                     }
                 }
             }
@@ -178,20 +183,20 @@ pub fn extract_archive_into(
     if let Some(dest) = destination {
         // Extract directly to a caller-specified directory
         let (result, _) = extract_archive(
-            archive_path
-                .to_str()
-                .ok_or("Non-UTF-8 archive path")?,
+            archive_path.to_str().ok_or("Non-UTF-8 archive path")?,
             Some(dest.to_str().ok_or("Non-UTF-8 dest path")?),
         )?;
         if !result.success {
-            return Err(result.error.unwrap_or_else(|| "Extraction failed".to_string()));
+            return Err(result
+                .error
+                .unwrap_or_else(|| "Extraction failed".to_string()));
         }
         return Ok(dest.to_path_buf());
     }
 
     // Create a TempDir and extract into it — transfer ownership to slot
-    let temp_dir = tempfile::TempDir::new()
-        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    let temp_dir =
+        tempfile::TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
     let output_path = temp_dir.path().to_path_buf();
 
     let (result, _) = extract_archive(
@@ -199,7 +204,9 @@ pub fn extract_archive_into(
         Some(output_path.to_str().ok_or("Non-UTF-8 path")?),
     )?;
     if !result.success {
-        return Err(result.error.unwrap_or_else(|| "Extraction failed".to_string()));
+        return Err(result
+            .error
+            .unwrap_or_else(|| "Extraction failed".to_string()));
     }
 
     *slot = Some(temp_dir);

@@ -29,7 +29,8 @@ function App() {
   const [selectedDrive, setSelectedDrive] = useState<RemovableDrive | null>(
     null,
   );
-  const [selectedFork, setSelectedFork] = useState<ForkConfig>(loadPersistedFork);
+  const [selectedFork, setSelectedFork] =
+    useState<ForkConfig>(loadPersistedFork);
 
   const handleSelectFork = (fork: ForkConfig) => {
     setSelectedFork(fork);

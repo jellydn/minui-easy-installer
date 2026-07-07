@@ -200,7 +200,7 @@ function Home({
     } finally {
       unlisten();
     }
-  }, [selectedDevice, selectedDrive]);
+  }, [selectedDevice, selectedDrive, fork]);
 
   const handleDismissInstall = () => {
     setInstall(INITIAL_INSTALL_STATE);
@@ -268,7 +268,9 @@ function Home({
         });
 
         if (!result.success) {
-          setUpdateAllError(`${fork.label} update failed: ${result.error.message}`);
+          setUpdateAllError(
+            `${fork.label} update failed: ${result.error.message}`,
+          );
           setIsUpdatingAll(false);
           return;
         }
@@ -324,9 +326,7 @@ function Home({
           }),
         );
 
-        const errors = installResults.filter(
-          (e): e is string => e !== null,
-        );
+        const errors = installResults.filter((e): e is string => e !== null);
 
         if (errors.length > 0) {
           setUpdateAllError(`Package update errors:\n${errors.join("\n")}`);
@@ -363,7 +363,8 @@ function Home({
     <div className="screen">
       <h1>{fork.label} Easy Installer</h1>
       <p className="subtitle">
-        The easiest way to install and manage {fork.label} on retro handheld devices.
+        The easiest way to install and manage {fork.label} on retro handheld
+        devices.
       </p>
 
       {install.phase !== "idle" ? (

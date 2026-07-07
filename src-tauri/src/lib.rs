@@ -15,7 +15,6 @@ mod validate;
 mod version;
 mod wifi;
 
-
 #[tauri::command]
 async fn get_removable_drives() -> Result<Vec<drives::RemovableDrive>, String> {
     drives::list_removable_drives()
@@ -98,6 +97,7 @@ async fn install_minui(
 /// The UI never runs concurrent installs in a single window, so we keep
 /// at most one token at a time. A new install replaces the previous
 /// (cancelling the old one — safer than letting it run orphaned).
+#[derive(Default)]
 pub struct InstallRegistry {
     pub token: Mutex<Option<CancellationToken>>,
 }
@@ -115,6 +115,7 @@ impl InstallRegistry {
 /// The actual install runs in a background task; the result is emitted
 /// as a `install-complete` or `install-error` event.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn start_install(
     app_handle: AppHandle,
     registry: tauri::State<'_, Arc<InstallRegistry>>,
@@ -144,13 +145,12 @@ async fn start_install(
             eprintln!("Warning: failed to emit install progress event: {}", e);
         }
     });
-    let download_progress: pipeline::DownloadProgressCallback =
-        Arc::new(move |_bytes, _total| {
-            // Byte-level progress events are emitted via the existing
-            // install-progress channel with the `step: "download"` label.
-            // Future enhancement: extend InstallProgressEvent with
-            // currentBytes / totalBytes and emit them here.
-        });
+    let download_progress: pipeline::DownloadProgressCallback = Arc::new(move |_bytes, _total| {
+        // Byte-level progress events are emitted via the existing
+        // install-progress channel with the `step: "download"` label.
+        // Future enhancement: extend InstallProgressEvent with
+        // currentBytes / totalBytes and emit them here.
+    });
     let options = install::InstallOptions {
         base_url,
         extras_url,
@@ -166,13 +166,8 @@ async fn start_install(
     let registry_for_task = registry.inner().clone();
     let result_handle = app_handle.clone();
     tokio::spawn(async move {
-        let res = install::install_minui_with_cancel(
-            &options,
-            progress,
-            download_progress,
-            token,
-        )
-        .await;
+        let res =
+            install::install_minui_with_cancel(&options, progress, download_progress, token).await;
         // Clear the slot on completion.
         if let Ok(mut slot) = registry_for_task.token.lock() {
             *slot = None;
@@ -241,15 +236,18 @@ async fn install_package(
         extract_to_root,
         pak_name,
     };
-    package::install_package(&artifact_url, checksum.as_deref(), &sd_mount, &rules, &platform).await
+    package::install_package(
+        &artifact_url,
+        checksum.as_deref(),
+        &sd_mount,
+        &rules,
+        &platform,
+    )
+    .await
 }
 
 #[tauri::command]
-async fn write_wifi_config(
-    sd_mount: String,
-    ssid: String,
-    password: String,
-) -> Result<(), String> {
+async fn write_wifi_config(sd_mount: String, ssid: String, password: String) -> Result<(), String> {
     wifi::write_wifi_config(&sd_mount, &ssid, &password)
 }
 
@@ -415,22 +413,16 @@ mod tests {
 
     #[test]
     fn test_validate_installation_errors_on_nonexistent_mount() {
-        let result = validate::validate_installation(
-            "/nonexistent/path/that/cannot/exist",
-            false,
-            "/Tools",
-        );
+        let result =
+            validate::validate_installation("/nonexistent/path/that/cannot/exist", false, "/Tools");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_validate_installation_on_empty_tempdir() {
         let temp = tempfile::tempdir().unwrap();
-        let result = validate::validate_installation(
-            temp.path().to_str().unwrap(),
-            false,
-            "/Tools",
-        );
+        let result =
+            validate::validate_installation(temp.path().to_str().unwrap(), false, "/Tools");
         assert!(result.is_ok());
         let v = result.unwrap();
         // Empty dir = no MinUI files = failures expected
@@ -471,8 +463,7 @@ mod tests {
     #[test]
     fn test_check_minui_version_on_empty_tempdir() {
         let temp = tempfile::tempdir().unwrap();
-        let result =
-            version::check_for_updates(temp.path().to_str().unwrap(), Some("2025.01.01"));
+        let result = version::check_for_updates(temp.path().to_str().unwrap(), Some("2025.01.01"));
         // No minui.txt on a fresh card → installed = None, update_available = true
         assert!(result.installed.is_none());
         assert!(result.update_available);
@@ -595,13 +586,17 @@ mod tests {
         drop(f);
 
         // sha256("hello world") = b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
-        let result =
-            download::verify_checksum(file_path.to_str().unwrap(), "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        let result = download::verify_checksum(
+            file_path.to_str().unwrap(),
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+        );
         assert_eq!(result, Ok(true));
 
         // Wrong checksum returns Ok(false)
-        let result =
-            download::verify_checksum(file_path.to_str().unwrap(), "0000000000000000000000000000000000000000000000000000000000000000");
+        let result = download::verify_checksum(
+            file_path.to_str().unwrap(),
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        );
         assert_eq!(result, Ok(false));
     }
 

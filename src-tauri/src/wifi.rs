@@ -388,7 +388,8 @@ mod tests {
         // Hidden network: airport leaves the SSID column empty and the
         // BSSID slides into the first column. We must not report the BSSID
         // as the SSID, and we must not include an empty string.
-        let output = "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
+        let output =
+            "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
                                  00:11:22:33:44:55 -50  6       Y  -- WPA2\n\
                        Visible 66:77:88:99:AA:BB -60  11      Y  -- WPA2\n";
         let ssids = parse_airport_output(output);
@@ -401,7 +402,8 @@ mod tests {
         // BSSID format must be kept. The old check
         // `chars().all(is_ascii_hexdigit || ':')` would have misclassified
         // the 3-char-segment string below as a BSSID and dropped it.
-        let output = "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
+        let output =
+            "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
                        guest:net:2.4ghz 00:11:22:33:44:55 -50  6       Y  -- WPA2\n\
                        ab:cde:f:12:34:56 66:77:88:99:AA:BB -60  11      Y  -- WPA2\n";
         let ssids = parse_airport_output(output);
@@ -413,7 +415,8 @@ mod tests {
         // Regression: a 17-char 2-hex-per-segment string in column 0 must
         // still be dropped (it's a real BSSID, either a hidden-SSID
         // network or a stray entry).
-        let output = "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
+        let output =
+            "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
                        00:11:22:33:44:55 -50  6       Y  -- WPA2\n\
                        Visible 66:77:88:99:AA:BB -60  11      Y  -- WPA2\n";
         let ssids = parse_airport_output(output);

@@ -48,7 +48,10 @@ export function buildCustomFork(raw: string): ForkConfig | null {
 
   const parts = trimmed.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
-  if (!GITHUB_OWNER_REPO_RE.test(parts[0]) || !GITHUB_OWNER_REPO_RE.test(parts[1])) {
+  if (
+    !GITHUB_OWNER_REPO_RE.test(parts[0]) ||
+    !GITHUB_OWNER_REPO_RE.test(parts[1])
+  ) {
     return null;
   }
 
