@@ -56,6 +56,7 @@ export async function installMinui(options: {
   platform: string;
   extrasPlatform: string;
   version: string;
+  forkName?: string;
 }): Promise<InstallResultEither> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -68,6 +69,7 @@ export async function installMinui(options: {
       platform: options.platform,
       extrasPlatform: options.extrasPlatform,
       version: options.version,
+      forkName: options.forkName || null,
     });
 
     if (result.success) {
@@ -104,6 +106,7 @@ export async function startInstall(options: {
   platform: string;
   extrasPlatform: string;
   version: string;
+  forkName?: string;
 }): Promise<string> {
   const { invoke } = await import("@tauri-apps/api/core");
   return await invoke<string>("start_install", {
@@ -115,6 +118,7 @@ export async function startInstall(options: {
     platform: options.platform,
     extrasPlatform: options.extrasPlatform,
     version: options.version,
+    forkName: options.forkName || null,
   });
 }
 

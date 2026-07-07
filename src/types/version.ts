@@ -21,12 +21,14 @@ export type VersionCheckResultEither =
 export async function checkMinuiVersion(options: {
   sdMount: string;
   latestVersion?: string;
+  expectedPrefix?: string;
 }): Promise<VersionCheckResultEither> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const result = await invoke<VersionCheckResult>("check_minui_version", {
       sdMount: options.sdMount,
       latestVersion: options.latestVersion || null,
+      expectedPrefix: options.expectedPrefix || null,
     });
 
     return { success: true, data: result };

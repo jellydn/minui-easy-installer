@@ -5,9 +5,7 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 use crate::fs_utils;
-use crate::pipeline::{
-    create_target_within, DownloadProgressCallback, InstallSession, Pipeline,
-};
+use crate::pipeline::{create_target_within, DownloadProgressCallback, InstallSession, Pipeline};
 use crate::version;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -192,8 +190,7 @@ mod tests {
         fs::write(src.join("file1.txt"), "content1").unwrap();
         fs::write(src.join("subdir/file2.txt"), "content2").unwrap();
 
-        let copied =
-            fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false, &|| false).unwrap();
+        let copied = fs_utils::copy_dir_recursive(&src, &dst, &|_s, _d| false, &|| false).unwrap();
         assert_eq!(copied, 2);
         assert!(dst.join("file1.txt").exists());
         assert!(dst.join("subdir/file2.txt").exists());

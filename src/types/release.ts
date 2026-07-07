@@ -1,8 +1,13 @@
+import type { ForkConfig } from "./fork";
+import { buildReleaseUrl, getForkCacheKey } from "./fork";
+
 export interface MinUIRelease {
   version: string;
   baseArchiveUrl: string;
   extrasArchiveUrl: string | null;
   checksums: ReleaseChecksums | null;
+  /** The fork that this release came from. */
+  fork: ForkConfig;
 }
 
 export interface ReleaseChecksums {
@@ -19,11 +24,9 @@ export type ReleaseFetchResult =
   | { success: true; data: MinUIRelease }
   | { success: false; error: ReleaseFetchError };
 
-export const GITHUB_API_URL =
-  "https://api.github.com/repos/shauninman/MinUI/releases/latest";
-
 export function parseGitHubRelease(
   data: unknown,
+  fork: ForkConfig,
 ): MinUIRelease | ReleaseFetchError {
   if (!data || typeof data !== "object") {
     return { message: "Invalid release data", code: "PARSE_ERROR" };
@@ -71,25 +74,37 @@ export function parseGitHubRelease(
     baseArchiveUrl,
     extrasArchiveUrl,
     checksums: null,
+    fork,
   };
 }
 
-// Session-scoped cache — only used by loaders that call fetchMinUIRelease
-let cachedRelease: MinUIRelease | null = null;
+// Session-scoped cache — keyed by fork, so switching forks invalidates the cache.
+const releaseCache = new Map<string, MinUIRelease>();
 
-export function clearReleaseCache(): void {
-  cachedRelease = null;
+export function clearReleaseCache(key?: string): void {
+  if (key) {
+    releaseCache.delete(key);
+  } else {
+    releaseCache.clear();
+  }
 }
 
 export async function fetchMinUIRelease(
+  fork: ForkConfig,
   fetchFn: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<ReleaseFetchResult> {
-  if (cachedRelease && fetchFn === globalThis.fetch) {
-    return { success: true, data: cachedRelease };
+  const cacheKey = getForkCacheKey(fork);
+  if (fetchFn === globalThis.fetch) {
+    const cached = releaseCache.get(cacheKey);
+    if (cached) {
+      return { success: true, data: cached };
+    }
   }
 
+  const apiUrl = buildReleaseUrl(fork);
+
   try {
-    const response = await fetchFn(GITHUB_API_URL, {
+    const response = await fetchFn(apiUrl, {
       headers: { Accept: "application/vnd.github+json" },
     });
 
@@ -110,13 +125,13 @@ export async function fetchMinUIRelease(
     }
 
     const data = await response.json();
-    const result = parseGitHubRelease(data);
+    const result = parseGitHubRelease(data, fork);
 
     if ("code" in result) {
       return { success: false, error: result };
     }
 
-    cachedRelease = result;
+    releaseCache.set(cacheKey, result);
     return { success: true, data: result };
   } catch (err) {
     const message =

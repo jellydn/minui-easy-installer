@@ -54,7 +54,10 @@ pub async fn download_archive(
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    let response = client.get(url).send().await
+    let response = client
+        .get(url)
+        .send()
+        .await
         .map_err(|e| format!("Failed to download archive: {}", e))?;
 
     if !response.status().is_success() {
@@ -111,13 +114,13 @@ pub async fn download_archive(
 ///
 /// Returns the file path as a PathBuf on success. On checksum mismatch or
 /// download failure, returns an Err.
+#[allow(dead_code)]
 pub async fn download_archive_into(
     slot: &mut Option<TempDir>,
     url: &str,
     expected_checksum: Option<&str>,
 ) -> Result<PathBuf, String> {
-    let temp_dir =
-        TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
 
     let file_name = url.rsplit('/').next().unwrap_or("archive.zip");
     let file_path = temp_dir.path().join(file_name);
@@ -134,7 +137,10 @@ pub async fn download_archive_into(
         .map_err(|e| format!("Failed to download archive: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!("Download failed with status: {}", response.status()));
+        return Err(format!(
+            "Download failed with status: {}",
+            response.status()
+        ));
     }
 
     let bytes = response
@@ -178,8 +184,7 @@ pub async fn download_archive_streaming(
     progress: impl Fn(u64, Option<u64>) + Send + 'static,
     cancel: &CancellationToken,
 ) -> Result<PathBuf, String> {
-    let temp_dir =
-        TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
 
     let file_name = url.rsplit('/').next().unwrap_or("archive.zip");
     let file_path = temp_dir.path().join(file_name);
@@ -196,7 +201,10 @@ pub async fn download_archive_streaming(
         .map_err(|e| format!("Failed to download archive: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!("Download failed with status: {}", response.status()));
+        return Err(format!(
+            "Download failed with status: {}",
+            response.status()
+        ));
     }
 
     let total: Option<u64> = response.content_length();
@@ -226,10 +234,7 @@ pub async fn download_archive_streaming(
         .await
         .map_err(|e| format!("Failed to flush archive file: {}", e))?;
 
-    let file_path_str = file_path
-        .to_str()
-        .ok_or("Non-UTF-8 path")?
-        .to_string();
+    let file_path_str = file_path.to_str().ok_or("Non-UTF-8 path")?.to_string();
 
     if let Some(expected) = expected_checksum {
         let verified = verify_checksum(&file_path_str, expected)?;

@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { useVersionCheck } from "./useVersionCheck";
+import { FORK_PRESETS } from "../types/fork";
 
 vi.mock("../types/package", async () => {
   const actual = await import("../types/package");
@@ -44,9 +45,8 @@ describe("useVersionCheck race-condition guard", () => {
   });
 
   it("drops the stale result when a newer check() supersedes it", async () => {
-    const { fetchPackageRegistry, checkPackageUpdates } = await import(
-      "../types/package"
-    );
+    const { fetchPackageRegistry, checkPackageUpdates } =
+      await import("../types/package");
     const { fetchMinUIRelease } = await import("../types/release");
     const { checkMinuiVersion } = await import("../types/version");
 
@@ -80,7 +80,7 @@ describe("useVersionCheck race-condition guard", () => {
     });
     (checkPackageUpdates as Mock).mockResolvedValue([]);
 
-    const { result } = renderHook(() => useVersionCheck());
+    const { result } = renderHook(() => useVersionCheck(FORK_PRESETS.official));
 
     // Kick off both checks synchronously. Each captures its own requestId
     // and parks at the first await (fetchMinUIRelease).
@@ -104,6 +104,7 @@ describe("useVersionCheck race-condition guard", () => {
           baseArchiveUrl: "",
           extrasArchiveUrl: null,
           checksums: null,
+          fork: FORK_PRESETS.official,
         },
       });
       version2.resolve({
@@ -123,11 +124,10 @@ describe("useVersionCheck race-condition guard", () => {
     // checkMinuiVersion), and this assertion would fail.
     expect(result.current.versionCheck).toBeNull();
     // Defense-in-depth: with the guard working, the stale call bails
-    // BEFORE awaiting checkMinuiVersion, so it must have been invoked
-    // exactly once (by the live call). A partial guard removal (e.g.
-    // first guard deleted, later guards intact) would let the stale
-    // call reach checkMinuiVersion and bump versionCall to 2.
-    expect(versionCall).toBe(1);
+    // BEFORE awaiting checkMinuiVersion. The live call (second one)
+    // is still parked at fetchMinUIRelease at this point, so nothing
+    // has reached checkMinuiVersion yet — versionCall stays 0.
+    expect(versionCall).toBe(0);
 
     // Now resolve the SECOND call's release. This is the live request, so
     // it must commit. (version2 was already resolved above; the live
@@ -140,6 +140,7 @@ describe("useVersionCheck race-condition guard", () => {
           baseArchiveUrl: "",
           extrasArchiveUrl: null,
           checksums: null,
+          fork: FORK_PRESETS.official,
         },
       });
       await second;
@@ -151,9 +152,8 @@ describe("useVersionCheck race-condition guard", () => {
   });
 
   it("reset() invalidates any in-flight check so the orphaned result cannot clobber state", async () => {
-    const { fetchPackageRegistry, checkPackageUpdates } = await import(
-      "../types/package"
-    );
+    const { fetchPackageRegistry, checkPackageUpdates } =
+      await import("../types/package");
     const { fetchMinUIRelease } = await import("../types/release");
     const { checkMinuiVersion } = await import("../types/version");
 
@@ -173,7 +173,7 @@ describe("useVersionCheck race-condition guard", () => {
     });
     (checkPackageUpdates as Mock).mockResolvedValue([]);
 
-    const { result } = renderHook(() => useVersionCheck());
+    const { result } = renderHook(() => useVersionCheck(FORK_PRESETS.official));
 
     act(() => {
       void result.current.check("/sd-1");
@@ -198,6 +198,7 @@ describe("useVersionCheck race-condition guard", () => {
           baseArchiveUrl: "",
           extrasArchiveUrl: null,
           checksums: null,
+          fork: FORK_PRESETS.official,
         },
       });
       // Let the microtask queue drain.
@@ -206,5 +207,66 @@ describe("useVersionCheck race-condition guard", () => {
     });
 
     expect(result.current.versionCheck).toBeNull();
+  });
+
+  it("re-issues check when fork prop changes", async () => {
+    const { fetchPackageRegistry, checkPackageUpdates } =
+      await import("../types/package");
+    const { fetchMinUIRelease } = await import("../types/release");
+    const { checkMinuiVersion } = await import("../types/version");
+
+    let callCount = 0;
+    (fetchMinUIRelease as Mock).mockImplementation(
+      async (fork: { label: string }) => {
+        callCount += 1;
+        return {
+          success: true,
+          data: {
+            version: "1.0.0",
+            baseArchiveUrl: "",
+            extrasArchiveUrl: null,
+            checksums: null,
+            fork,
+          },
+        };
+      },
+    );
+    (checkMinuiVersion as Mock).mockResolvedValue({
+      success: true,
+      data: {
+        installed: null,
+        latest: "1.0.0",
+        update_available: false,
+      },
+    });
+    (fetchPackageRegistry as Mock).mockResolvedValue({
+      success: true,
+      data: { version: "1.0", packages: [] },
+    });
+    (checkPackageUpdates as Mock).mockResolvedValue([]);
+
+    const { result, rerender } = renderHook(
+      ({ fork }) => useVersionCheck(fork),
+      { initialProps: { fork: FORK_PRESETS.official } },
+    );
+
+    await act(async () => {
+      await result.current.check("/sd-1");
+    });
+
+    expect(callCount).toBe(1);
+
+    // Rerender with a different fork — the check callback should be
+    // recreated and the new fetch should use the new fork.
+    rerender({ fork: FORK_PRESETS["minui-zero"] });
+
+    await act(async () => {
+      await result.current.check("/sd-1");
+    });
+
+    // Two fetches because the fork changed (callCount increments inside
+    // the mock). With a fresh Map cache the first fetch for each fork
+    // actually goes through.
+    expect(callCount).toBe(2);
   });
 });

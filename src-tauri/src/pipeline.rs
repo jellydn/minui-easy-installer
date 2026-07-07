@@ -73,6 +73,7 @@ impl Pipeline {
     ///
     /// `cancel` is checked at the start of each phase. If cancelled,
     /// the function returns `Err("Install cancelled".to_string())`.
+    #[allow(clippy::too_many_arguments)]
     pub async fn run<Cp>(
         label: &str,
         url: &str,
@@ -137,11 +138,8 @@ impl Pipeline {
             step: "extract".to_string(),
             details: format!("Extracting {} archive", label),
         });
-        let extracted = extract::extract_archive_into(
-            session.slot_extracted(label),
-            &archive_path,
-            None,
-        )?;
+        let extracted =
+            extract::extract_archive_into(session.slot_extracted(label), &archive_path, None)?;
         Ok(extracted)
     }
 }
@@ -244,12 +242,10 @@ fn canonicalize_existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
     loop {
         match current.canonicalize() {
             Ok(canonical) => return Ok(canonical),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                match current.parent() {
-                    Some(parent) => current = parent,
-                    None => return Err(e),
-                }
-            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => match current.parent() {
+                Some(parent) => current = parent,
+                None => return Err(e),
+            },
             Err(e) => return Err(e),
         }
     }

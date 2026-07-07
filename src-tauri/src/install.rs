@@ -78,24 +78,19 @@ pub fn create_rom_dirs(sd_mount: &str) -> Result<u32, String> {
 const PRESERVED_FOLDERS: &[&str] = &["roms", "saves", "save", "bios", "cheats"];
 
 fn is_preserved_path(path: &Path, sd_root: &Path) -> bool {
-    if let Ok(relative) = path.strip_prefix(sd_root) {
-        let first_component = relative.iter().next();
-        if let Some(name) = first_component {
-            let name_str = name.to_string_lossy();
-            for preserved in PRESERVED_FOLDERS {
-                if name_str.eq_ignore_ascii_case(preserved) {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+    let Ok(relative) = path.strip_prefix(sd_root) else {
+        return false;
+    };
+    let Some(name) = relative.iter().next() else {
+        return false;
+    };
+    let name_str = name.to_string_lossy();
+    PRESERVED_FOLDERS
+        .iter()
+        .any(|preserved| name_str.eq_ignore_ascii_case(preserved))
 }
 
-pub fn copy_base_files(
-    extracted_base_path: &str,
-    sd_mount: &str,
-) -> Result<u32, String> {
+pub fn copy_base_files(extracted_base_path: &str, sd_mount: &str) -> Result<u32, String> {
     let base_dir = Path::new(extracted_base_path);
     let sd_root = Path::new(sd_mount);
     fs_utils::copy_dir_recursive(
@@ -155,8 +150,16 @@ pub fn copy_extras_files(
 
     let mut files_copied = 0u32;
     files_copied += copy_subtree(extras_src, sd_root, "Bios")?;
-    files_copied += copy_subtree(&extras_src.join("Emus"), &sd_root.join("Emus"), extras_platform)?;
-    files_copied += copy_subtree(&extras_src.join("Tools"), &sd_root.join("Tools"), extras_platform)?;
+    files_copied += copy_subtree(
+        &extras_src.join("Emus"),
+        &sd_root.join("Emus"),
+        extras_platform,
+    )?;
+    files_copied += copy_subtree(
+        &extras_src.join("Tools"),
+        &sd_root.join("Tools"),
+        extras_platform,
+    )?;
 
     Ok(files_copied)
 }
@@ -172,6 +175,9 @@ pub struct InstallOptions {
     pub platform: String,
     pub extras_platform: String,
     pub version: String,
+    /// Name of the fork (e.g. "MinUI", "MinUI-Zero"). Written into
+    /// minui.txt as "{fork_name} {version}". Defaults to "MinUI".
+    pub fork_name: Option<String>,
 }
 
 /// Runs extras download → extract → copy, returning the number of files copied.
@@ -192,7 +198,13 @@ async fn try_install_extras(
         "extras",
         extras_url,
         options.extras_checksum.as_deref(),
-        |p| copy_extras_files(p.to_str().unwrap(), &options.sd_mount, &options.extras_platform),
+        |p| {
+            copy_extras_files(
+                p.to_str().unwrap(),
+                &options.sd_mount,
+                &options.extras_platform,
+            )
+        },
         progress,
         download_progress,
         cancel,
@@ -208,7 +220,13 @@ pub async fn install_minui(
     options: &InstallOptions,
     progress: ProgressCallback,
 ) -> Result<InstallResult, String> {
-    install_minui_with_cancel(options, progress, Arc::new(|_, _| {}), CancellationToken::new()).await
+    install_minui_with_cancel(
+        options,
+        progress,
+        Arc::new(|_, _| {}),
+        CancellationToken::new(),
+    )
+    .await
 }
 
 /// Full installation flow with cancellation support.
@@ -269,13 +287,24 @@ pub async fn install_minui_with_cancel(
     let rom_dirs_created = create_rom_dirs(&options.sd_mount).unwrap_or(0);
 
     // Write version metadata after successful install
+    let fork_label = options.fork_name.as_deref().unwrap_or("MinUI");
     progress(InstallProgressEvent {
         step: "finish".to_string(),
-        details: format!("Writing version metadata (MinUI {})", options.version),
+        details: format!(
+            "Writing version metadata ({} {})",
+            fork_label, options.version
+        ),
     });
     let minui_txt_path = Path::new(&options.sd_mount).join("minui.txt");
-    if let Err(e) = fs::write(&minui_txt_path, format!("MinUI {}\n", options.version)) {
-        eprintln!("Warning: Failed to write version metadata: {}", e);
+    if let Err(e) = fs::write(
+        &minui_txt_path,
+        format!("{} {}\n", fork_label, options.version),
+    ) {
+        // Surface the failure as a non-fatal warning so the UI can
+        // show it. The install itself succeeded; only the metadata
+        // file is missing, so we don't downgrade success.
+        eprintln!("Warning: failed to write version metadata: {}", e);
+        extras_warning = Some(format!("Failed to write version metadata: {}", e));
     }
 
     // session drops here — temp dirs cleaned up after all operations complete
@@ -383,11 +412,8 @@ mod tests {
         fs::write(platform_dir.join("boot.sh"), "boot").unwrap();
 
         // copy_base_files now copies ALL contents of extracted to sd_root
-        let copied = copy_base_files(
-            extracted.to_str().unwrap(),
-            sd_root.to_str().unwrap(),
-        )
-        .unwrap();
+        let copied =
+            copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap()).unwrap();
 
         assert_eq!(copied, 2);
         assert!(sd_root.join("miyoo-mini-plus/minui.pak").exists());
@@ -507,11 +533,31 @@ mod tests {
         fs::create_dir_all(extras_src.join("Bios")).unwrap();
 
         fs::write(extras_src.join("Emus/rg35xxplus/mgba.pak/launch.sh"), "emu").unwrap();
-        fs::write(extras_src.join("Emus/rg35xxplus/gambatte.pak/launch.sh"), "emu").unwrap();
-        fs::write(extras_src.join("Tools/rg35xxplus/wifi.pak/launch.sh"), "tool").unwrap();
-        fs::write(extras_src.join("Tools/rg35xxplus/ssh.pak/launch.sh"), "tool").unwrap();
-        fs::write(extras_src.join("Tools/trimuismart/dc.pak/launch.sh"), "tool").unwrap();
-        fs::write(extras_src.join("Tools/trimuismart/wifi.pak/launch.sh"), "tool").unwrap();
+        fs::write(
+            extras_src.join("Emus/rg35xxplus/gambatte.pak/launch.sh"),
+            "emu",
+        )
+        .unwrap();
+        fs::write(
+            extras_src.join("Tools/rg35xxplus/wifi.pak/launch.sh"),
+            "tool",
+        )
+        .unwrap();
+        fs::write(
+            extras_src.join("Tools/rg35xxplus/ssh.pak/launch.sh"),
+            "tool",
+        )
+        .unwrap();
+        fs::write(
+            extras_src.join("Tools/trimuismart/dc.pak/launch.sh"),
+            "tool",
+        )
+        .unwrap();
+        fs::write(
+            extras_src.join("Tools/trimuismart/wifi.pak/launch.sh"),
+            "tool",
+        )
+        .unwrap();
         fs::write(extras_src.join("Bios/gba_bios.bin"), "bios").unwrap();
 
         let copied = copy_extras_files(
@@ -526,7 +572,9 @@ mod tests {
 
         // Verify rg35xxplus emus and tools were copied
         assert!(sd_root.join("Emus/rg35xxplus/mgba.pak/launch.sh").exists());
-        assert!(sd_root.join("Emus/rg35xxplus/gambatte.pak/launch.sh").exists());
+        assert!(sd_root
+            .join("Emus/rg35xxplus/gambatte.pak/launch.sh")
+            .exists());
         assert!(sd_root.join("Tools/rg35xxplus/wifi.pak/launch.sh").exists());
         assert!(sd_root.join("Tools/rg35xxplus/ssh.pak/launch.sh").exists());
 
@@ -535,5 +583,34 @@ mod tests {
 
         // Verify Bios was copied
         assert!(sd_root.join("Bios/gba_bios.bin").exists());
+    }
+
+    #[test]
+    fn test_minui_txt_writes_fork_name() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        // Simulate what install_minui_with_cancel writes after copying
+        let fork_label = "MinUI-Zero";
+        let version = "20250525";
+        let minui_txt_path = sd_root.join("minui.txt");
+        fs::write(&minui_txt_path, format!("{} {}\n", fork_label, version)).unwrap();
+
+        let content = fs::read_to_string(&minui_txt_path).unwrap();
+        assert_eq!(content, "MinUI-Zero 20250525\n");
+    }
+
+    #[test]
+    fn test_minui_txt_defaults_to_minui_when_no_fork_name() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        let fork_label = "MinUI"; // default when fork_name is None
+        let version = "2025.01.01";
+        let minui_txt_path = sd_root.join("minui.txt");
+        fs::write(&minui_txt_path, format!("{} {}\n", fork_label, version)).unwrap();
+
+        let content = fs::read_to_string(&minui_txt_path).unwrap();
+        assert_eq!(content, "MinUI 2025.01.01\n");
     }
 }

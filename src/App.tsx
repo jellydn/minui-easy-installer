@@ -1,17 +1,28 @@
 import { useState } from "react";
+import { ForkProvider, useFork } from "./contexts/ForkContext";
 import Home from "./Home";
 import PackageStore from "./PackageStore";
+import Settings from "./Settings";
 import type { RemovableDrive } from "./types/drive";
 import WifiWizard from "./WifiWizard";
 
-type Screen = "home" | "store" | "wifi";
+type Screen = "home" | "store" | "wifi" | "settings";
 
 function App() {
+  return (
+    <ForkProvider>
+      <AppShell />
+    </ForkProvider>
+  );
+}
+
+function AppShell() {
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [selectedDrive, setSelectedDrive] = useState<RemovableDrive | null>(
     null,
   );
+  const { fork, setFork } = useFork();
 
   return (
     <main className="container">
@@ -36,6 +47,13 @@ function App() {
           onClick={() => setScreen("wifi")}
         >
           WiFi Setup
+        </button>
+        <button
+          type="button"
+          className={`nav-btn ${screen === "settings" ? "active" : ""}`}
+          onClick={() => setScreen("settings")}
+        >
+          Settings
         </button>
       </nav>
 
@@ -90,6 +108,12 @@ function App() {
           </div>
         </div>
       ) : null}
+
+      {screen === "settings" && (
+        <div className="screen">
+          <Settings selectedFork={fork} onSelectFork={setFork} />
+        </div>
+      )}
     </main>
   );
 }

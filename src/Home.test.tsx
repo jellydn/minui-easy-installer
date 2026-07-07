@@ -1,12 +1,26 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
+import type { ReactElement } from "react";
+import { ForkProvider } from "./contexts/ForkContext";
 import Home from "./Home";
 import type { RemovableDrive } from "./types/drive";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
 }));
 
 vi.mock("./types/release", () => ({
@@ -39,6 +53,8 @@ vi.mock("./types/validate", () => ({
   checkSdCardHealth: vi.fn(),
 }));
 
+const renderWithFork = (ui: ReactElement) => render(<ForkProvider>{ui}</ForkProvider>);
+
 const mockDrive: RemovableDrive = {
   name: "SD_CARD",
   mount_path: "/Volumes/SD_CARD",
@@ -66,9 +82,11 @@ describe("Home", () => {
   });
 
   it("renders the home screen title and device selector", () => {
-    render(<Home {...defaultProps} />);
+    renderWithFork(<Home {...defaultProps} />);
 
-    expect(screen.getByText("MinUI Easy Installer")).toBeInTheDocument();
+    expect(
+      screen.getByText("MinUI (Official) Easy Installer"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Select Your Device")).toBeInTheDocument();
   });
 
@@ -105,7 +123,7 @@ describe("Home", () => {
     });
     (checkPackageUpdates as Mock).mockResolvedValue([]);
 
-    render(
+    renderWithFork(
       <Home
         {...defaultProps}
         selectedDevice="miyoo-mini-plus"
@@ -115,7 +133,7 @@ describe("Home", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "Install MinUI" }),
+        screen.getByRole("button", { name: "Install MinUI (Official)" }),
       ).toBeInTheDocument();
     });
   });
@@ -150,7 +168,7 @@ describe("Home", () => {
     });
     (checkPackageUpdates as Mock).mockResolvedValue([]);
 
-    render(
+    renderWithFork(
       <Home
         {...defaultProps}
         selectedDevice="miyoo-mini-plus"
@@ -195,7 +213,7 @@ describe("Home", () => {
     });
     (checkPackageUpdates as Mock).mockResolvedValue([]);
 
-    render(
+    renderWithFork(
       <Home
         {...defaultProps}
         selectedDevice="miyoo-mini-plus"
@@ -205,12 +223,12 @@ describe("Home", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "Install MinUI" }),
+        screen.getByRole("button", { name: "Install MinUI (Official)" }),
       ).toBeInTheDocument();
     });
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Install MinUI" }),
+      screen.getByRole("button", { name: "Install MinUI (Official)" }),
     );
 
     expect(screen.getByText(/Confirm Installation/)).toBeInTheDocument();

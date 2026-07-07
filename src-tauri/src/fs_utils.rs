@@ -41,12 +41,7 @@ pub fn get_free_space(mount: &str) -> Option<u64> {
 /// The cancel function is checked once per file; if it returns true, the
 /// function returns Err("cancelled"). Pass `&|_| false` to disable.
 /// Returns the number of files copied.
-pub fn copy_dir_recursive<F, C>(
-    src: &Path,
-    dst: &Path,
-    skip: &F,
-    cancel: &C,
-) -> Result<u32, String>
+pub fn copy_dir_recursive<F, C>(src: &Path, dst: &Path, skip: &F, cancel: &C) -> Result<u32, String>
 where
     F: Fn(&Path, &Path) -> bool,
     C: Fn() -> bool,
@@ -118,13 +113,16 @@ mod tests {
         touch(&src.join("sub/deeper/c.txt"), b"c");
         touch(&src.join("sub/deeper/deepest/d.txt"), b"d");
 
-        let copied = copy_dir_recursive(&src, &dst, &|_s, _d| false).unwrap();
+        let copied = copy_dir_recursive(&src, &dst, &|_s, _d| false, &|| false).unwrap();
 
         assert_eq!(copied, 4);
         assert_eq!(fs::read(dst.join("a.txt")).unwrap(), b"a");
         assert_eq!(fs::read(dst.join("sub/b.txt")).unwrap(), b"b");
         assert_eq!(fs::read(dst.join("sub/deeper/c.txt")).unwrap(), b"c");
-        assert_eq!(fs::read(dst.join("sub/deeper/deepest/d.txt")).unwrap(), b"d");
+        assert_eq!(
+            fs::read(dst.join("sub/deeper/deepest/d.txt")).unwrap(),
+            b"d"
+        );
     }
 
     #[test]
@@ -132,7 +130,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let missing = temp.path().join("nope");
         let dst = temp.path().join("dst");
-        let result = copy_dir_recursive(&missing, &dst, &|_s, _d| false);
+        let result = copy_dir_recursive(&missing, &dst, &|_s, _d| false, &|| false);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.contains("Failed to read directory"), "got: {err}");
@@ -150,10 +148,17 @@ mod tests {
         // The skip predicate is `Fn` (not `FnMut`), so we use RefCell
         // for interior mutability to record what the predicate sees.
         let seen_pairs: RefCell<Vec<(PathBuf, PathBuf)>> = RefCell::new(Vec::new());
-        let copied = copy_dir_recursive(&src, &dst, &|s, d| {
-            seen_pairs.borrow_mut().push((s.to_path_buf(), d.to_path_buf()));
-            s.file_name().and_then(|n| n.to_str()) == Some("skip_me.txt")
-        })
+        let copied = copy_dir_recursive(
+            &src,
+            &dst,
+            &|s, d| {
+                seen_pairs
+                    .borrow_mut()
+                    .push((s.to_path_buf(), d.to_path_buf()));
+                s.file_name().and_then(|n| n.to_str()) == Some("skip_me.txt")
+            },
+            &|| false,
+        )
         .unwrap();
 
         assert_eq!(copied, 1, "only keep.txt should be copied");
@@ -180,7 +185,7 @@ mod tests {
         // Symlink inside src pointing outside
         symlink(outside.path().join("secret.txt"), src.join("leak.txt")).unwrap();
 
-        let copied = copy_dir_recursive(&src, &dst, &|_s, _d| false).unwrap();
+        let copied = copy_dir_recursive(&src, &dst, &|_s, _d| false, &|| false).unwrap();
         // The CURRENT behavior of `fs::copy` on a symlink copies the
         // target's contents. If a future refactor changes this to
         // preserve the symlink, this test will fail and the refactorer
@@ -204,16 +209,22 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let src = temp.path().join("src");
         let dst = temp.path().join("dst");
-        touch(&src.join("Tools/wifi.pak/launch.sh"), b"#!/bin/sh\nexit 0\n");
+        touch(
+            &src.join("Tools/wifi.pak/launch.sh"),
+            b"#!/bin/sh\nexit 0\n",
+        );
         touch(&src.join("Tools/empty.pak/.keep"), b"");
         touch(&src.join("Tools/skip.pak/binary"), b"binary");
         // Pre-create the dst/ dir to test that copy still works when
         // the dst already exists (re-install case).
         fs::create_dir_all(&dst).unwrap();
 
-        let copied = copy_dir_recursive(&src, &dst, &|s, _d| {
-            s.file_name().and_then(|n| n.to_str()) == Some("binary")
-        })
+        let copied = copy_dir_recursive(
+            &src,
+            &dst,
+            &|s, _d| s.file_name().and_then(|n| n.to_str()) == Some("binary"),
+            &|| false,
+        )
         .unwrap();
         assert_eq!(copied, 2, "launch.sh + .keep copied; binary was skipped");
         assert!(dst.join("Tools/wifi.pak/launch.sh").exists());
@@ -233,7 +244,7 @@ mod tests {
         let big: Vec<u8> = (0..5 * 1024 * 1024).map(|i| (i % 256) as u8).collect();
         touch(&src.join("big.bin"), &big);
 
-        let copied = copy_dir_recursive(&src, &dst, &|_s, _d| false).unwrap();
+        let copied = copy_dir_recursive(&src, &dst, &|_s, _d| false, &|| false).unwrap();
         assert_eq!(copied, 1);
         let read_back = fs::read(dst.join("big.bin")).unwrap();
         assert_eq!(read_back, big);
@@ -248,11 +259,17 @@ mod tests {
         let src = temp.path().join("src");
         let dst = temp.path().join("dst");
         touch(&src.join("Tools/skip.pak/binary"), b"binary");
-        touch(&src.join("Tools/keep.pak/launch.sh"), b"#!/bin/sh\nexit 0\n");
+        touch(
+            &src.join("Tools/keep.pak/launch.sh"),
+            b"#!/bin/sh\nexit 0\n",
+        );
 
-        let copied = copy_dir_recursive(&src, &dst, &|s, _d| {
-            s.file_name().and_then(|n| n.to_str()) == Some("skip.pak")
-        })
+        let copied = copy_dir_recursive(
+            &src,
+            &dst,
+            &|s, _d| s.file_name().and_then(|n| n.to_str()) == Some("skip.pak"),
+            &|| false,
+        )
         .unwrap();
 
         assert_eq!(copied, 1, "only keep.pak/launch.sh is copied");

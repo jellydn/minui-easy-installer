@@ -15,12 +15,7 @@ interface PackageStoreProps {
   selectedDrive: string | null;
 }
 
-const ALL_CATEGORIES: PackageCategory[] = [
-  "Utilities",
-  "Emulators",
-  "Network",
-  "Community",
-];
+const ALL_CATEGORIES: PackageCategory[] = ["Utilities", "Emulators"];
 
 function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
   const profile = selectedDevice ? getDeviceProfile(selectedDevice) : null;
