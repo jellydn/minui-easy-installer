@@ -2,13 +2,13 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useMountEffect } from "./hooks/useMountEffect";
 import PackageCard from "./PackageCard";
 import { getDeviceProfile } from "./types/device";
+import type { PackageInstallState } from "./types/install";
 import type {
   PackageCategory,
   PackageRegistry,
   PackageRegistryEntry,
 } from "./types/package";
 import { fetchPackageRegistry, installPackage } from "./types/package";
-import type { PackageInstallState } from "./types/install";
 
 interface PackageStoreProps {
   selectedDevice: string | null;
@@ -185,15 +185,6 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
       <p className="subtitle">
         Browse and install add-on packages for your MinUI device.
       </p>
-
-      {error && (
-        <div className="store-error">
-          <p className="error">{error}</p>
-          <button type="button" onClick={() => setError(null)}>
-            Dismiss
-          </button>
-        </div>
-      )}
 
       <div className="store-controls">
         <input

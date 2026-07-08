@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from "react";
+import type { ForkConfig } from "../types/fork";
 import type { PackageUpdateInfo } from "../types/package";
 import { checkPackageUpdates, fetchPackageRegistry } from "../types/package";
 import { fetchMinUIRelease } from "../types/release";
 import type { VersionCheckResult } from "../types/version";
 import { checkMinuiVersion } from "../types/version";
-import type { ForkConfig } from "../types/fork";
 
 interface VersionCheckState {
   isChecking: boolean;
@@ -68,8 +68,10 @@ export function useVersionCheck(fork: ForkConfig) {
             packageUpdates: updates.filter((u) => u.update_available),
           }));
         }
-      } catch {
-        // Version check failure is non-fatal
+      } catch (err) {
+        // Version check failure is non-fatal, but log so programming
+        // bugs (not just network failures) surface during development.
+        console.error("Version check failed:", err);
       } finally {
         if (requestId === requestIdRef.current) {
           setState((s) => ({ ...s, isChecking: false }));
