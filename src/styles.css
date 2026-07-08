@@ -1350,3 +1350,94 @@ select option {
 .active-fork strong {
   color: #ccc;
 }
+
+/* BIOS Installer */
+.bios-installer-header {
+  margin-bottom: 1rem;
+}
+
+.bios-warn {
+  color: #e6c200;
+  font-size: 0.875rem;
+  background: #1a1a00;
+  border: 1px solid #4d4d00;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.bios-summary {
+  font-size: 0.9375rem;
+  color: #cccccc;
+  margin: 0.5rem 0 0;
+}
+
+.bios-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bios-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  background: #0a0a0a;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+}
+
+.bios-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bios-item-title {
+  font-size: 0.9375rem;
+}
+
+.bios-item-desc {
+  color: #999999;
+}
+
+.bios-item-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  color: #888888;
+  margin-top: 0.25rem;
+  word-break: break-all;
+}
+
+.bios-item-status {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.bios-status-present {
+  color: #4ade80;
+}
+
+.bios-status-missing {
+  color: #888888;
+}
+
+.bios-message {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.bios-item-actions {
+  flex-shrink: 0;
+}
+
+.bios-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}

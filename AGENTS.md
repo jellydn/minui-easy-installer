@@ -77,7 +77,7 @@ Config in `prek.toml`. Auto-rewrites staged files (trailing whitespace, EOF fixe
 
 ## Code Organization
 
-- Frontend entry: `src/main.tsx` → `src/App.tsx` (state-based navigation: "home" | "store" | "wifi")
+- Frontend entry: `src/main.tsx` → `src/App.tsx` (state-based navigation: "home" | "store" | "wifi" | "bios" | "settings")
 - Rust entry: `src-tauri/src/main.rs` → `src-tauri/src/lib.rs` (all Tauri commands registered here)
 - Device profiles: `src/types/device.ts` + `src/types/device-install-map.json`
 - Drive detection: `src-tauri/src/drives.rs` (platform-specific macOS/Windows)
@@ -87,6 +87,7 @@ Config in `prek.toml`. Auto-rewrites staged files (trailing whitespace, EOF fixe
 - SD health check: `src-tauri/src/health.rs`
 - Validation: `src-tauri/src/validate.rs`
 - WiFi: `src-tauri/src/wifi.rs` (scan via `airport` on macOS, write config)
+- BIOS: `src-tauri/src/bios.rs` (catalog + status + install_bios_from_bytes) and `src/BiosInstaller.tsx` (UI). The user supplies copyrighted BIOS files; the installer copies them to the right `Bios/<subdir>/` path.
 - Confirmation dialogs: `src/ConfirmDialog.tsx` (overlay modal for write ops)
 - Install progress UI: `src/InstallProgress.tsx`
 
@@ -94,6 +95,7 @@ Config in `prek.toml`. Auto-rewrites staged files (trailing whitespace, EOF fixe
 
 - `pipeline.rs::create_target_within`: Canonicalizes path ancestors to verify they stay within SD card root _before_ creating directories, then re-validates _after_ to catch symlink races
 - `install.rs::copy_extras_files`: Sanitizes `extras_platform` (alphanumeric + hyphens only)
+- `bios.rs::install_bios_from_bytes`: Sanitizes subdir/filename (no traversal, NUL, or path separators), canonicalizes the target parent _before_ write and re-validates the canonical path _after_ write (symlink-race guard)
 - `fs_utils.rs::copy_dir_recursive`: `fs::copy` dereferences symlinks (no symlink escape)
 - Registry data: validate schema before use (see `src/types/validate.ts`)
 
