@@ -113,6 +113,41 @@ pub fn catalog() -> Vec<BiosEntry> {
             description: "Super Game Boy".to_string(),
             system: "Super Game Boy".to_string(),
         },
+        BiosEntry {
+            id: "dc_boot".to_string(),
+            subdir: "DC".to_string(),
+            filename: "dc_boot.bin".to_string(),
+            description: "Dreamcast BIOS".to_string(),
+            system: "Dreamcast".to_string(),
+        },
+        BiosEntry {
+            id: "dc_naomi".to_string(),
+            subdir: "DC".to_string(),
+            filename: "naomi.zip".to_string(),
+            description: "Naomi arcade BIOS".to_string(),
+            system: "Dreamcast / Naomi".to_string(),
+        },
+        BiosEntry {
+            id: "nds_bios7".to_string(),
+            subdir: "NDS".to_string(),
+            filename: "bios7.bin".to_string(),
+            description: "Nintendo DS ARM7 BIOS".to_string(),
+            system: "Nintendo DS".to_string(),
+        },
+        BiosEntry {
+            id: "nds_bios9".to_string(),
+            subdir: "NDS".to_string(),
+            filename: "bios9.bin".to_string(),
+            description: "Nintendo DS ARM9 BIOS".to_string(),
+            system: "Nintendo DS".to_string(),
+        },
+        BiosEntry {
+            id: "nds_firmware".to_string(),
+            subdir: "NDS".to_string(),
+            filename: "firmware.bin".to_string(),
+            description: "Nintendo DS firmware".to_string(),
+            system: "Nintendo DS".to_string(),
+        },
     ]
 }
 
@@ -319,6 +354,26 @@ fn canonicalize_existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
 }
 
 #[cfg(test)]
+pub(crate) const EXPECTED_BIOS_IDS: &[&str] = &[
+    "gb_bios",
+    "gbc_bios",
+    "gba_bios",
+    "md_cd_e",
+    "md_cd_j",
+    "md_cd_u",
+    "ps_bios",
+    "pce_bios",
+    "fc_disksys",
+    "pkm_bios",
+    "sgb_bios",
+    "dc_boot",
+    "dc_naomi",
+    "nds_bios7",
+    "nds_bios9",
+    "nds_firmware",
+];
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
@@ -336,19 +391,7 @@ mod tests {
     #[test]
     fn test_catalog_contains_expected_ids() {
         let ids: Vec<String> = catalog().into_iter().map(|e| e.id).collect();
-        for required in [
-            "gb_bios",
-            "gbc_bios",
-            "gba_bios",
-            "md_cd_e",
-            "md_cd_j",
-            "md_cd_u",
-            "ps_bios",
-            "pce_bios",
-            "fc_disksys",
-            "pkm_bios",
-            "sgb_bios",
-        ] {
+        for &required in EXPECTED_BIOS_IDS {
             assert!(
                 ids.iter().any(|id| id == required),
                 "missing {required} in catalog"
@@ -372,6 +415,11 @@ mod tests {
         assert_eq!(by_id("fc_disksys").filename, "disksys.rom");
         assert_eq!(by_id("pkm_bios").filename, "bios.min");
         assert_eq!(by_id("sgb_bios").filename, "sgb.bios");
+        assert_eq!(by_id("dc_boot").filename, "dc_boot.bin");
+        assert_eq!(by_id("dc_naomi").filename, "naomi.zip");
+        assert_eq!(by_id("nds_bios7").filename, "bios7.bin");
+        assert_eq!(by_id("nds_bios9").filename, "bios9.bin");
+        assert_eq!(by_id("nds_firmware").filename, "firmware.bin");
     }
 
     #[test]
@@ -386,6 +434,11 @@ mod tests {
         assert_eq!(by_id("fc_disksys").subdir, "FC");
         assert_eq!(by_id("pkm_bios").subdir, "PKM");
         assert_eq!(by_id("sgb_bios").subdir, ""); // root
+        assert_eq!(by_id("dc_boot").subdir, "DC");
+        assert_eq!(by_id("dc_naomi").subdir, "DC");
+        assert_eq!(by_id("nds_bios7").subdir, "NDS");
+        assert_eq!(by_id("nds_bios9").subdir, "NDS");
+        assert_eq!(by_id("nds_firmware").subdir, "NDS");
     }
 
     #[test]

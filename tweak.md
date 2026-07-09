@@ -70,6 +70,11 @@ copies them to the right `Bios/<subdir>/` path on the SD card.
 | `fc_disksys` | FC | `disksys.rom` | Famicom Disk System |
 | `pkm_bios` | PKM | `bios.min` | Pokemon Mini |
 | `sgb_bios` | _root_ | `sgb.bios` | Super Game Boy |
+| `dc_boot` | DC | `dc_boot.bin` | Sega Dreamcast |
+| `dc_naomi` | DC | `naomi.zip` | Dreamcast / Naomi |
+| `nds_bios7` | NDS | `bios7.bin` | Nintendo DS ARM7 |
+| `nds_bios9` | NDS | `bios9.bin` | Nintendo DS ARM9 |
+| `nds_firmware` | NDS | `firmware.bin` | Nintendo DS firmware |
 
 Regression guard: `test_catalog_filenames_match_issue_spec` and
 `test_catalog_subdirs_match_issue_spec` pin every filename/subdir to

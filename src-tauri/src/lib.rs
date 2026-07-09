@@ -542,19 +542,7 @@ mod tests {
         // #7 are present. Mirrors the unit test in bios.rs.
         assert!(!entries.is_empty());
         let ids: Vec<&str> = entries.iter().map(|e| e.id.as_str()).collect();
-        for required in [
-            "gb_bios",
-            "gbc_bios",
-            "gba_bios",
-            "md_cd_e",
-            "md_cd_j",
-            "md_cd_u",
-            "ps_bios",
-            "pce_bios",
-            "fc_disksys",
-            "pkm_bios",
-            "sgb_bios",
-        ] {
+        for &required in bios::EXPECTED_BIOS_IDS {
             assert!(ids.contains(&required), "missing {required} in catalog");
         }
     }
