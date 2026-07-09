@@ -27,7 +27,7 @@ function Settings({ selectedFork, onSelectFork }: SettingsProps) {
       setCustomError(null);
     } else {
       setCustomError(
-        "Invalid format. Use \"owner/repo\" (e.g. \"myfork/MinUI-Mod\").",
+        'Invalid format. Use "owner/repo" (e.g. "myfork/MinUI-Mod").',
       );
     }
   };

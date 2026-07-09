@@ -76,7 +76,10 @@ describe("parseGitHubRelease", () => {
 
   it("returns error for missing tag_name", () => {
     const input = { assets: [] };
-    const result = parseGitHubRelease(input, OFFICIAL_FORK) as ReleaseFetchError;
+    const result = parseGitHubRelease(
+      input,
+      OFFICIAL_FORK,
+    ) as ReleaseFetchError;
     expect(result.code).toBe("PARSE_ERROR");
     expect(result.message).toContain("tag_name");
   });
@@ -91,14 +94,20 @@ describe("parseGitHubRelease", () => {
       ],
     };
 
-    const result = parseGitHubRelease(input, OFFICIAL_FORK) as ReleaseFetchError;
+    const result = parseGitHubRelease(
+      input,
+      OFFICIAL_FORK,
+    ) as ReleaseFetchError;
     expect(result.code).toBe("NOT_FOUND");
     expect(result.message).toContain("base archive");
   });
 
   it("handles empty assets array", () => {
     const input = { tag_name: "v1.0.0", assets: [] };
-    const result = parseGitHubRelease(input, OFFICIAL_FORK) as ReleaseFetchError;
+    const result = parseGitHubRelease(
+      input,
+      OFFICIAL_FORK,
+    ) as ReleaseFetchError;
     expect(result.code).toBe("NOT_FOUND");
   });
 });

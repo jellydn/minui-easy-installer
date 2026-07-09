@@ -33,7 +33,11 @@ export interface UseForkInstallOptions {
   /** Version check result; needed to gate update-all. */
   versionCheck: VersionCheckResult | null;
   /** Pending package updates; needed for update-all. */
-  packageUpdates: { name: string; installed_version: string | null; latest_version: string }[];
+  packageUpdates: {
+    name: string;
+    installed_version: string | null;
+    latest_version: string;
+  }[];
   /** Refresh the version check after update-all completes. */
   onAfterUpdate: (sdMount: string) => Promise<void> | void;
 }
@@ -98,10 +102,7 @@ export function useForkInstall(
     forkRef.current = fork;
   }, [fork]);
 
-  const dismissInstall = useCallback(
-    () => setInstall(INITIAL_STATE),
-    [],
-  );
+  const dismissInstall = useCallback(() => setInstall(INITIAL_STATE), []);
   const dismissValidation = useCallback(
     () => setInstall((s) => ({ ...s, validationResult: null })),
     [],
@@ -257,7 +258,10 @@ export function useForkInstall(
       if (versionCheck?.update_available) {
         setUpdateAllMessage(`Updating ${forkRef.current.label}...`);
 
-        const fetched = await fetchAndInstallRelease(selectedDriveMount, profile);
+        const fetched = await fetchAndInstallRelease(
+          selectedDriveMount,
+          profile,
+        );
         if (fetched.kind === "err") {
           finish(fetched.message, "");
           return;
@@ -265,9 +269,7 @@ export function useForkInstall(
       }
 
       if (packageUpdates.length > 0) {
-        setUpdateAllMessage(
-          `Updating ${packageUpdates.length} package(s)...`,
-        );
+        setUpdateAllMessage(`Updating ${packageUpdates.length} package(s)...`);
 
         const registryResult = await fetchPackageRegistry();
         if (!registryResult.success) {
@@ -356,10 +358,7 @@ async function attachProgressListener(
   });
 }
 
-function stepToInstallPhase(
-  step: string,
-  current: InstallPhase,
-): InstallPhase {
+function stepToInstallPhase(step: string, current: InstallPhase): InstallPhase {
   switch (step) {
     case "download":
       return "downloading";
