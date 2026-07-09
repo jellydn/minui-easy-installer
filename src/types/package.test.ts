@@ -21,6 +21,7 @@ describe("fetchPackageRegistry", () => {
     expect(names).toContain("Pico-8");
     expect(names).toContain("Portmaster");
     expect(names).toContain("PSP");
+    expect(names).toContain("MAME 2003 Plus");
 
     // Tool paks
     expect(names).toContain("Wifi");
