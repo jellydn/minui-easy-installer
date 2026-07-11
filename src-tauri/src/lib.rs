@@ -26,37 +26,9 @@ async fn format_drive(mount_path: String, volume_name: String) -> Result<(), Str
     drives::format_drive(&mount_path, &volume_name)
 }
 
-/// Standalone download command — deprecated in favor of the install pipeline.
-/// The TempDir is dropped immediately after this returns, so the file_path
-/// in the result is no longer valid once this returns. Kept for backward
-/// compatibility with frontend archive.ts. Prefer install_minui or install_package.
-#[tauri::command]
-async fn download_and_verify_archive(
-    url: String,
-    checksum: Option<String>,
-) -> Result<download::DownloadResult, String> {
-    let checksum_ref = checksum.as_deref();
-    let (result, _temp_dir) = download::download_archive(&url, checksum_ref).await?;
-    // _temp_dir drops here — file still exists on disk for the return trip
-    // but will be cleaned up shortly after. Not safe to chain with extraction.
-    Ok(result)
-}
-
 #[tauri::command]
 fn verify_archive_checksum(file_path: String, expected_checksum: String) -> Result<bool, String> {
     download::verify_checksum(&file_path, &expected_checksum)
-}
-
-#[tauri::command]
-async fn extract_archive_to_directory(
-    archive_path: String,
-    destination: Option<String>,
-) -> Result<extract::ExtractionResult, String> {
-    let dest_ref = destination.as_deref();
-    let (result, _temp_dir) = extract::extract_archive(&archive_path, dest_ref)?;
-    // Same caveat as download_and_verify_archive: if no destination is
-    // specified, the TempDir drops here and the extracted files vanish.
-    Ok(result)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -333,9 +305,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_removable_drives,
             format_drive,
-            download_and_verify_archive,
             verify_archive_checksum,
-            extract_archive_to_directory,
             install_minui,
             start_install,
             cancel_install,
@@ -638,14 +608,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ---- download::download_archive ----
-
-    #[tokio::test]
-    async fn test_download_and_verify_archive_errors_on_unreachable() {
-        let result = download::download_archive("http://127.0.0.1:1/never.zip", None).await;
-        assert!(result.is_err());
-    }
-
     // ---- download::verify_checksum ----
 
     #[test]
@@ -677,7 +639,4 @@ mod tests {
         assert_eq!(result, Ok(false));
     }
 
-    // ---- extract::extract_archive_to_directory ----
-    // Already covered by `extract.rs` tests. Contract test in lib.rs would
-    // duplicate that work; skip and document.
 }
