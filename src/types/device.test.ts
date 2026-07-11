@@ -31,6 +31,4 @@ describe("getDeviceProfile", () => {
       expect(profile.installPathRules.toolsDir).toBeTruthy();
     }
   });
-
-
 });

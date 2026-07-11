@@ -1,5 +1,11 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import { useFork } from "../contexts/ForkContext";
 import { type DeviceProfile, getDeviceProfile } from "../types/device";
 import type { ForkConfig } from "../types/fork";
@@ -151,8 +157,6 @@ export function useForkInstall(
     () => setInstall((s) => ({ ...s, validationResult: null })),
     [],
   );
-
-
 
   const installMinUI = useCallback(async () => {
     if (!selectedDevice || !selectedDriveMount) return;
