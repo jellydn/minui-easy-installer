@@ -20,7 +20,7 @@ pub struct ValidationResult {
     pub free_space_bytes: Option<u64>,
 }
 
-const ESSENTIAL_BASE_PATHS: &[&str] = &["MinUI.zip", "minui.txt"];
+const ESSENTIAL_BASE_PATHS: &[&str] = &["minui.txt"];
 
 fn check_path_exists(sd_root: &Path, relative_path: &str) -> ValidationCheck {
     let full_path = sd_root.join(relative_path.trim_start_matches('/'));
