@@ -93,8 +93,16 @@ fn looks_like_version(s: &str) -> bool {
         return false;
     }
 
-    // Single numeric run of 6+ digits: date-only format (e.g. MinUI-Zero "20250525")
-    if s.len() >= 6 && s.chars().all(|c| c.is_ascii_digit()) {
+    // Single run of 6+ characters: date-only format (e.g. MinUI-Zero
+    // "20250525") or tagged builds like "20240212b-1". Hyphens are only
+    // accepted when the string also contains a letter, so plain
+    // dash-separated dates such as "2024-12-25" are still rejected.
+    if s.len() >= 6
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        && (s.chars().any(|c| c.is_ascii_alphabetic())
+            || !s.contains('-'))
+    {
         return true;
     }
 
