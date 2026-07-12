@@ -115,7 +115,12 @@ fn copy_archive_item(
                 .map_err(|e| format!("Failed to create parent directory: {}", e))?;
         }
         fs::copy(src, dst).map_err(|e| {
-            format!("Failed to copy {} to {}: {}", src.display(), dst.display(), e)
+            format!(
+                "Failed to copy {} to {}: {}",
+                src.display(),
+                dst.display(),
+                e
+            )
         })?;
         Ok(1)
     } else {
@@ -482,9 +487,12 @@ mod tests {
         // README should not be copied
         fs::write(extracted.join("README.txt"), "readme").unwrap();
 
-        let copied =
-            copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap(), "miyoo354")
-                .unwrap();
+        let copied = copy_base_files(
+            extracted.to_str().unwrap(),
+            sd_root.to_str().unwrap(),
+            "miyoo354",
+        )
+        .unwrap();
 
         // 2 device files + MinUI.zip + Bios/Roms/Saves dirs (empty) = 3 copied files/entries
         assert_eq!(copied, 3);
@@ -521,9 +529,17 @@ mod tests {
         fs::write(extracted.join("MinUI.zip"), "minui").unwrap();
 
         // No device folders exist in this archive.
-        let copied = copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap(), "miyoo354").unwrap();
+        let copied = copy_base_files(
+            extracted.to_str().unwrap(),
+            sd_root.to_str().unwrap(),
+            "miyoo354",
+        )
+        .unwrap();
 
-        assert_eq!(copied, 1, "only MinUI.zip should be copied when device folder is missing");
+        assert_eq!(
+            copied, 1,
+            "only MinUI.zip should be copied when device folder is missing"
+        );
         assert!(sd_root.join("MinUI.zip").exists());
         assert!(sd_root.join("Bios").is_dir());
         assert!(sd_root.join("Roms").is_dir());
@@ -603,15 +619,27 @@ mod tests {
             // Shared items: MinUI.zip + Bios/Roms/Saves directories.
             // Bios/Roms/Saves are empty in this mock, so only MinUI.zip counts as a file,
             // but the directories should still be created on the SD card.
-            assert!(sd_root.join("MinUI.zip").exists(), "MinUI.zip should be copied for {platform}");
+            assert!(
+                sd_root.join("MinUI.zip").exists(),
+                "MinUI.zip should be copied for {platform}"
+            );
             assert_eq!(
                 fs::read_to_string(sd_root.join("MinUI.zip")).unwrap(),
                 "minui",
                 "MinUI.zip content should be preserved for {platform}"
             );
-            assert!(sd_root.join("Bios").is_dir(), "Bios directory should be created for {platform}");
-            assert!(sd_root.join("Roms").is_dir(), "Roms directory should be created for {platform}");
-            assert!(sd_root.join("Saves").is_dir(), "Saves directory should be created for {platform}");
+            assert!(
+                sd_root.join("Bios").is_dir(),
+                "Bios directory should be created for {platform}"
+            );
+            assert!(
+                sd_root.join("Roms").is_dir(),
+                "Roms directory should be created for {platform}"
+            );
+            assert!(
+                sd_root.join("Saves").is_dir(),
+                "Saves directory should be created for {platform}"
+            );
             assert!(
                 sd_root.join(expected_item).exists(),
                 "selected device item {expected_item} should be copied for {platform}"
@@ -652,8 +680,14 @@ mod tests {
             }
 
             // README and LICENSE should never be copied.
-            assert!(!sd_root.join("README.txt").exists(), "README.txt should not be copied for {platform}");
-            assert!(!sd_root.join("LICENSE.txt").exists(), "LICENSE.txt should not be copied for {platform}");
+            assert!(
+                !sd_root.join("README.txt").exists(),
+                "README.txt should not be copied for {platform}"
+            );
+            assert!(
+                !sd_root.join("LICENSE.txt").exists(),
+                "LICENSE.txt should not be copied for {platform}"
+            );
         }
     }
 
@@ -670,9 +704,12 @@ mod tests {
         fs::write(extracted.join("MinUI.zip"), "minui").unwrap();
         fs::create_dir_all(extracted.join("Bios")).unwrap();
 
-        let copied =
-            copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap(), "m17")
-                .unwrap();
+        let copied = copy_base_files(
+            extracted.to_str().unwrap(),
+            sd_root.to_str().unwrap(),
+            "m17",
+        )
+        .unwrap();
 
         assert_eq!(copied, 2); // em_ui.sh + MinUI.zip
         assert!(sd_root.join("em_ui.sh").exists());
@@ -701,9 +738,12 @@ mod tests {
         fs::create_dir_all(extracted.join("miyoo")).unwrap();
         fs::write(extracted.join("miyoo/app"), "app").unwrap();
 
-        let copied =
-            copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap(), "miyoo")
-                .unwrap();
+        let copied = copy_base_files(
+            extracted.to_str().unwrap(),
+            sd_root.to_str().unwrap(),
+            "miyoo",
+        )
+        .unwrap();
 
         // MinUI.zip + miyoo/app = 2 files; Roms/Saves skipped because they exist
         assert_eq!(copied, 2);

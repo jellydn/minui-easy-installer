@@ -25,7 +25,6 @@ pub struct ValidationResult {
     pub multiple_device_folders_warning: Option<String>,
 }
 
-
 /// Detect device-specific folders/files present at the SD card root.
 fn detect_device_base_items(sd_root: &Path) -> Vec<String> {
     let mut found = Vec::new();
@@ -252,7 +251,8 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let sd_root = temp.path();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
 
         assert!(!result.success);
         assert!(result.failed_count > 0);
@@ -271,7 +271,8 @@ mod tests {
         fs::create_dir_all(sd_root.join("miyoo")).unwrap();
         fs::create_dir_all(sd_root.join("Tools")).unwrap();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
 
         assert!(result.success);
         assert_eq!(result.failed_count, 0);
@@ -292,7 +293,8 @@ mod tests {
         fs::create_dir_all(sd_root.join("Tools/rg35xxplus/wifi.pak")).unwrap();
         fs::create_dir_all(sd_root.join("Emus/rg35xxplus/mgba.pak")).unwrap();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), "rg35xxplus", true, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "rg35xxplus", true, "/Tools").unwrap();
 
         assert!(result.success);
         assert_eq!(result.failed_count, 0);
@@ -309,7 +311,8 @@ mod tests {
         fs::write(sd_root.join("minui.txt"), "MinUI 2025.01.01").unwrap();
         fs::create_dir_all(sd_root.join("miyoo")).unwrap();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
 
         assert!(!result.success);
         let tools_check = result.checks.iter().find(|c| c.name.contains("Tools"));
@@ -327,7 +330,8 @@ mod tests {
         fs::write(sd_root.join("em_ui.sh"), "#!/bin/sh").unwrap();
         fs::create_dir_all(sd_root.join("Tools")).unwrap();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), "m17", false, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "m17", false, "/Tools").unwrap();
 
         assert!(result.success);
         let em_ui_check = result.checks.iter().find(|c| c.name.contains("em_ui.sh"));
@@ -376,7 +380,8 @@ mod tests {
         fs::create_dir_all(sd_root.join("trimui")).unwrap();
         fs::create_dir_all(sd_root.join("Tools")).unwrap();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
 
         assert!(result.success);
         assert!(result.multiple_device_folders_warning.is_some());
@@ -395,7 +400,8 @@ mod tests {
         fs::create_dir_all(sd_root.join("miyoo")).unwrap();
         fs::create_dir_all(sd_root.join("Tools")).unwrap();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
 
         assert!(result.success);
         assert!(result.multiple_device_folders_warning.is_none());

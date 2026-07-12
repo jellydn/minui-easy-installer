@@ -57,8 +57,7 @@ mod tests {
 
     #[test]
     fn known_items_cover_all_mapped_outputs() {
-        let known: std::collections::HashSet<_> =
-            KNOWN_DEVICE_BASE_ITEMS.iter().copied().collect();
+        let known: std::collections::HashSet<_> = KNOWN_DEVICE_BASE_ITEMS.iter().copied().collect();
         for (_, item) in DEVICE_BASE_MAPPINGS {
             assert!(
                 known.contains(item),
