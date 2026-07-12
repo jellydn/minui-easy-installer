@@ -171,10 +171,11 @@ fn cancel_install(registry: tauri::State<'_, Arc<InstallRegistry>>) -> Result<()
 #[tauri::command]
 async fn validate_installation(
     sd_mount: String,
+    platform: String,
     has_extras: bool,
     extras_dir: String,
 ) -> Result<validate::ValidationResult, String> {
-    validate::validate_installation(&sd_mount, has_extras, &extras_dir)
+    validate::validate_installation(&sd_mount, &platform, has_extras, &extras_dir)
 }
 
 #[tauri::command]
@@ -408,7 +409,7 @@ mod tests {
     #[test]
     fn test_validate_installation_errors_on_nonexistent_mount() {
         let result =
-            validate::validate_installation("/nonexistent/path/that/cannot/exist", false, "/Tools");
+            validate::validate_installation("/nonexistent/path/that/cannot/exist", "miyoo", false, "/Tools");
         assert!(result.is_err());
     }
 
@@ -416,12 +417,14 @@ mod tests {
     fn test_validate_installation_on_empty_tempdir() {
         let temp = tempfile::tempdir().unwrap();
         let result =
-            validate::validate_installation(temp.path().to_str().unwrap(), false, "/Tools");
+            validate::validate_installation(temp.path().to_str().unwrap(), "miyoo", false, "/Tools");
         assert!(result.is_ok());
         let v = result.unwrap();
         // Empty dir = no MinUI files = failures expected
         assert!(!v.success);
         assert!(v.failed_count > 0);
+        assert_eq!(v.device_path, "miyoo");
+        assert!(v.multiple_device_folders_warning.is_none());
     }
 
     // ---- validate::format_validation_report ----
@@ -445,6 +448,8 @@ mod tests {
             passed_count: 1,
             failed_count: 1,
             free_space_bytes: Some(1024 * 1024 * 1024),
+            device_path: "miyoo".into(),
+            multiple_device_folders_warning: None,
         };
         let report = validate::format_validation_report(&v);
         assert!(report.contains("ok-line"));
