@@ -15,7 +15,8 @@ Think "Balena Etcher for MinUI" — insert an SD card, select your device, click
 - 📦 Built-in package store with per-device platform paths (e.g., `/Emus/tg5040/DC.pak/`)
 - 💾 SD card detection and validation with health checks
 - 📶 WiFi configuration wizard
-- 🎮 Supports 17 devices across TrimUI, Miyoo, Anbernic, and more
+- 🧬 BIOS file installer for emulators that need copyrighted BIOS files (you supply the BIOS files)
+- 🎮 Supports TrimUI Brick/Smart Pro, Miyoo Mini+/A30/Flip, RG35XX Plus/H/SP, and more
 
 ## Status
 
