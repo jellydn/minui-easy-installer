@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import FormatConfirmDialog from "./FormatConfirmDialog";
 import { useMountEffect } from "./hooks/useMountEffect";
 import type { RemovableDrive } from "./types/drive";
@@ -19,7 +19,7 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
   const [formatError, setFormatError] = useState<string | null>(null);
   const [formatSuccess, setFormatSuccess] = useState(false);
 
-  const fetchDrives = async () => {
+  const fetchDrives = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -30,7 +30,7 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useMountEffect(() => {
     fetchDrives();
