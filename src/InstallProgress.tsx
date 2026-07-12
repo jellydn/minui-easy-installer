@@ -41,6 +41,18 @@ function InstallProgressUI({
     onCancel != null &&
     (phase === "downloading" || phase === "extracting" || phase === "copying");
 
+  // Show a progress bar for the most recent download event that has a
+  // known total size. Events are appended in order, so the last matching
+  // entry is the current one.
+  const latestDownload = [...log]
+    .reverse()
+    .find(
+      (entry): entry is InstallProgressEvent & { currentBytes: number; totalBytes: number } =>
+        entry.step === "download" &&
+        typeof entry.currentBytes === "number" &&
+        typeof entry.totalBytes === "number",
+    );
+
   return (
     <div className="install-progress">
       <h2>{PHASE_LABELS[phase]}</h2>
@@ -50,6 +62,19 @@ function InstallProgressUI({
       )}
 
       {message && <p className="install-message">{message}</p>}
+
+      {latestDownload && phase !== "complete" && phase !== "error" && (
+        <div className="install-download-progress">
+          <progress
+            value={latestDownload.currentBytes}
+            max={latestDownload.totalBytes}
+            aria-label="Download progress"
+          />
+          <span className="install-download-progress-text">
+            {formatBytes(latestDownload.currentBytes)} / {formatBytes(latestDownload.totalBytes)}
+          </span>
+        </div>
+      )}
 
       {cancellable && (
         <div className="install-cancel-row">
@@ -66,7 +91,12 @@ function InstallProgressUI({
       {log.length > 0 && (
         <div className="install-log" ref={containerRef}>
           {log.map((entry, i) => (
-            <div key={i} className={`log-line log-${entry.step}`}>
+            // New log entries receive a stable id from the listener; the index
+            // fallback only exists for entries created before that change.
+            <div
+              key={entry.id ?? i}
+              className={`log-line log-${entry.step}`}
+            >
               <span className="log-step">{STEP_ICON[entry.step] ?? "•"}</span>
               <span className="log-details">{entry.details}</span>
             </div>
@@ -120,5 +150,16 @@ const STEP_ICON: Record<string, string> = {
   copy: "→",
   finish: "✓",
 };
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(
+    units.length - 1,
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+  );
+  const value = bytes / 1024 ** i;
+  return `${value.toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
+}
 
 export default InstallProgressUI;

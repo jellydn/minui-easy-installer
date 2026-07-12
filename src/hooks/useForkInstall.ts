@@ -211,6 +211,7 @@ export function useForkInstall(
           {
             step: "fetch",
             details: `Found ${forkRef.current.label} v${release.version} (${fileName})`,
+            id: generateLogId(),
           },
         ],
       }));
@@ -363,6 +364,10 @@ export function useForkInstall(
   };
 }
 
+function generateLogId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 async function attachProgressListener(
   setInstall: React.Dispatch<React.SetStateAction<InstallState>>,
 ): Promise<UnlistenFn> {
@@ -370,7 +375,8 @@ async function attachProgressListener(
     const { step, details } = event.payload;
     setInstall((s) => {
       const phase = stepToInstallPhase(step, s.phase);
-      return { ...s, phase, message: details, log: [...s.log, event.payload] };
+      const entry = { ...event.payload, id: generateLogId() };
+      return { ...s, phase, message: details, log: [...s.log, entry] };
     });
   });
 }
