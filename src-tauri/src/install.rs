@@ -6,6 +6,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::fs_utils;
 use crate::pipeline::{DownloadProgressCallback, InstallSession, Pipeline};
+use crate::platform::device_base_item;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallResult {
@@ -90,15 +91,70 @@ fn is_preserved_path(path: &Path, sd_root: &Path) -> bool {
         .any(|preserved| name_str.eq_ignore_ascii_case(preserved))
 }
 
-pub fn copy_base_files(extracted_base_path: &str, sd_mount: &str) -> Result<u32, String> {
+/// Shared items that should be copied from every base archive to the SD root.
+const SHARED_BASE_ITEMS: &[&str] = &["Bios", "Roms", "Saves", "MinUI.zip"];
+
+/// Copy a single base archive item (file or directory) from `src` to `dst`.
+///
+/// When `preserve` is true, existing user data under the destination is
+/// skipped using `is_preserved_path`. Returns the number of files copied,
+/// or 0 if the source does not exist.
+fn copy_archive_item(
+    src: &Path,
+    dst: &Path,
+    sd_root: &Path,
+    preserve: bool,
+) -> Result<u32, String> {
+    if !src.exists() {
+        return Ok(0);
+    }
+
+    if src.is_file() {
+        if let Some(parent) = dst.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+        }
+        fs::copy(src, dst).map_err(|e| {
+            format!("Failed to copy {} to {}: {}", src.display(), dst.display(), e)
+        })?;
+        Ok(1)
+    } else {
+        fs::create_dir_all(dst)
+            .map_err(|e| format!("Failed to create directory {}: {}", dst.display(), e))?;
+        let skip_predicate = |_src: &Path, dst: &Path| preserve && is_preserved_path(dst, sd_root);
+        fs_utils::copy_dir_recursive(src, dst, &skip_predicate, &|| false)
+    }
+}
+
+/// Copy the base archive contents to the SD card root.
+///
+/// Only copies the shared items (`Bios`, `Roms`, `Saves`, `MinUI.zip`) and the
+/// device-specific folder/file for `platform`. Other device folders and
+/// `README.txt` are intentionally skipped so the SD card is not polluted with
+/// files for devices the user did not select.
+pub fn copy_base_files(
+    extracted_base_path: &str,
+    sd_mount: &str,
+    platform: &str,
+) -> Result<u32, String> {
     let base_dir = Path::new(extracted_base_path);
     let sd_root = Path::new(sd_mount);
-    fs_utils::copy_dir_recursive(
-        base_dir,
-        sd_root,
-        &|_src, dst| is_preserved_path(dst, sd_root),
-        &|| false,
-    )
+    let mut files_copied = 0u32;
+
+    // Copy shared items, preserving existing user data in Bios/Roms/Saves.
+    for item in SHARED_BASE_ITEMS {
+        let src = base_dir.join(item);
+        let dst = sd_root.join(item);
+        files_copied += copy_archive_item(&src, &dst, sd_root, true)?;
+    }
+
+    // Copy the device-specific folder/file.
+    let device_item = device_base_item(platform);
+    let device_src = base_dir.join(device_item);
+    let device_dst = sd_root.join(device_item);
+    files_copied += copy_archive_item(&device_src, &device_dst, sd_root, false)?;
+
+    Ok(files_copied)
 }
 
 /// Copies a subdirectory tree from src_root/subpath to dst_root/subpath.
@@ -252,7 +308,7 @@ pub async fn install_minui_with_cancel(
         "base",
         &options.base_url,
         options.base_checksum.as_deref(),
-        |p| copy_base_files(p.to_str().unwrap(), &options.sd_mount),
+        |p| copy_base_files(p.to_str().unwrap(), &options.sd_mount, &options.platform),
         progress.clone(),
         download_progress.clone(),
         cancel.clone(),
@@ -402,7 +458,7 @@ mod tests {
     fn test_copy_base_files_with_platform_dir() {
         let temp = tempfile::tempdir().unwrap();
         let extracted = temp.path().join("extracted");
-        let platform_dir = extracted.join("miyoo-mini-plus");
+        let platform_dir = extracted.join("miyoo354");
         let sd_root = temp.path().join("sdcard");
 
         fs::create_dir_all(&platform_dir).unwrap();
@@ -411,13 +467,258 @@ mod tests {
         fs::write(platform_dir.join("minui.pak"), "base").unwrap();
         fs::write(platform_dir.join("boot.sh"), "boot").unwrap();
 
-        // copy_base_files now copies ALL contents of extracted to sd_root
-        let copied =
-            copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap()).unwrap();
+        // Shared items
+        fs::create_dir_all(extracted.join("Bios")).unwrap();
+        fs::create_dir_all(extracted.join("Roms")).unwrap();
+        fs::create_dir_all(extracted.join("Saves")).unwrap();
+        fs::write(extracted.join("MinUI.zip"), "minui").unwrap();
 
+        // Other device folders should not be copied
+        fs::create_dir_all(extracted.join("trimui")).unwrap();
+        fs::write(extracted.join("trimui/trimui.pak"), "trimui").unwrap();
+        fs::create_dir_all(extracted.join("miyoo")).unwrap();
+        fs::write(extracted.join("miyoo/miyoo.pak"), "miyoo").unwrap();
+
+        // README should not be copied
+        fs::write(extracted.join("README.txt"), "readme").unwrap();
+
+        let copied =
+            copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap(), "miyoo354")
+                .unwrap();
+
+        // 2 device files + MinUI.zip + Bios/Roms/Saves dirs (empty) = 3 copied files/entries
+        assert_eq!(copied, 3);
+        assert!(sd_root.join("miyoo354/minui.pak").exists());
+        assert!(sd_root.join("miyoo354/boot.sh").exists());
+        assert!(sd_root.join("MinUI.zip").exists());
+        assert!(!sd_root.join("trimui").exists());
+        assert!(!sd_root.join("miyoo").exists());
+        assert!(!sd_root.join("README.txt").exists());
+    }
+
+    /// End-to-end test of the base-archive copy step with a realistic
+    /// multi-device MinUI archive. Verifies that selecting a platform only
+    /// copies the shared items plus that platform's device folder/file,
+    /// leaving all other device folders and README.txt behind.
+    ///
+    /// This test mocks the SD card with a temporary directory and exercises
+    /// the same `copy_base_files` path the full install pipeline uses after
+    /// download/extract, so it proves the installer copy behavior without
+    /// requiring network I/O or a real SD card.
+    /// Verifies graceful handling when the selected platform has no matching
+    /// device folder/file in the base archive. Only shared items should be copied.
+    #[test]
+    fn test_copy_base_files_end_to_end_missing_device_folder_copies_only_shared_items() {
+        let temp = tempfile::tempdir().unwrap();
+        let extracted = temp.path().join("extracted");
+        let sd_root = temp.path().join("sdcard");
+        fs::create_dir_all(&extracted).unwrap();
+        fs::create_dir_all(&sd_root).unwrap();
+
+        fs::create_dir_all(extracted.join("Bios")).unwrap();
+        fs::create_dir_all(extracted.join("Roms")).unwrap();
+        fs::create_dir_all(extracted.join("Saves")).unwrap();
+        fs::write(extracted.join("MinUI.zip"), "minui").unwrap();
+
+        // No device folders exist in this archive.
+        let copied = copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap(), "miyoo354").unwrap();
+
+        assert_eq!(copied, 1, "only MinUI.zip should be copied when device folder is missing");
+        assert!(sd_root.join("MinUI.zip").exists());
+        assert!(sd_root.join("Bios").is_dir());
+        assert!(sd_root.join("Roms").is_dir());
+        assert!(sd_root.join("Saves").is_dir());
+        assert!(!sd_root.join("miyoo354").exists());
+    }
+
+    /// End-to-end test of the base-archive copy step with a realistic
+    /// multi-device MinUI archive. Verifies that selecting a platform only
+    /// copies the shared items plus that platform's device folder/file,
+    /// leaving all other device folders and README.txt behind.
+    ///
+    /// This test mocks the SD card with a temporary directory and exercises
+    /// the same `copy_base_files` path the full install pipeline uses after
+    /// download/extract, so it proves the installer copy behavior without
+    /// requiring network I/O or a real SD card.
+    #[test]
+    fn test_copy_base_files_end_to_end_only_selected_device_folder_is_copied() {
+        let temp = tempfile::tempdir().unwrap();
+        let extracted = temp.path().join("extracted");
+        let sd_root = temp.path().join("sdcard");
+        fs::create_dir_all(&extracted).unwrap();
+        fs::create_dir_all(&sd_root).unwrap();
+
+        // Shared items that every base archive contains
+        fs::create_dir_all(extracted.join("Bios")).unwrap();
+        fs::create_dir_all(extracted.join("Roms")).unwrap();
+        fs::create_dir_all(extracted.join("Saves")).unwrap();
+        fs::write(extracted.join("MinUI.zip"), "minui").unwrap();
+
+        // Device-specific folders/files that should only be copied when
+        // their matching platform is selected. Derive the archive contents
+        // from the canonical mappings so the test stays in sync.
+        let mut device_folders: Vec<(&str, &str)> = Vec::new();
+        for (_, item) in crate::platform::DEVICE_BASE_MAPPINGS {
+            if *item == "em_ui.sh" {
+                fs::write(extracted.join("em_ui.sh"), "#!/bin/sh").unwrap();
+                continue;
+            }
+            let file = "minui.pak";
+            fs::create_dir_all(extracted.join(item)).unwrap();
+            fs::write(extracted.join(item).join(file), format!("{item} data")).unwrap();
+            device_folders.push((*item, file));
+        }
+
+        // README and other top-level files should never be copied
+        fs::write(extracted.join("README.txt"), "readme").unwrap();
+        fs::write(extracted.join("LICENSE.txt"), "license").unwrap();
+
+        fn clean_sd_root(sd_root: &std::path::Path) {
+            for entry in std::fs::read_dir(sd_root).unwrap() {
+                let entry = entry.unwrap();
+                if entry.path().is_dir() {
+                    std::fs::remove_dir_all(entry.path()).unwrap();
+                } else {
+                    std::fs::remove_file(entry.path()).unwrap();
+                }
+            }
+        }
+
+        // Iterate over every supported platform so the test stays in sync
+        // with the canonical device mappings.
+        for (platform, expected_item) in crate::platform::DEVICE_BASE_MAPPINGS {
+            let platform = *platform;
+            let expected_item = *expected_item;
+
+            // Clean the SD card root between runs so each assertion is independent.
+            clean_sd_root(&sd_root);
+
+            let _copied = copy_base_files(
+                extracted.to_str().unwrap(),
+                sd_root.to_str().unwrap(),
+                platform,
+            )
+            .unwrap();
+
+            // Shared items: MinUI.zip + Bios/Roms/Saves directories.
+            // Bios/Roms/Saves are empty in this mock, so only MinUI.zip counts as a file,
+            // but the directories should still be created on the SD card.
+            assert!(sd_root.join("MinUI.zip").exists(), "MinUI.zip should be copied for {platform}");
+            assert_eq!(
+                fs::read_to_string(sd_root.join("MinUI.zip")).unwrap(),
+                "minui",
+                "MinUI.zip content should be preserved for {platform}"
+            );
+            assert!(sd_root.join("Bios").is_dir(), "Bios directory should be created for {platform}");
+            assert!(sd_root.join("Roms").is_dir(), "Roms directory should be created for {platform}");
+            assert!(sd_root.join("Saves").is_dir(), "Saves directory should be created for {platform}");
+            assert!(
+                sd_root.join(expected_item).exists(),
+                "selected device item {expected_item} should be copied for {platform}"
+            );
+
+            // Verify the selected device file content is correct.
+            if expected_item != "em_ui.sh" {
+                assert_eq!(
+                    fs::read_to_string(sd_root.join(expected_item).join("minui.pak")).unwrap(),
+                    format!("{expected_item} data"),
+                    "selected device file content should match for {platform}"
+                );
+            } else {
+                assert_eq!(
+                    fs::read_to_string(sd_root.join(expected_item)).unwrap(),
+                    "#!/bin/sh",
+                    "em_ui.sh content should match for {platform}"
+                );
+            }
+
+            // Verify no other device folders were copied.
+            for (folder, _) in &device_folders {
+                if *folder == expected_item {
+                    continue;
+                }
+                assert!(
+                    !sd_root.join(folder).exists(),
+                    "unselected device folder {folder} should not be copied for {platform}"
+                );
+            }
+
+            // M17 script should only exist when platform is m17.
+            if platform != "m17" {
+                assert!(
+                    !sd_root.join("em_ui.sh").exists(),
+                    "em_ui.sh should not be copied for {platform}"
+                );
+            }
+
+            // README and LICENSE should never be copied.
+            assert!(!sd_root.join("README.txt").exists(), "README.txt should not be copied for {platform}");
+            assert!(!sd_root.join("LICENSE.txt").exists(), "LICENSE.txt should not be copied for {platform}");
+        }
+    }
+
+    #[test]
+    fn test_copy_base_files_m17_copies_em_ui_sh() {
+        let temp = tempfile::tempdir().unwrap();
+        let extracted = temp.path().join("extracted");
+        let sd_root = temp.path().join("sdcard");
+
+        fs::create_dir_all(&extracted).unwrap();
+        fs::create_dir_all(&sd_root).unwrap();
+
+        fs::write(extracted.join("em_ui.sh"), "#!/bin/sh").unwrap();
+        fs::write(extracted.join("MinUI.zip"), "minui").unwrap();
+        fs::create_dir_all(extracted.join("Bios")).unwrap();
+
+        let copied =
+            copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap(), "m17")
+                .unwrap();
+
+        assert_eq!(copied, 2); // em_ui.sh + MinUI.zip
+        assert!(sd_root.join("em_ui.sh").exists());
+        assert!(sd_root.join("MinUI.zip").exists());
+    }
+
+    #[test]
+    fn test_copy_base_files_preserves_existing_user_data() {
+        let temp = tempfile::tempdir().unwrap();
+        let extracted = temp.path().join("extracted");
+        let sd_root = temp.path().join("sdcard");
+
+        fs::create_dir_all(&extracted).unwrap();
+        fs::create_dir_all(&sd_root).unwrap();
+
+        // Existing user data
+        fs::create_dir_all(sd_root.join("Roms/GB")).unwrap();
+        fs::write(sd_root.join("Roms/GB/pokemon.gb"), "rom_data").unwrap();
+        fs::create_dir_all(sd_root.join("Saves")).unwrap();
+        fs::write(sd_root.join("Saves/pokemon.sav"), "save_data").unwrap();
+
+        // Archive content
+        fs::create_dir_all(extracted.join("Roms")).unwrap();
+        fs::create_dir_all(extracted.join("Saves")).unwrap();
+        fs::write(extracted.join("MinUI.zip"), "minui").unwrap();
+        fs::create_dir_all(extracted.join("miyoo")).unwrap();
+        fs::write(extracted.join("miyoo/app"), "app").unwrap();
+
+        let copied =
+            copy_base_files(extracted.to_str().unwrap(), sd_root.to_str().unwrap(), "miyoo")
+                .unwrap();
+
+        // MinUI.zip + miyoo/app = 2 files; Roms/Saves skipped because they exist
         assert_eq!(copied, 2);
-        assert!(sd_root.join("miyoo-mini-plus/minui.pak").exists());
-        assert!(sd_root.join("miyoo-mini-plus/boot.sh").exists());
+        assert!(sd_root.join("MinUI.zip").exists());
+        assert!(sd_root.join("miyoo/app").exists());
+        assert!(sd_root.join("Roms/GB/pokemon.gb").exists());
+        assert_eq!(
+            fs::read_to_string(sd_root.join("Roms/GB/pokemon.gb")).unwrap(),
+            "rom_data"
+        );
+        assert!(sd_root.join("Saves/pokemon.sav").exists());
+        assert_eq!(
+            fs::read_to_string(sd_root.join("Saves/pokemon.sav")).unwrap(),
+            "save_data"
+        );
     }
 
     #[test]
