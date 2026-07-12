@@ -10,6 +10,10 @@ export interface ValidationResult {
   passed_count: number;
   failed_count: number;
   free_space_bytes: number | null;
+  /** The device-specific path that was validated (e.g. "miyoo", "rg35xxplus", "em_ui.sh"). */
+  device_path: string;
+  /** Warning message when multiple device folders are present on the SD card. */
+  multiple_device_folders_warning: string | null;
 }
 
 export interface HealthCheckResult {
@@ -32,6 +36,7 @@ export type ValidationResultEither =
 
 export async function validateInstallation(options: {
   sdMount: string;
+  platform: string;
   hasExtras: boolean;
   extrasDir: string;
 }): Promise<ValidationResultEither> {
@@ -39,6 +44,7 @@ export async function validateInstallation(options: {
     const { invoke } = await import("@tauri-apps/api/core");
     const result = await invoke<ValidationResult>("validate_installation", {
       sdMount: options.sdMount,
+      platform: options.platform,
       hasExtras: options.hasExtras,
       extrasDir: options.extrasDir,
     });

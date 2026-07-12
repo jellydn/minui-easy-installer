@@ -15,27 +15,17 @@ function ValidationReportUI({
   onRetry,
 }: ValidationReportProps) {
   const [copySuccess, setCopySuccess] = useState(false);
-  const [reportText, setReportText] = useState<string | null>(null);
 
   const handleCopyReport = useCallback(async () => {
     try {
-      const text = reportText || (await formatValidationReport(result));
+      const text = await formatValidationReport(result);
       await navigator.clipboard.writeText(text);
-      setReportText(text);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch {
-      // Fallback: create textarea for manual copy
-      const textarea = document.createElement("textarea");
-      textarea.value = reportText || "";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
+      // Clipboard API failed; the report is still visible below.
     }
-  }, [result, reportText]);
+  }, [result]);
 
   return (
     <div className="validation-report">
@@ -61,6 +51,20 @@ function ValidationReportUI({
           <strong>{result.failed_count}</strong> failed
         </p>
       </div>
+
+      <div className="validation-device-path">
+        <h3>Device-Specific Path</h3>
+        <p>
+          Checked: <code className="device-path-code">{result.device_path || "unknown"}</code>
+        </p>
+      </div>
+
+      {result.multiple_device_folders_warning && (
+        <div className="validation-warning validation-warning-multiple-devices">
+          <h3>⚠️ Multiple Device Folders Detected</h3>
+          <p className="warning-message">{result.multiple_device_folders_warning}</p>
+        </div>
+      )}
 
       <div className="validation-checks">
         <h3>Check Details</h3>

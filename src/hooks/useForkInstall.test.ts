@@ -111,6 +111,8 @@ describe("useForkInstall", () => {
         passed_count: 0,
         failed_count: 0,
         free_space_bytes: null,
+        device_path: "miyoo354",
+        multiple_device_folders_warning: null,
       },
     });
 

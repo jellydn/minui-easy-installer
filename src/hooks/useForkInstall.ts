@@ -217,6 +217,7 @@ export function useForkInstall(
 
       const valResult = await validateInstallation({
         sdMount: selectedDriveMount,
+        platform: profile.platform,
         hasExtras: data.extras_files_copied > 0,
         extrasDir: profile.installPathRules.extrasDir,
       });
@@ -244,6 +245,7 @@ export function useForkInstall(
     const { extrasFilesCopied } = install;
     const valResult = await validateInstallation({
       sdMount: selectedDriveMount,
+      platform: profile.platform,
       hasExtras: extrasFilesCopied > 0,
       extrasDir: profile.installPathRules.extrasDir,
     });

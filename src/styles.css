@@ -556,6 +556,59 @@ select option {
   margin: 0.5rem 0 1rem;
 }
 
+.validation-device-path {
+  margin: 1rem 0;
+  padding: 12px;
+  background: #000000;
+  border: 1px solid #444444;
+  border-radius: 4px;
+}
+
+.validation-device-path h3 {
+  color: #999999;
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.validation-device-path p {
+  margin: 0;
+  color: #ffffff;
+}
+
+.device-path-code {
+  background: #1a1a1a;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+  color: #cccccc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.validation-warning-multiple-devices {
+  margin: 1rem 0;
+  padding: 12px;
+  background: #1a1a00;
+  border: 1px solid #4d4d00;
+  border-radius: 4px;
+}
+
+.validation-warning-multiple-devices h3 {
+  color: #e6c200;
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.warning-message {
+  margin: 0;
+  color: #e6c200;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
 .validation-checks {
   margin: 1rem 0;
 }

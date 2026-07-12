@@ -32,6 +32,8 @@ describe("ValidationResult types", () => {
       passed_count: 2,
       failed_count: 0,
       free_space_bytes: 1024 * 1024 * 500,
+      device_path: "miyoo",
+      multiple_device_folders_warning: null,
     };
     expect(result.success).toBe(true);
     expect(result.passed_count).toBe(2);
@@ -49,6 +51,8 @@ describe("ValidationResult types", () => {
       passed_count: 1,
       failed_count: 1,
       free_space_bytes: null,
+      device_path: "rg35xxplus",
+      multiple_device_folders_warning: null,
     };
     expect(result.success).toBe(false);
     expect(result.failed_count).toBe(1);
@@ -73,6 +77,8 @@ describe("formatReportLocally", () => {
       passed_count: 1,
       failed_count: 0,
       free_space_bytes: 1024 * 1024 * 100,
+      device_path: "miyoo",
+      multiple_device_folders_warning: null,
     };
 
     // formatValidationReport calls invoke which will fail in test env,
@@ -100,6 +106,8 @@ describe("formatReportLocally", () => {
       passed_count: 0,
       failed_count: 1,
       free_space_bytes: null,
+      device_path: "trimui",
+      multiple_device_folders_warning: null,
     };
 
     const report = await formatValidationReport(result);
@@ -117,6 +125,8 @@ describe("formatReportLocally", () => {
       passed_count: 0,
       failed_count: 0,
       free_space_bytes: 1024 * 1024 * 1024 * 2.5,
+      device_path: "miyoo",
+      multiple_device_folders_warning: null,
     };
 
     const report = await formatValidationReport(result);
