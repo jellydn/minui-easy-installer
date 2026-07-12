@@ -35,7 +35,7 @@ const DEVICE_PROFILES: DeviceProfile[] = [
     installPathRules: { ...DEFAULT_INSTALL_PATH_RULES },
   },
 
-  // Miyoo — base uses "miyoo"/"miyoo285", extras uses "miyoomini"/"my282"
+  // Miyoo — base uses "miyoo"/"miyoo285"/"miyoo355", extras uses "miyoomini"/"my282"/"my355"
   {
     id: "miyoo-mini",
     name: "Miyoo Mini",
@@ -46,22 +46,31 @@ const DEVICE_PROFILES: DeviceProfile[] = [
   {
     id: "miyoo-mini-plus",
     name: "Miyoo Mini+",
-    platform: "miyoo",
+    platform: "miyoo354",
     extrasPlatform: "miyoomini",
     installPathRules: { ...DEFAULT_INSTALL_PATH_RULES },
   },
   {
     id: "miyoo-a30",
     name: "Miyoo A30",
-    platform: "miyoo285",
+    platform: "miyoo",
     extrasPlatform: "my282",
     installPathRules: { ...DEFAULT_INSTALL_PATH_RULES },
   },
   {
     id: "miyoo-flip",
     name: "Miyoo Flip",
-    platform: "miyoo354",
-    extrasPlatform: "miyoo354",
+    platform: "miyoo355",
+    extrasPlatform: "my355",
+    installPathRules: { ...DEFAULT_INSTALL_PATH_RULES },
+  },
+  {
+    id: "miyoo-mini-flip",
+    name: "Miyoo Mini Flip",
+    platform: "miyoo285",
+    // Extras platform inferred from MinUI release notes; verify against the
+    // target release's extras archive if installation fails.
+    extrasPlatform: "miyoomini",
     installPathRules: { ...DEFAULT_INSTALL_PATH_RULES },
   },
   {
