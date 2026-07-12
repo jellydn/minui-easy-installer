@@ -98,10 +98,8 @@ fn looks_like_version(s: &str) -> bool {
     // accepted when the string also contains a letter, so plain
     // dash-separated dates such as "2024-12-25" are still rejected.
     if s.len() >= 6
-        && s.chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-')
-        && (s.chars().any(|c| c.is_ascii_alphabetic())
-            || !s.contains('-'))
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        && (s.chars().any(|c| c.is_ascii_alphabetic()) || !s.contains('-'))
     {
         return true;
     }
