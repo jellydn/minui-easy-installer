@@ -13,6 +13,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use base64::engine::general_purpose::STANDARD as BASE64;
+
+use crate::fs_utils;
 use base64::Engine as _;
 
 /// One BIOS file the user might want to install.
@@ -286,7 +288,7 @@ pub fn install_bios_from_bytes(
     let parent = target
         .parent()
         .ok_or_else(|| "Target path has no parent directory".to_string())?;
-    let canonical_parent = canonicalize_existing_ancestor(parent)
+    let canonical_parent = fs_utils::canonicalize_existing_ancestor(parent)
         .map_err(|e| format!("Failed to resolve target parent: {}", e))?;
     if !canonical_parent.starts_with(&canonical_mount) {
         return Err(format!(
@@ -308,6 +310,15 @@ pub fn install_bios_from_bytes(
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create {}: {}", parent.display(), e))?;
     }
+
+    // If target exists (or is a symlink), remove it to break any potential symlink escapes.
+    if let Ok(meta) = fs::symlink_metadata(&target) {
+        if meta.is_file() || meta.file_type().is_symlink() {
+            fs::remove_file(&target)
+                .map_err(|e| format!("Failed to remove existing file/symlink at target {}: {}", target.display(), e))?;
+        }
+    }
+
     fs::write(&target, &bytes)
         .map_err(|e| format!("Failed to write {}: {}", target.display(), e))?;
 
@@ -328,30 +339,6 @@ pub fn install_bios_from_bytes(
     Ok(target.display().to_string())
 }
 
-/// Walk up `path` until we find an existing ancestor, then canonicalize it.
-///
-/// `Path::canonicalize` requires every component to exist. On a fresh
-/// install, the target parent directory tree may not exist yet. This
-/// helper finds the highest existing ancestor and canonicalizes that,
-/// so the caller can still reason about the path's location relative
-/// to the SD card root.
-///
-/// Symlink-safety: if any existing ancestor is a symlink pointing outside
-/// the SD card, `canonicalize` resolves through the symlink and the caller's
-/// `starts_with(canonical_mount)` check will reject it.
-fn canonicalize_existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
-    let mut current: &Path = path;
-    loop {
-        match current.canonicalize() {
-            Ok(canonical) => return Ok(canonical),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => match current.parent() {
-                Some(parent) => current = parent,
-                None => return Err(e),
-            },
-            Err(e) => return Err(e),
-        }
-    }
-}
 
 #[cfg(test)]
 pub(crate) const EXPECTED_BIOS_IDS: &[&str] = &[
@@ -637,6 +624,44 @@ mod tests {
         assert!(
             err.contains("Security violation") || err.contains("escapes SD card"),
             "got: {err}"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_install_rejects_leaf_symlink_escape() {
+        // If the target file itself is a symlink pointing outside the SD
+        // card, the write must not follow it. Removing the symlink before
+        // writing ensures the new file is created directly on the SD card.
+        let temp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let sd = temp.path();
+
+        let target_dir = sd.join("Bios/GB");
+        fs::create_dir_all(&target_dir).unwrap();
+
+        let target_file = target_dir.join("gb_bios.bin");
+        let outside_file = outside.path().join("leak.bin");
+        fs::write(&outside_file, b"original").unwrap();
+
+        // Create a symlink at target pointing to outside
+        symlink(&outside_file, &target_file).unwrap();
+
+        let result = install_bios_from_bytes(
+            sd.to_str().unwrap(),
+            "gb_bios",
+            &BASE64.encode(b"new_data"),
+        );
+
+        assert!(result.is_ok());
+        // Verify outside file was NOT modified/followed
+        assert_eq!(fs::read(&outside_file).unwrap(), b"original");
+        // Verify local file was written as a regular file
+        assert_eq!(fs::read(&target_file).unwrap(), b"new_data");
+        let meta = fs::symlink_metadata(&target_file).unwrap();
+        assert!(
+            !meta.file_type().is_symlink(),
+            "Target file must be a regular file, not a symlink"
         );
     }
 }

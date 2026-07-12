@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[allow(dead_code)]
 pub struct DiskSpace {
@@ -34,6 +34,31 @@ pub fn get_disk_space(_mount: &str) -> Option<DiskSpace> {
 #[allow(dead_code)]
 pub fn get_free_space(mount: &str) -> Option<u64> {
     get_disk_space(mount).map(|ds| ds.available)
+}
+
+/// Walk up `path` until we find an existing ancestor, then canonicalize it.
+///
+/// `Path::canonicalize` requires every component to exist. On a fresh
+/// install, the target parent directory tree may not exist yet. This
+/// helper finds the highest existing ancestor and canonicalizes that,
+/// so the caller can still reason about the path's location relative
+/// to the SD card root.
+///
+/// Symlink-safety: if any existing ancestor is a symlink pointing outside
+/// the SD card, `canonicalize` resolves through the symlink and the caller's
+/// checks will reject it.
+pub fn canonicalize_existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
+    let mut current: &Path = path;
+    loop {
+        match current.canonicalize() {
+            Ok(canonical) => return Ok(canonical),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => match current.parent() {
+                Some(parent) => current = parent,
+                None => return Err(e),
+            },
+            Err(e) => return Err(e),
+        }
+    }
 }
 
 /// Copies a directory tree from src to dst, optionally skipping entries via a predicate.

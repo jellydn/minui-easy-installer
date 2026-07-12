@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::download;
 use crate::extract;
+use crate::fs_utils;
 use crate::install::{InstallProgressEvent, ProgressCallback};
 
 /// Byte-level download progress callback.
@@ -180,7 +181,7 @@ pub fn create_target_within(
     let parent = target
         .parent()
         .ok_or_else(|| "Target path has no parent directory".to_string())?;
-    let canonical_parent = canonicalize_existing_ancestor(parent)
+    let canonical_parent = fs_utils::canonicalize_existing_ancestor(parent)
         .map_err(|e| format!("Failed to resolve target parent: {}", e))?;
 
     if !canonical_parent.starts_with(&canonical_sd) {
@@ -222,31 +223,4 @@ pub fn create_target_within(
     }
 
     Ok(canonical)
-}
-
-/// Walk up `path` until we find an existing ancestor, then canonicalize it.
-///
-/// `Path::canonicalize` requires every component to exist. On a fresh
-/// install, the target parent directory tree may not exist yet (e.g. SD
-/// card just formatted). This helper finds the highest existing ancestor
-/// and canonicalizes that, so the caller can still reason about the path's
-/// location relative to the SD card root.
-///
-/// Symlink-safety: if any existing ancestor is a symlink pointing outside
-/// the SD card, `canonicalize` resolves through the symlink and the caller's
-/// `starts_with(canonical_sd)` check will reject it. So this helper does
-/// not weaken the security boundary -- it just makes the fresh-install
-/// case work.
-fn canonicalize_existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
-    let mut current: &Path = path;
-    loop {
-        match current.canonicalize() {
-            Ok(canonical) => return Ok(canonical),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => match current.parent() {
-                Some(parent) => current = parent,
-                None => return Err(e),
-            },
-            Err(e) => return Err(e),
-        }
-    }
 }

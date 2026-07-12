@@ -53,6 +53,14 @@ pub fn write_wifi_config(sd_mount: &str, ssid: &str, password: &str) -> Result<(
 
     let content = format!("{}\n", entries.join("\n"));
 
+    // If wifi.txt exists (or is a symlink), remove it to break any potential symlink escapes.
+    if let Ok(meta) = fs::symlink_metadata(&wifi_path) {
+        if meta.is_file() || meta.file_type().is_symlink() {
+            fs::remove_file(&wifi_path)
+                .map_err(|e| format!("Failed to remove existing wifi.txt file/symlink: {}", e))?;
+        }
+    }
+
     fs::write(&wifi_path, content).map_err(|e| format!("Failed to write wifi.txt: {}", e))?;
 
     Ok(())
@@ -362,6 +370,34 @@ mod tests {
         let content = fs::read_to_string(wifi_path).unwrap();
         assert!(content.contains("# my home network"));
         assert!(content.contains("MyNetwork:pass"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_write_wifi_config_rejects_symlink_escape() {
+        let temp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let sd = temp.path();
+
+        let wifi_path = sd.join("wifi.txt");
+        let outside_file = outside.path().join("leak.txt");
+        fs::write(&outside_file, b"original").unwrap();
+
+        // Create a symlink at target pointing to outside
+        std::os::unix::fs::symlink(&outside_file, &wifi_path).unwrap();
+
+        write_wifi_config(sd.to_str().unwrap(), "SSID", "password").unwrap();
+
+        // Verify outside file was NOT modified/followed
+        assert_eq!(fs::read(&outside_file).unwrap(), b"original");
+        // Verify local file was written as a regular file containing the SSID config
+        let content = fs::read_to_string(&wifi_path).unwrap();
+        assert!(content.contains("SSID:password"));
+        let meta = fs::symlink_metadata(&wifi_path).unwrap();
+        assert!(
+            !meta.file_type().is_symlink(),
+            "wifi.txt must be a regular file, not a symlink"
+        );
     }
 
     #[test]
