@@ -12,6 +12,7 @@ mod health;
 mod install;
 mod package;
 mod pipeline;
+mod platform;
 mod validate;
 mod version;
 mod wifi;
