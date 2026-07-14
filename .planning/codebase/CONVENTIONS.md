@@ -1,126 +1,99 @@
-# Coding Conventions
-
-## TypeScript
-
-### Configuration
-- **Target**: ES2020
-- **Module**: ESNext with bundler resolution
-- **Strict mode**: Enabled
-- **JSX**: `react-jsx`
-- **No emit**: TypeScript used for type-checking only (Vite handles bundling)
-
-### Naming
-- **Files**: PascalCase for components (`App.tsx`, `PackageCard.tsx`), camelCase for utilities/hooks/types (`device.ts`, `useForkInstall.ts`)
-- **Types/Interfaces**: PascalCase (`DeviceProfile`, `InstallResult`, `PackageRegistryEntry`)
-- **Functions**: camelCase (`getDeviceProfile`, `copyBaseFiles`, `fetchPackageRegistry`)
-- **Test files**: Co-located `.test.ts` / `.test.tsx` files
-
-### React Patterns
-- **Functional components** only (no class components)
-- **Hooks** for state and side effects
-- **No `useEffect` for data fetching** — use `useMountEffect` escape hatch or direct event handlers
-- **State-based navigation** — `useState<Screen>()` with conditional rendering
-- **Props drilling** — passed through component tree (no global state manager)
-- **Context** for cross-cutting concerns (`ForkContext`)
-
-### Error Handling
-- **Either types**: `PackageInstallResultEither`, `PackageRegistryFetchResult`
-- **Error codes**: `"INVALID_ENTRY" | "VALIDATION_ERROR" | "PARSE_ERROR" | "NETWORK_ERROR" | "NOT_FOUND" | "UNKNOWN_ERROR"`
-- **`classifyError()`** in `src/types/errors.ts` for categorizing backend errors
-- **Try/catch** with typed fallback values for Tauri `invoke()` calls
-
-### Data Validation
-- Registry data from external sources is validated before use (`isStoreRegistry`, `validateStoreEntry`)
-- `store.json` is bundled as a fallback when the remote registry is unavailable
-- Schema validation uses type guards and shape checks
+# Conventions
 
 ## Rust
 
-### Style
-- **Edition**: 2021
-- **Formatting**: `cargo fmt` (standard Rust style)
-- **Linting**: `cargo clippy -- -D warnings`
-- **Line width**: 80 characters (matching oxfmt)
-
 ### Module Organization
-- **One module per file** (e.g., `install.rs`, `wifi.rs`, `bios.rs`)
-- **Sub-modules for complex domains**: `version/mod.rs` + `version/tests.rs`
-- **Command registration**: All Tauri commands registered in `lib.rs`
-- **Public API**: Functions exposed to Tauri commands are `pub`
+
+- **One module per file**. `lib.rs` declares all modules with `mod`.
+- **Test splits**: Use `#[cfg(test)] #[path = "module_tests.rs"] mod tests;` for extracted test files. This follows the established `version/tests.rs` pattern. Test files start with `use super::*;` (no `mod tests {}` wrapper).
+
+### Security Patterns
+
+The codebase takes SD card safety seriously. These patterns must be preserved:
+
+1. **Canonicalize before write** (`create_target_within`): Resolve the parent path's canonical form, verify it's within the SD card root, **then** create directories, then re-verify. This catches symlink races.
+
+2. **Extract to temp, then copy**: Archives are never extracted directly to the SD card. All extraction happens in temp directories, then files are selectively copied.
+
+3. **Symlink-dereferencing copy**: `copy_dir_recursive` uses `fs::copy` which dereferences symlinks by default — preventing symlink escape attacks.
+
+4. **Input sanitization**: Platform names are sanitized to alphanumeric + hyphens. BIOS filenames are checked for traversal, NUL bytes, and path separators.
+
+### Platform Gating
+
+- Use `#[cfg(target_os = "macos")]` for macOS-specific code
+- Use `#[cfg(not(target_os = "macos"))]` for non-macOS fallbacks
+- Use `#[cfg_attr(not(target_os = "macos"), allow(unused_variables))]` for parameters unused on some platforms (prefer over `_param` prefix when the parameter is used on other platforms)
+- Gate test functions that call platform-gated production code with the same `#[cfg]` attribute
+
+### Async & Cancellation
+
+- All Tauri commands are `async fn`
+- Long-running operations use `tokio::spawn` and check `CancellationToken::is_cancelled()` at phase boundaries
+- `InstallRegistry` holds a single `Arc<Mutex<Option<CancellationToken>>>` — new installs cancel old ones
+- Progress callbacks use `Arc<dyn Fn(Event) + Send + Sync>` for thread-safe sharing
 
 ### Error Handling
-- **Result<T, String>** — primary error type (simple, serializable)
-- **Error propagation**: `?` operator with `.map_err()` for context
-- **String errors**: `format!("Failed to do X: {}", e)`
 
-### Async
-- **Tokio** runtime with `#[tokio::test]` for async tests
-- **`tokio_util::sync::CancellationToken`** for cancellation
-- **`reqwest`** with `stream` feature for streaming downloads
+- Tauri commands return `Result<T, String>` — errors propagate as user-facing strings
+- Internal errors use `Result<T, String>` or `Option<T>` with descriptive messages
+- `map_err(|e| format!("context: {}", e))` for adding context to errors
+- Contract tests in `lib.rs` verify error propagation shapes (not just success paths)
 
-### Testing Patterns
-- `#[test]` for unit tests, `#[tokio::test]` for async
-- `#[cfg(test)]` modules within source files
-- `tempfile::tempdir()` for filesystem simulation
-- IPC contract tests in `lib.rs` test error propagation and return shapes
-- `/nonexistent` paths for file-not-found tests
+### Testing
 
-## Security Conventions
+- Unit tests use `tempfile::tempdir()` — no real SD card needed
+- `#[tokio::test]` for async test functions
+- Contract tests in `lib.rs` test the IPC boundary: error shapes, return types, edge cases
+- `#[cfg(test)]` gates on production functions kept only for test use (preferred over `#[allow(dead_code)]`)
 
-### Path Validation
-- **Canonicalize before create**: Validate parent directory is within expected root
-- **Re-validate after create**: Catch symlink race conditions
-- **`create_target_within()`** — canonical ancestor check → create → canonicalize → re-check
-- **`copy_dir_recursive()`** — `fs::copy` dereferences symlinks (no traversal)
+## TypeScript
 
-### Input Sanitization
-- **Platform names**: Alphanumeric + hyphens only (`copy_extras_files`)
-- **BIOS paths**: No traversal (`..`, `/`), NUL bytes, or path separators
-- **Registry data**: Full schema validation before use
+### Component Patterns
 
-### Atomic Operations
-- **Temp dirs**: `tempfile::TempDir` for all archive extraction
-- **InstallSession**: Owns temp dirs, drops atomically on completion
-- **No partial writes**: All files extracted to temp before copying to SD
+- **State-based navigation**: `App.tsx` uses a `Screen` union type (`"home" | "store" | "wifi" | "bios" | "settings"`) — no router
+- **Custom hooks** for complex logic: `useForkInstall`, `useVersionCheck`, `useMountEffect`, `useScrollToBottom`
+- **Context** for cross-component state: `ForkContext` for fork selection
+- **No CSS framework**: All styles in `src/styles.css` (plain CSS)
 
-### General Security Rules
-- Never write to SD card without explicit user confirmation (`ConfirmDialog`)
-- Never format drives in MVP
-- Never log WiFi passwords or secrets in plaintext
-- Treat registry data as untrusted
+### Type Organization
 
-## Formatting & Linting
+- Types live in `src/types/` — one file per domain (`device.ts`, `drive.ts`, `install.ts`, etc.)
+- Interfaces for data shapes (`DeviceProfile`, `RemovableDrive`, `InstallProgressEvent`)
+- Type-only imports: `import type { ... }` for compile-time safety
+- Union types for discriminated states (e.g., `Screen`, `InstallPhase`)
 
-| Tool | Scope | Config |
-|------|-------|--------|
-| **oxfmt** | TypeScript/TSX | 2-space, LF, 80 width, double quotes |
-| **ESLint** | TypeScript/TSX | `recommended` + `@typescript-eslint/recommended` |
-| **oxlint** | TypeScript/TSX | Fast Rust-based linting |
-| **cargo fmt** | Rust | Standard Rust style |
-| **cargo clippy** | Rust | `-D warnings` (deny all) |
+### IPC Conventions
 
-### Pre-commit (`prek.toml`)
-- `trailing-whitespace` — Remove trailing whitespace
-- `end-of-file-fixer` — Ensure files end with newline
-- `check-added-large-files` — Prevent large file commits
-- `mixed-line-ending --fix=lf` — Enforce LF
-- `check-merge-conflict` — Detect unresolved conflicts
-- `check-case-conflict` — Detect case-sensitive filename conflicts
-- `bun-lint` — Run `eslint --fix`
-- `bun-typecheck` — Run `tsc`
+- Frontend calls Rust via `invoke("command_name", { args })` from `@tauri-apps/api/core`
+- Events are listened via `listen("event-name", callback)` from `@tauri-apps/api/event`
+- IPC wrapper functions in `src/types/` (e.g., `installMinui`, `fetchPackageRegistry`)
+- Error types use `AppError` with `classifyError` for safe error handling
 
-## Commit Convention
+### Testing
 
-Uses changesets (`.changeset/`) with conventional commit messages:
-- `feat:` — New features
-- `fix:` — Bug fixes
-- `refactor:` — Code restructuring
-- `test:` — Test additions/changes
-- `docs:` — Documentation
-- `chore:` — Maintenance
+- Vitest with `jsdom` environment
+- `@testing-library/react` for component rendering and queries
+- `@testing-library/user-event` for simulated interactions
+- Mock Tauri `invoke` with `vi.mock("@tauri-apps/api/core")`
+- Test files colocated: `Component.tsx` + `Component.test.tsx`
 
-Recent examples:
-- `refactor: delete dead parallel device system and deprecated archive commands`
-- `fix(installer): copy only selected device files, improve validation`
-- `feat: custom fork support for community MinUI builds`
-- `feat(install): stream archive downloads and add cancel mechanism`
+## Shared Conventions
+
+### Commits
+
+- [Conventional Commits](https://www.conventionalcommits.org/) format: `type(scope): subject`
+- Types: `feat`, `fix`, `refactor`, `docs`, `test`, `ci`, `chore`
+- Subject in imperative mood, max 72 chars
+
+### Code Quality
+
+- **No dead code**: `#[allow(dead_code)]` only when truly needed; prefer `#[cfg(test)]` for test-only functions
+- **No magic values**: Extract unexplained literals into named constants
+- **One concern per function**: Extract logical sections into well-named helpers
+- **Guard clauses**: Bail out early at the top rather than nesting
+
+### Pre-commit (prek)
+
+- `prek.toml` enforces: trailing whitespace removal, EOF newline, LF normalization, oxlint `--fix`
+- If a hook rewrites a file, re-stage with `git add -u` before retrying commit

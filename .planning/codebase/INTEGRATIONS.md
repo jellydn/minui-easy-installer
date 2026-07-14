@@ -1,60 +1,54 @@
-# External Integrations
+# Integrations
 
-## Overview
+## External APIs
 
-The MinUI Easy Installer connects to external services for release discovery, package management, and artifact downloads. All external connections are governed by a strict Content Security Policy.
+### GitHub REST API
 
-## GitHub API
+- **Endpoint**: `https://api.github.com/repos/{owner}/{repo}/releases/latest`
+- **Purpose**: Fetch the latest MinUI release (or community fork release) for version checking and download URLs
+- **Code**: `src/types/release.ts` (`fetchMinUIRelease`), `src/types/fork.ts` (`buildReleaseUrl`)
+- **Auth**: None (public repository, unauthenticated requests)
+- **Rate limit**: 60 req/hour unauthenticated; sufficient for the install flow (one fetch per session)
 
-**Purpose**: Discover the latest MinUI release.
+### GitHub Releases (asset downloads)
 
-- **Endpoint**: `https://api.github.com/repos/shauninman/MinUI/releases/latest`
-- **Used by**: `src/types/release.ts` (ts) / `src-tauri/src/download.rs` (rs)
-- **Data**: Release metadata, version tag, asset URLs, SHA-256 checksums
-- **Auth**: None (public repository, rate-limited by GitHub)
+- **Endpoint**: `https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}`
+- **Purpose**: Download base and extras zip archives for MinUI installation
+- **Code**: `src-tauri/src/download.rs` (`download_archive_streaming`)
+- **Flow**: Fetch release metadata → parse asset URLs → stream download with progress
+- **Cancellation**: `CancellationToken` checked at phase boundaries
 
-## GitHub Releases (Artifact Downloads)
+### Package Registry
 
-**Purpose**: Download MinUI base and extras archives, plus package artifacts.
+- **Endpoint**: `https://packages.minui.dev/registry/index.json`
+- **Purpose**: Fetch the community package catalog with per-device platform paths
+- **Code**: `src/types/package.ts` (`fetchPackageRegistry`)
+- **Cache**: Session-scoped (fetched once per app launch)
+- **Validation**: Schema validated before use (see `src/types/validate.ts`)
 
-- **Domains**: `github.com`, `*.githubusercontent.com`
-- **Used by**: `src-tauri/src/download.rs` — streaming HTTP downloads
-- **Features**: Streaming downloads with progress callbacks, SHA-256 checksum verification, cancellation support via `CancellationToken`
+### GitHub Content (raw)
 
-## Package Registry
+- **Domain**: `*.githubusercontent.com`
+- **Purpose**: CSP allowlisted for potential raw file access
+- **Current use**: Not directly fetched; included in CSP for future package asset downloads
 
-**Purpose**: Catalog of community-contributed emulator and utility packages.
+## Package Downloads
 
-- **Remote URL**: `https://packages.minui.dev/registry/index.json`
-- **Bundled fallback**: `src/types/store.json`
-- **Used by**: `src/types/package.ts` — `fetchPackageRegistry()`
-- **Caching**: Session-scoped (cleared on app restart via `clearRegistryCache()`)
-- **Schema**: Validated before use (treat registry data as untrusted)
-  - `emu_paks[]` — Emulator packages with `name`, `repository`, `version`, `pak_name`, `rom_folder`
-  - `tool_paks[]` — Utility packages with `name`, `repository`, `version`, `pak_name`, optional `device[]` filter
-- **Error handling**: Falls back to bundled `store.json` on network failure
+Community packages reference GitHub release assets:
 
-## Package Artifact Downloads
+- **Pattern**: `https://github.com/{repo}/releases/download/{version}/{fileName}`
+- **Code**: `src/types/package.ts` (`buildDownloadUrlForVersion`)
+- **Validation**: Only `https://github.com/` repositories are accepted
 
-**Purpose**: Download individual `.pak.zip` files for community packages.
+## No Integrations For
 
-- **Pattern**: `https://github.com/{owner}/{repo}/releases/download/{version}/{pak_name}.pak.zip`
-- **Override**: Individual tool packages can specify a custom `download_url`
-- **Used by**: `src-tauri/src/package.rs` — `install_package` Tauri command
-
-## CSP Whitelist
-
-All external domains are explicitly allowed in `src-tauri/tauri.conf.json`:
-
-| Domain | Purpose |
-|--------|---------|
-| `packages.minui.dev` | Package registry JSON |
-| `api.github.com` | GitHub REST API (release metadata) |
-| `github.com` | Release asset downloads |
-| `*.githubusercontent.com` | Raw content downloads |
-
-No other external domains are accessible from the frontend.
-
-## No External Auth, Databases, or Payments
-
-The application is fully local-first with no user accounts, authentication providers, databases, or payment integrations.
+| Category | Status |
+|----------|--------|
+| Database | ❌ None (stateless app) |
+| Authentication | ❌ None (local-only desktop app) |
+| Payment processing | ❌ None |
+| Analytics/telemetry | ❌ None |
+| Error tracking | ❌ None |
+| Email | ❌ None |
+| CDN | ❌ None |
+| Cloud storage | ❌ None |

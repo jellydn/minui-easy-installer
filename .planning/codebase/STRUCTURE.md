@@ -1,148 +1,128 @@
-# Directory Structure
+# Structure
 
-## Top-Level Layout
-
-```
-minui-easy-installer/
-├── src/                    # React frontend (TypeScript)
-├── src-tauri/              # Rust backend (Tauri v2)
-├── icons/                  # App icon resources
-├── scripts/                # Build/automation scripts
-├── .planning/              # Codebase documentation & handoffs
-├── .changeset/             # Changeset tracking
-├── .github/workflows/      # CI workflows
-├── package.json            # npm/bun dependencies
-├── bun.lock                # Bun lockfile
-├── tsconfig.json           # TypeScript config
-├── vite.config.ts          # Vite build config
-├── vitest.config.ts        # Vitest test config
-├── vitest.setup.ts         # Test environment setup
-├── .eslintrc.cjs           # ESLint config
-├── .oxfmtrc.json           # oxfmt config
-├── prek.toml               # Pre-commit hooks config
-├── justfile                # Task runner
-├── .editorconfig           # Editor settings
-├── index.html              # HTML entry point
-├── AGENTS.md               # Agent/developer guide
-├── DESIGN.md               # Design documentation
-├── LICENSE                 # License file
-├── README.md               # Project readme
-└── install-guide.txt       # User-facing install guide
-```
-
-## Frontend (`src/`)
+## Directory Layout
 
 ```
-src/
-├── main.tsx                # Entry point — renders App into #root
-├── App.tsx                 # Root component, state-based navigation
-├── Home.tsx                # Home screen (device/drive selection, install flow)
-├── PackageStore.tsx        # Package store screen
-├── PackageCard.tsx         # Individual package display card
-├── DeviceSelector.tsx      # Device picker UI
-├── DriveSelector.tsx       # SD card picker UI
-├── InstallProgress.tsx     # Install progress display (phases, log, results)
-├── ValidationReport.tsx    # Post-install validation report
-├── ConfirmDialog.tsx       # Overlay modal for write confirmation
-├── FormatConfirmDialog.tsx # Format confirmation dialog (MVP: unused)
-├── WifiWizard.tsx          # WiFi network scanner and config UI
-├── BiosInstaller.tsx       # BIOS file selection and install UI
-├── HealthCheck.tsx         # SD card health display
-├── Settings.tsx            # Settings screen (fork selection)
-├── styles.css              # Global styles (all components, no framework)
+.
+├── src/                          # React frontend (TypeScript)
+│   ├── main.tsx                  # Entry point
+│   ├── App.tsx                   # Shell with state-based navigation
+│   ├── styles.css                # All styles (no CSS framework)
+│   ├── Home.tsx                  # Main screen: device/drive select, install
+│   ├── PackageStore.tsx          # Browse and install community packages
+│   ├── PackageCard.tsx           # Individual package display card
+│   ├── DeviceSelector.tsx        # Device dropdown
+│   ├── DriveSelector.tsx         # SD card dropdown with refresh
+│   ├── WifiWizard.tsx            # WiFi scan + config
+│   ├── BiosInstaller.tsx         # BIOS file upload + install
+│   ├── Settings.tsx              # Fork selection (presets + custom)
+│   ├── HealthCheck.tsx           # SD card health report
+│   ├── ValidationReport.tsx      # Post-install validation results
+│   ├── InstallProgress.tsx       # Real-time install progress log
+│   ├── ConfirmDialog.tsx         # Overlay modal for write confirmation
+│   ├── FormatConfirmDialog.tsx   # Format confirmation modal
+│   ├── contexts/
+│   │   └── ForkContext.tsx       # Fork selection state + persistence
+│   ├── hooks/
+│   │   ├── useForkInstall.ts     # Install orchestration hook (largest: 399 lines)
+│   │   ├── useVersionCheck.ts    # Version polling hook
+│   │   ├── useMountEffect.ts     # useEffect on mount
+│   │   └── useScrollToBottom.ts  # Auto-scroll progress log
+│   └── types/
+│       ├── device.ts             # Device profiles (16 devices)
+│       ├── drive.ts              # RemovableDrive type, formatting
+│       ├── install.ts            # Install types, IPC wrappers
+│       ├── package.ts            # Package registry, install, cache (420 lines)
+│       ├── release.ts            # GitHub release fetching
+│       ├── version.ts            # Version parsing and checking
+│       ├── bios.ts               # BIOS catalog types, IPC wrappers
+│       ├── validate.ts           # Post-install validation
+│       ├── fork.ts               # Fork config, presets, URL building
+│       ├── errors.ts             # AppError type, error classification
+│       └── store.json            # Local dev registry fallback
 │
-├── contexts/
-│   └── ForkContext.tsx     # Fork selection context provider
+├── src-tauri/                    # Rust backend
+│   ├── Cargo.toml                # Rust dependencies
+│   ├── tauri.conf.json           # Tauri config, CSP, bundle
+│   ├── build.rs                  # Tauri build script
+│   ├── capabilities/default.json # Tauri capabilities
+│   ├── icons/                    # App icons
+│   └── src/
+│       ├── main.rs               # Entry point (calls lib::run)
+│       ├── lib.rs                # 17 Tauri commands + contract tests (619 lines)
+│       ├── install.rs            # Install orchestration (~290 lines production)
+│       ├── install_tests.rs      # Install tests (789 lines)
+│       ├── pipeline.rs           # Download→Extract→Copy pipeline + path safety
+│       ├── download.rs           # Streaming archive download + checksum
+│       ├── extract.rs            # Archive extraction
+│       ├── drives.rs             # Removable drive detection (418 lines)
+│       ├── drives_tests.rs       # Drive detection tests (366 lines)
+│       ├── wifi.rs               # WiFi scan + config (480 lines)
+│       ├── bios.rs               # BIOS catalog, status, install (668 lines)
+│       ├── package.rs            # Package install, detect, update
+│       ├── health.rs             # SD card health checks
+│       ├── validate.rs           # Post-install validation
+│       ├── fs_utils.rs           # copy_dir_recursive, disk space, canonicalize
+│       ├── platform.rs           # Device base item mappings
+│       └── version/
+│           ├── mod.rs            # Version parsing + detection
+│           └── tests.rs          # Version tests
 │
-├── hooks/
-│   ├── useForkInstall.ts   # Install orchestration hook (fork-aware)
-│   ├── useVersionCheck.ts  # Version checking hook
-│   ├── useMountEffect.ts   # Strict-mode-safe mount effect
-│   └── useScrollToBottom.ts # Scroll-tracking hook
+├── .github/workflows/
+│   ├── rust.yml                  # Rust CI: fmt, clippy, test
+│   └── react-doctor.yml          # React Doctor scan
 │
-├── types/
-│   ├── device.ts           # Device profiles (18+ devices)
-│   ├── drive.ts            # RemovableDrive type, formatSize()
-│   ├── install.ts          # Install state types
-│   ├── package.ts          # Package registry types and fetch logic
-│   ├── release.ts          # GitHub release parsing
-│   ├── bios.ts             # BIOS catalog types
-│   ├── version.ts          # Version parsing types
-│   ├── validate.ts         # Validation result types
-│   ├── errors.ts           # Error classification
-│   ├── fork.ts             # Fork type definitions
-│   └── store.json          # Bundled package store fallback data
+├── .planning/
+│   ├── codebase/                 # This codebase map
+│   └── handoffs/                 # Session handoff documents
 │
-└── *.test.ts(x)            # Co-located test files (18 files, ~2585 lines)
+├── scripts/ralph/                # Autonomous agent loop
+├── tasks/                        # PRDs and task definitions
+├── .changeset/                   # Changeset for version tracking
+├── icons/                        # macOS .icns
+├── AGENTS.md                     # Agent instructions
+├── DESIGN.md                     # Design guidelines
+├── package.json                  # Frontend deps + scripts
+├── bun.lock                      # Bun lockfile
+├── vitest.config.ts              # Test runner config
+├── vite.config.ts                # Vite config
+├── tsconfig.json                 # TypeScript config
+├── prek.toml                     # Pre-commit hooks
+├── justfile                      # Task runner (just)
+└── install-guide.txt             # Upstream MinUI install guide (reference)
 ```
 
-## Backend (`src-tauri/`)
+## File Size Summary
 
-```
-src-tauri/
-├── Cargo.toml              # Rust dependencies
-├── Cargo.lock              # Locked dependency versions
-├── build.rs                # Tauri build script
-├── tauri.conf.json         # Tauri app configuration
-│
-├── capabilities/
-│   └── default.json        # Tauri v2 capability permissions
-│
-├── gen/schemas/            # Generated JSON schemas
-│   ├── capabilities.json
-│   ├── acl-manifests.json
-│   ├── macOS-schema.json
-│   └── desktop-schema.json
-│
-├── icons/
-│   └── icon.icns           # macOS app icon
-│
-└── src/                    # Rust source code
-    ├── main.rs             # Entry point
-    ├── lib.rs              # Tauri command registration
-    ├── install.rs          # Install flow (1168 lines — largest file)
-    ├── pipeline.rs         # Pipeline abstraction + path validation
-    ├── download.rs         # Streaming HTTP downloads
-    ├── extract.rs          # ZIP archive extraction
-    ├── drives.rs           # Platform-specific drive detection (743 lines)
-    ├── health.rs           # SD card health checks
-    ├── validate.rs         # Post-install validation
-    ├── package.rs          # Community package management
-    ├── wifi.rs             # WiFi scanning & config
-    ├── bios.rs             # BIOS file management (667 lines)
-    ├── fs_utils.rs         # Filesystem utilities
-    ├── platform.rs         # Device platform mappings
-    └── version/
-        ├── mod.rs          # Version parsing
-        └── tests.rs        # Version parsing tests
-```
+| Largest Rust Files | Lines |
+|--------------------|-------|
+| `install_tests.rs` | 789 |
+| `bios.rs`          | 668 |
+| `lib.rs`           | 619 |
+| `wifi.rs`          | 480 |
+| `drives.rs`        | 418 |
 
-## Documentation (`.planning/`)
+| Largest TS/TSX Files | Lines |
+|----------------------|-------|
+| `types/package.ts`   | 420 |
+| `hooks/useForkInstall.ts` | 399 |
+| `types/release.test.ts` | 315 |
+| `hooks/useVersionCheck.test.ts` | 272 |
+| `PackageStore.tsx`   | 266 |
 
-```
-.planning/
-├── codebase/               # Codebase map (this directory)
-│   ├── STACK.md
-│   ├── ARCHITECTURE.md
-│   ├── STRUCTURE.md
-│   ├── CONVENTIONS.md
-│   ├── TESTING.md
-│   ├── INTEGRATIONS.md
-│   └── CONCERNS.md
-├── fork-support/
-│   └── plan.md             # Fork support implementation plan
-└── handoffs/
-    ├── 2026-06-13-fix-store-install-platform.md
-    └── 2026-06-13-per-device-extras-install.md
-```
+## Naming Conventions
 
-## Key File Sizes (Complexity Indicators)
+### Rust
 
-| File | Lines | Area |
-|------|-------|------|
-| `src-tauri/src/install.rs` | 1,168 | Install flow + tests |
-| `src-tauri/src/drives.rs` | 743 | Drive detection |
-| `src-tauri/src/bios.rs` | 667 | BIOS management |
-| `src/types/package.ts` | 418 | Package registry |
-| `src/hooks/useForkInstall.ts` | 399 | Install orchestration |
-| `src/PackageStore.tsx` | 266 | Store UI |
+- **Test files**: `#[path = "module_tests.rs"] mod tests;` (following `version/tests.rs` pattern)
+- **Module files**: One module per file, `mod` declarations in `lib.rs`
+- **Types**: PascalCase (`InstallSession`, `CancellationToken`)
+- **Functions**: snake_case (`copy_dir_recursive`, `create_target_within`)
+- **Platform-gated**: `#[cfg(target_os = "macos")]`, `#[cfg(not(target_os = "macos"))]`
+
+### TypeScript
+
+- **Components**: PascalCase (`PackageStore`, `DeviceSelector`)
+- **Hooks**: camelCase with `use` prefix (`useForkInstall`, `useVersionCheck`)
+- **Types/Interfaces**: PascalCase (`DeviceProfile`, `RemovableDrive`)
+- **Test files**: `*.test.ts` or `*.test.tsx` colocated with source

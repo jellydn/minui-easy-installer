@@ -1,117 +1,145 @@
 # Testing
 
-## Overview
-
-The project uses **Vitest** for frontend testing and Rust's built-in test framework for backend testing. Total test coverage spans ~2,585 lines across 18 test files.
-
-## Frontend Testing (Vitest)
-
-### Configuration
-
-```typescript
-// vitest.config.ts
-environment: "jsdom"
-setupFiles: ["./vitest.setup.ts"]
-include: ["src/**/*.test.{ts,tsx}"]
-```
-
-- **Test runner**: Vitest
-- **Environment**: jsdom (browser-like DOM)
-- **Setup**: `vitest.setup.ts` imports `@testing-library/jest-dom/vitest` for DOM matchers
-
-### Test Files (17 files, 2,585 lines)
-
-| Test File | Lines | Focus |
-|-----------|-------|-------|
-| `src/types/release.test.ts` | 315 | GitHub release parsing |
-| `src/hooks/useVersionCheck.test.ts` | 272 | Version checking hook |
-| `src/types/install.test.ts` | 260 | Install flow types |
-| `src/BiosInstaller.test.tsx` | 250 | BIOS installer component |
-| `src/Home.test.tsx` | 237 | Home screen component |
-| `src/PackageStore.test.tsx` | 190 | Package store component |
-| `src/WifiWizard.test.tsx` | 180 | WiFi wizard component |
-| `src/hooks/useForkInstall.test.ts` | 149 | Fork install hook |
-| `src/types/validate.test.ts` | 135 | Validation types |
-| `src/Settings.test.tsx` | 120 | Settings component |
-| `src/types/fork.test.ts` | 112 | Fork types |
-| `src/DriveSelector.test.tsx` | 106 | Drive selector component |
-| `src/types/drive.test.ts` | 60 | Drive types |
-| `src/types/version.test.ts` | 54 | Version parsing |
-| `src/types/package.test.ts` | 54 | Package types |
-| `src/types/device.test.ts` | 48 | Device profiles |
-| `src/types/bios.test.ts` | 43 | BIOS types |
-
-### Testing Libraries
-- `@testing-library/react` — Render components, query DOM
-- `@testing-library/user-event` — Simulate user interactions
-- `@testing-library/jest-dom` — Extended DOM matchers (`toBeInTheDocument()`, etc.)
-
-### Patterns
-- **Co-located tests**: Test files next to source files (`src/types/device.test.ts` alongside `src/types/device.ts`)
-- **Component tests**: Render with test props, assert DOM content
-- **Hook tests**: `renderHook()` from testing library, act() for state changes
-- **Type tests**: Pure function tests for validation/parsing logic
-
-### Running Tests
-
-```bash
-bun test                    # vitest run (all tests)
-bun test -- --reporter=verbose  # verbose output
-bun run test:coverage       # vitest run --coverage
-```
-
-## Backend Testing (Rust)
+## Frontend (TypeScript)
 
 ### Framework
-- Built-in Rust `#[test]` attribute
-- `#[tokio::test]` for async test functions
-- `#[cfg(test)]` modules within source files
 
-### Test Locations
+- **Runner**: [Vitest](https://vitest.dev/)
+- **Environment**: `jsdom` (configured in `vitest.config.ts`)
+- **Setup**: `vitest.setup.ts`
+- **UI Testing**: `@testing-library/react` + `@testing-library/user-event`
 
-| Module | Test Location | Focus |
-|--------|--------------|-------|
-| `lib.rs` | Inline `#[cfg(test)]` | IPC contract tests (error propagation, return shapes) |
-| `install.rs` | Inline `#[cfg(test)]` | Copy operations, preserved folders, full pipeline |
-| `version/tests.rs` | Separate test file | Version parsing edge cases |
-| `fs_utils.rs` | Inline tests | copy_dir_recursive, get_free_space |
+### Structure
 
-### Testing Patterns
-- **tempfile**: `tempfile::tempdir()` for filesystem simulation (no real SD card needed)
-- **Mock servers**: `TcpListener` one-shot HTTP servers for download tests
-- **Full pipeline**: `test_install_minui_with_cancel_full_pipeline` exercises download → extract → copy
-- **Cross-platform**: `/nonexistent` paths for health check/file-not-found edge cases
-- **Environment-dependent**: WiFi tests have no specific network assertions
+Test files are colocated with source files:
 
-### Known Test Quirks
-- WiFi tests are environment-dependent (no specific networks asserted)
-- Health check tests use `/nonexistent` paths (works cross-platform)
-
-### Running Tests
-
-```bash
-cd src-tauri && cargo test           # All Rust tests
-cd src-tauri && cargo test --lib     # Library tests only
-cd src-tauri && cargo test -- --nocapture  # Show println output
+```
+src/
+├── Home.tsx
+├── Home.test.tsx
+├── PackageStore.tsx
+├── PackageStore.test.tsx
+├── types/
+│   ├── package.ts
+│   ├── package.test.ts
+│   ├── release.ts
+│   └── release.test.ts
 ```
 
-## Mocking & Fixtures
+### Mocking Tauri
 
-### Frontend
-- **Mock hooks**: Custom hook mocks via `vi.mock()`
-- **Mock Tauri API**: `vi.mock("@tauri-apps/api/core")` for IPC simulation
-- **Test data**: Inline test fixtures (no shared fixture files)
+Tauri IPC calls are mocked at the module level:
 
-### Backend
-- **Inline test data**: ZIP archives created programmatically in tests
-- **One-shot servers**: `start_one_shot_file_server()` for HTTP mocking
-- **Temp directories**: `tempfile::tempdir()` for all filesystem tests
-
-## All Checks
-
-```bash
-just check    # lint + typecheck + cargo fmt --check + cargo clippy
-just fmt      # oxfmt + cargo fmt
+```typescript
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
 ```
 
-Pre-commit via `prek.toml` runs lint and typecheck on staged files.
+Events are mocked via:
+
+```typescript
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(),
+}));
+```
+
+### Coverage
+
+- **Provider**: v8 (built into Vitest)
+- **Thresholds**: 50% statements, 50% lines, 40% branches, 40% functions
+- **Exclusions**: Test files (`*.test.*`), `main.tsx` (entry point)
+- **Config**: `vitest.config.ts`
+
+### Running
+
+```bash
+bun test                    # Run all tests
+bun run test:coverage       # Run with coverage report
+```
+
+## Backend (Rust)
+
+### Framework
+
+- **Runner**: `cargo test`
+- **Async tests**: `#[tokio::test]` attribute
+- **Temp files**: `tempfile::tempdir()` for isolated test directories
+- **No mocking library**: Tests use real implementations with temp dirs
+
+### Structure
+
+Three layers of tests:
+
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| Unit tests | Inline in source files or `*_tests.rs` | Test individual functions |
+| Contract tests | `lib.rs` (`#[cfg(test)] mod tests`) | Verify IPC boundary: error shapes, return types, edge cases |
+| Integration tests | `drives_tests.rs` (ignored) | Test against real SD cards |
+
+### Test File Pattern
+
+Test modules use the `#[path]` attribute:
+
+```rust
+// In drives.rs:
+#[cfg(test)]
+#[path = "drives_tests.rs"]
+mod tests;
+```
+
+```rust
+// In drives_tests.rs:
+use super::*;
+// ... test functions without `mod tests {}` wrapper
+```
+
+### Contract Tests (lib.rs)
+
+Each Tauri command handler has at least one contract test:
+- `get_removable_drives` → tests return shape (Ok or Err, non-empty strings)
+- `start_install` → tests unreachable URL returns error
+- `validate_installation` → tests nonexistent path, empty tempdir
+- `install_package` → tests bad URL error propagation
+- `write_wifi_config` → (covered by wifi.rs tests)
+- `check_minui_version` → tests empty tempdir returns None installed
+- `install_bios_file` → tests round-trip write + read
+- `check_sd_card_health` → tests nonexistent path, empty tempdir
+
+### Running
+
+```bash
+cargo test                  # All tests
+cargo test --all-targets    # Including doctests
+cargo test -p <crate>       # Specific crate
+```
+
+## CI
+
+### Rust CI (`.github/workflows/rust.yml`)
+
+Runs on PR open/sync/reopen and push to `main`:
+
+| Step | Command |
+|------|---------|
+| Format | `cargo fmt --check` |
+| Clippy | `cargo clippy --all-targets -- -D warnings` |
+| Test | `cargo test --all-targets` |
+
+Includes cargo cache (`actions/cache@v4`) for `~/.cargo` and `target/`.
+
+### Pre-commit
+
+`prek.toml` runs on staged files:
+- Trailing whitespace removal
+- EOF newline enforcement  
+- LF normalization
+- oxlint `--fix`
+
+## Test Philosophy
+
+1. **No real SD cards in tests** — `tempfile` everywhere
+2. **Contract tests verify IPC shapes** — error propagation, return types, not just success
+3. **Security tests for path safety** — symlink escape, traversal, canonicalize guards
+4. **Platform-gated tests** — Mac-only code gets `#[cfg(target_os = "macos")]` tests
+5. **No flaky tests** — avoid network calls in tests, use local TCP listeners for mock servers

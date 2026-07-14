@@ -1,195 +1,151 @@
 # Architecture
 
-## System Pattern
-
-**Desktop Application with IPC Bridge**
-
-The application follows a two-process architecture:
-- **Rust backend** (Tauri v2): System operations, HTTP downloads, filesystem access, archive extraction
-- **React frontend** (HTML/CSS/TS): User interface, state management, user input
-
-Communication flows through Tauri's command-based IPC system: the frontend calls `invoke("command_name", { args })` and the backend responds with serialized JSON.
+## Pattern: Tauri v2 Desktop App
 
 ```
-┌─────────────────────────────────────────┐
-│              React Frontend              │
-│  src/App.tsx (state-based navigation)   │
-│  ┌──────┐ ┌───────┐ ┌──────┐ ┌───────┐ │
-│  │ Home │ │ Store │ │ WiFi │ │ BIOS  │ │
-│  └──┬───┘ └───┬───┘ └──┬───┘ └───┬───┘ │
-│     │         │         │         │      │
-│     └─────────┴────┬────┴─────────┘      │
-│                    │ invoke()             │
-├────────────────────┼─────────────────────┤
-│              Tauri IPC Bridge             │
-├────────────────────┼─────────────────────┤
-│             Rust Backend                  │
-│  src-tauri/src/lib.rs (commands)         │
-│  ┌──────────┬──────────┬──────────┐      │
-│  │ install  │ download │ extract  │      │
-│  ├──────────┼──────────┼──────────┤      │
-│  │ drives   │ health   │ validate │      │
-│  ├──────────┼──────────┼──────────┤      │
-│  │ wifi     │ bios     │ package  │      │
-│  └──────────┴──────────┴──────────┘      │
-│                                          │
-│  Filesystem / HTTP / System APIs         │
-└──────────────────────────────────────────┘
-```
-
-## Frontend Architecture
-
-### Navigation (`src/App.tsx`)
-
-State-based screen navigation using a `Screen` union type:
-
-```typescript
-type Screen = "home" | "store" | "wifi" | "bios" | "settings";
-```
-
-State is lifted to `AppShell` and passed as props. The `ForkContext` provider wraps the entire app.
-
-### Component Tree
-
-```
-App
-└── ForkProvider
-    └── AppShell
-        ├── Home
-        │   ├── DeviceSelector
-        │   ├── DriveSelector
-        │   ├── StatusSummary (inline)
-        │   ├── InstallProgress / ValidationReport
-        │   ├── HealthCheck
-        │   └── ConfirmDialog
-        ├── PackageStore
-        │   └── PackageCard[]
-        ├── WifiWizard
-        ├── BiosInstaller
-        └── Settings
-```
-
-### State Management
-
-- **Local state**: React `useState` for component-level state (screen, selectedDevice, selectedDrive)
-- **Context**: `ForkContext` for fork selection (shared across Home, Settings, package store)
-- **Custom hooks**: `useForkInstall`, `useVersionCheck`, `useMountEffect`, `useScrollToBottom`
-- **No external state library** (no Redux, Zustand, etc.)
-
-## Backend Architecture
-
-### Tauri Command Registry (`src-tauri/src/lib.rs`)
-
-All frontend-accessible commands are registered in `lib.rs`:
-
-| Command | Module | Purpose |
-|---------|--------|---------|
-| `get_removable_drives` | `drives.rs` | Detect SD cards and removable drives |
-| `format_drive` | `drives.rs` | Format a drive (MVP: not implemented) |
-| `verify_archive_checksum` | `download.rs` | Verify SHA-256 checksum |
-| `install_minui` | `install.rs` | Orchestrate full install flow (deprecated sync) |
-| `start_install` | `lib.rs` | Start async install with cancellation |
-| `cancel_install` | `lib.rs` | Cancel running install |
-| `fetch_url` | `download.rs` | Simple HTTP GET (for package registry) |
-| `scan_wifi` | `wifi.rs` | Scan for WiFi networks (macOS `airport`) |
-| `write_wifi_config` | `wifi.rs` | Write `wifi.txt` to SD card |
-| `check_sd_health` | `health.rs` | Check SD card health |
-| `install_bios` / `install_bios_from_bytes` | `bios.rs` | Copy BIOS files to SD |
-| `install_package` | `package.rs` | Install a community package |
-| `detect_installed_packages` | `package.rs` | Scan SD for installed packages |
-| `check_package_updates` | `package.rs` | Check for package updates |
-| `validate_install` | `validate.rs` | Post-install validation |
-
-### Module Organization
-
-```
-src-tauri/src/
-├── main.rs          # Entry point — calls lib::run()
-├── lib.rs           # Tauri command registration
-├── install.rs       # Install flow (copy_base_files, copy_extras_files, rom dirs)
-├── pipeline.rs      # Pipeline abstraction (download → extract → copy)
-│                    # InstallSession (temp dir lifecycle)
-│                    # create_target_within (path traversal guard)
-├── download.rs      # Streaming HTTP downloads, checksum verification
-├── extract.rs       # ZIP archive extraction
-├── drives.rs        # Platform-specific drive detection (macOS/Windows)
-├── health.rs        # SD card health checks
-├── validate.rs      # Post-install validation
-├── package.rs       # Community package install/detect/update
-├── wifi.rs          # WiFi scanning and config writing
-├── bios.rs          # BIOS file catalog and installation
-├── fs_utils.rs      # Filesystem helpers (copy_dir_recursive, canonicalize, free space)
-├── platform.rs      # Device platform mappings
-└── version/
-    ├── mod.rs       # Version parsing (minui.txt, version.txt)
-    └── tests.rs     # Version parsing tests
+┌─────────────────────────────────────┐
+│            React Frontend            │
+│  (src/) TypeScript + CSS            │
+│                                      │
+│  App.tsx → state-based navigation   │
+│  ├── Home (install/update)          │
+│  ├── PackageStore (browse/install)  │
+│  ├── WifiWizard (scan/config)       │
+│  ├── BiosInstaller (upload/copy)    │
+│  └── Settings (fork selection)      │
+│                                      │
+│  invoke("command", args) ─────────┐ │
+│  listen("event", callback) ←────┐ │ │
+└──────────────────────────────────┼─┼─┘
+                                   │ │
+                    Tauri IPC Bridge │
+                                   │ │
+┌──────────────────────────────────┼─┼─┐
+│            Rust Backend           │ │ │
+│  (src-tauri/src/)                │ │ │
+│                                   │ │ │
+│  lib.rs — 17 Tauri commands ─────┘ │ │
+│  ├── get_removable_drives          │ │
+│  ├── start_install                 │ │
+│  ├── cancel_install                │ │
+│  ├── validate_installation         │ │
+│  ├── install_package               │ │
+│  ├── write_wifi_config             │ │
+│  ├── scan_wifi_networks            │ │
+│  ├── install_bios_file             │ │
+│  ├── check_sd_card_health          │ │
+│  └── ...                           │ │
+│                                     │ │
+│  Emit events ───────────────────────┘ │
+│  ├── install-progress                │
+│  ├── install-complete                │
+│  └── install-error                   │
+└───────────────────────────────────────┘
 ```
 
 ## Install Pipeline
 
-The core installation follows a three-phase pipeline:
+The core architecture follows a **Pipeline** pattern: Download → Extract → Copy.
 
 ```
-Download → Extract → Copy
+Pipeline::run(label, url, checksum, copy_fn, progress, cancel, session)
+    │
+    ├── 1. DOWNLOAD (streaming)
+    │   download_archive_streaming() → TempDir
+    │   - Checks CancellationToken before starting
+    │   - Verifies SHA-256 checksum if provided
+    │   - Emits byte-level progress (frontend not yet wired)
+    │
+    ├── 2. EXTRACT
+    │   extract_archive_into() → TempDir
+    │   - Checks CancellationToken before starting
+    │   - Extracts to temp dir (never directly to SD card)
+    │
+    └── 3. COPY
+        copy_fn(extracted_path) → u32 (files_copied)
+        - copy_base_files: shared items + device folder
+        - copy_extras_files: extras platform folder (non-fatal on failure)
+        - copy_dir_recursive: walks tree, skips preserved folders
 ```
 
-### Pipeline (`pipeline.rs`)
+### InstallSession
 
-- `InstallSession` owns temporary directories (created by download/extract)
-- `Pipeline::run()` orchestrates download → extract → copy for any archive type
-- `Pipeline::run_to_extracted()` runs download → extract, returning path for custom copy logic
-- Temp dirs drop atomically when `InstallSession` drops → cleanup after all operations
+`InstallSession` owns all `TempDir` handles for the lifetime of an install:
 
-### Install Flow (`install.rs`)
+```rust
+pub struct InstallSession {
+    _base_archive: Option<TempDir>,
+    _base_extracted: Option<TempDir>,
+    _extras_archive: Option<TempDir>,
+    _extras_extracted: Option<TempDir>,
+    _package_archive: Option<TempDir>,
+    _package_extracted: Option<TempDir>,
+}
+```
 
-1. **Download base archive** → streaming with progress, SHA-256 verification
-2. **Extract base archive** → to temp directory
-3. **Copy base files** → only shared items (`Bios`, `Roms`, `Saves`, `MinUI.zip`) + selected device folder
-4. **Download extras archive** → (if available, non-fatal on failure)
-5. **Extract extras** → to temp directory
-6. **Copy extras** → filtered by `extras_platform`
-7. **Create ROM directories** → standard folder structure
-8. **Write `minui.txt`** → `{fork_name} {version}` metadata
+When `InstallSession` drops, all temp directories are cleaned up atomically — even on cancellation or error.
 
 ### Cancellation
 
-- `start_install` spawns a background task with `CancellationToken`
-- Cancellation checked at phase boundaries in `Pipeline::run()`
-- Emits `install-progress`, `install-complete`, `install-error` events
+- Single `InstallRegistry` (global `Arc<Mutex<Option<CancellationToken>>>`)
+- New install cancels any prior install (replaces token)
+- `start_install` spawns background task, returns immediately with `"current"`
+- `cancel_install` triggers the token; pipeline checks at phase boundaries
+- Frontend receives `install-error` with "Install cancelled" on cancellation
 
-## Install Path Rules
+## Frontend Architecture
 
-Three directories per device profile:
+### Navigation (State-based)
 
-| Rule | Value | Purpose |
-|------|-------|---------|
-| `baseDir` | `"/"` | Base archive target (SD root) |
-| `extrasDir` | `"/"` | Extras archive target |
-| `toolsDir` | `"/Tools"` | Tool packages target |
+`App.tsx` uses a `Screen` type with 5 states:
 
-All 8 primary devices use the same defaults. Defined in `src/types/device.ts`.
+| Screen | Component | Requires |
+|--------|-----------|----------|
+| `home` | `Home` | — |
+| `store` | `PackageStore` | Device + Drive selected |
+| `wifi` | `WifiWizard` | Drive selected |
+| `bios` | `BiosInstaller` | Drive selected |
+| `settings` | `Settings` | — |
+
+### State Management
+
+- **ForkContext** (`src/contexts/ForkContext.tsx`): Selected MinUI fork (default or custom), provides `fork` + `setFork`
+- **Local state**: Each screen manages its own UI state (device selection, drive selection, install progress)
+- **Custom hooks**: `useForkInstall` (install orchestration), `useVersionCheck` (version polling), `useMountEffect` (mount-side-effect), `useScrollToBottom` (progress log auto-scroll)
+
+### Data Flow
+
+```
+User action → invoke Tauri command → Rust backend → emit event → frontend listener → state update → re-render
+```
 
 ## Security Patterns
 
-### Path Traversal Prevention
+### Path Containment (create_target_within)
 
-- `create_target_within()` — Validates parent canonical path before directory creation, re-validates after
-- `copy_dir_recursive()` — `fs::copy` dereferences symlinks (no symlink escape)
-- `install_bios_from_bytes` — Sanitizes subdir/filename, canonicalizes target parent before and after write
+`pipeline.rs::create_target_within` validates that package install paths stay within the SD card:
+1. Canonicalize SD card root
+2. Walk up target parent to first existing ancestor, canonicalize
+3. Verify ancestor is within SD card root **before** creating directories
+4. Create directories
+5. Re-canonicalize and re-verify **after** creation (symlink race guard)
+6. On violation: best-effort cleanup of newly-created directories only
 
-### Input Sanitization
+### Symlink Safety
 
-- `extras_platform`: Alphanumeric + hyphens only
-- BIOS paths: No traversal characters, NUL bytes, or path separators
-- Registry data: Full schema validation before use
+- `fs_utils::copy_dir_recursive` uses `fs::copy` which dereferences symlinks (copies target contents, not symlinks)
+- `canonicalize_existing_ancestor` resolves symlinks, so path-escaping symlinks are detected
+- BIOS install sanitizes subdir/filename (no traversal, NUL, or path separators)
 
-### Atomic Operations
+### Input Validation
 
-- Temporary directories via `tempfile::TempDir`
-- Temp dirs live in `InstallSession` — cleanup on drop after all operations complete
+- Registry data validated via `src/types/validate.ts` before use
+- Extras platform name sanitized (alphanumeric + hyphens only)
+- Package repository URLs must start with `https://github.com/`
 
-## Version Tracking
+## Device Platform Mapping
 
-- **Installer writes**: `minui.txt` — `{fork_name} {version}` (e.g., `MinUI 2025.01.01`)
-- **Packages read**: `Tools/*/version.txt` (included in archives)
-- **Fork name**: Configurable via `Settings`, defaults to `"MinUI"`
+16 device profiles in `src/types/device.ts`:
+- Each device has `id`, `platform` (base archive folder), `extrasPlatform` (extras archive folder)
+- Platform names can differ: e.g. TrimUI uses `trimui` for base, `tg5040` for extras
+- `src-tauri/src/platform.rs` maps platforms to base archive items (mostly folders, `em_ui.sh` for M17)
