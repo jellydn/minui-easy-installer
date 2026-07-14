@@ -23,6 +23,24 @@ pub struct InstallResult {
 pub struct InstallProgressEvent {
     pub step: String,
     pub details: String,
+    /// Optional byte-level download progress (set when `step === "download"`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_bytes: Option<u64>,
+    /// Optional total bytes (None when server didn't send Content-Length).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_bytes: Option<u64>,
+}
+
+impl InstallProgressEvent {
+    /// Create a phase-level progress event (no byte-level download data).
+    pub fn phase(step: &str, details: &str) -> Self {
+        Self {
+            step: step.to_string(),
+            details: details.to_string(),
+            current_bytes: None,
+            total_bytes: None,
+        }
+    }
 }
 
 /// Callback for reporting install progress. Passed through the install flow.
@@ -307,10 +325,10 @@ pub async fn install_minui_with_cancel(
 
     // Step 1: Download, extract, and copy base
     let file_name = options.base_url.rsplit('/').next().unwrap_or("MinUI.zip");
-    progress(InstallProgressEvent {
-        step: "download".to_string(),
-        details: format!("Downloading {}", file_name),
-    });
+    progress(InstallProgressEvent::phase(
+        "download",
+        &format!("Downloading {}", file_name),
+    ));
     let base_files_copied = Pipeline::run(
         "base",
         &options.base_url,
@@ -343,21 +361,21 @@ pub async fn install_minui_with_cancel(
     }
 
     // Step 3: Create standard ROM directories
-    progress(InstallProgressEvent {
-        step: "copy".to_string(),
-        details: "Creating standard ROM directories...".to_string(),
-    });
+    progress(InstallProgressEvent::phase(
+        "copy",
+        "Creating standard ROM directories...",
+    ));
     let rom_dirs_created = create_rom_dirs(&options.sd_mount).unwrap_or(0);
 
     // Write version metadata after successful install
     let fork_label = options.fork_name.as_deref().unwrap_or("MinUI");
-    progress(InstallProgressEvent {
-        step: "finish".to_string(),
-        details: format!(
+    progress(InstallProgressEvent::phase(
+        "finish",
+        &format!(
             "Writing version metadata ({} {})",
             fork_label, options.version
         ),
-    });
+    ));
     let minui_txt_path = Path::new(&options.sd_mount).join("minui.txt");
     if let Err(e) = fs::write(
         &minui_txt_path,

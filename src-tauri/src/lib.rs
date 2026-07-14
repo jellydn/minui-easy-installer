@@ -85,10 +85,17 @@ async fn start_install(
             eprintln!("Warning: failed to emit install progress event: {}", e);
         }
     });
-    let download_progress: pipeline::DownloadProgressCallback = Arc::new(move |_bytes, _total| {
-        // TODO: extend InstallProgressEvent with currentBytes / totalBytes.
-        // Currently byte-level progress is discarded; only phase-level events
-        // ("download", "extract", "copy", "finish") reach the frontend.
+    let handle_for_dl = app_handle.clone();
+    let download_progress: pipeline::DownloadProgressCallback = Arc::new(move |bytes, total| {
+        let event = install::InstallProgressEvent {
+            step: "download".to_string(),
+            details: String::new(),
+            current_bytes: Some(bytes),
+            total_bytes: total,
+        };
+        if let Err(e) = handle_for_dl.emit("install-progress", event) {
+            eprintln!("Warning: failed to emit download progress event: {}", e);
+        }
     });
     let options = install::InstallOptions {
         base_url,
