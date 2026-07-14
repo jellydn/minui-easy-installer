@@ -41,13 +41,16 @@ export interface PackageRegistryError {
 
 const REGISTRY_URL = "https://packages.minui.dev/registry/index.json";
 
+/// How long the registry cache is valid before a re-fetch (5 minutes).
+const CACHE_TTL_MS = 5 * 60_000;
+
 // Module-level cache for the remote registry (session-scoped).
-// TODO: consider adding a TTL to the cache so long-running sessions
-// pick up registry updates without a full app restart.
 let cachedRegistry: PackageRegistry | null = null;
+let cachedAt: number = 0;
 
 export function clearRegistryCache(): void {
   cachedRegistry = null;
+  cachedAt = 0;
 }
 
 export async function installPackage(options: {
@@ -376,8 +379,8 @@ function parseRegistryFromJson(data: unknown): PackageRegistryFetchResult {
 }
 
 export async function fetchPackageRegistry(): Promise<PackageRegistryFetchResult> {
-  // Return cache if available
-  if (cachedRegistry) {
+  // Return cache if still valid
+  if (cachedRegistry && Date.now() - cachedAt < CACHE_TTL_MS) {
     return { success: true, data: cachedRegistry };
   }
 
@@ -390,6 +393,7 @@ export async function fetchPackageRegistry(): Promise<PackageRegistryFetchResult
 
     if (result.success) {
       cachedRegistry = result.data;
+      cachedAt = Date.now();
       return result;
     }
   } catch {
