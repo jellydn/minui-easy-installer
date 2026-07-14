@@ -349,7 +349,8 @@ fn test_check_for_updates_with_install() {
 #[test]
 fn test_check_for_updates_no_install() {
     let temp = tempfile::tempdir().unwrap();
-    let result = check_for_updates_with_prefix(temp.path().to_str().unwrap(), Some("2025.01.01"), None);
+    let result =
+        check_for_updates_with_prefix(temp.path().to_str().unwrap(), Some("2025.01.01"), None);
     assert!(result.update_available);
     assert!(result.installed.is_none());
 }

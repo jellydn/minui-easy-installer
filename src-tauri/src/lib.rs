@@ -261,9 +261,7 @@ async fn check_sd_card_health(
 
 /// Allowed URLs for fetch_url. Prevents SSRF by restricting HTTP
 /// fetches to known endpoints. Add new endpoints here as needed.
-const ALLOWED_URLS: &[&str] = &[
-    "https://packages.minui.dev/registry/index.json",
-];
+const ALLOWED_URLS: &[&str] = &["https://packages.minui.dev/registry/index.json"];
 
 #[tauri::command]
 async fn fetch_url(url: String) -> Result<String, String> {
