@@ -414,11 +414,7 @@ impl InstallPhase {
                 Ok(PhaseOutcome::RomDirsCreated(created))
             }
             Self::VersionMetadata => {
-                let fork_label = ctx
-                    .options
-                    .fork_name
-                    .as_deref()
-                    .unwrap_or("MinUI");
+                let fork_label = ctx.options.fork_name.as_deref().unwrap_or("MinUI");
                 (ctx.progress)(InstallProgressEvent::phase(
                     self.label(),
                     &format!(

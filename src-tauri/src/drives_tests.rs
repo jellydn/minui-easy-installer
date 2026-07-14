@@ -1,5 +1,5 @@
-use std::path::Path;
 use super::*;
+use std::path::Path;
 
 #[test]
 fn test_removable_drive_serialization() {

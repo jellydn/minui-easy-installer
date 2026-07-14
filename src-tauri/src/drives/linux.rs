@@ -3,8 +3,8 @@
 //! other target that supports `lsblk` with JSON output.
 use std::process::Command;
 
-use crate::fs_utils;
 use super::{DriveDetector, RemovableDrive};
+use crate::fs_utils;
 
 /// Linux implementation of drive detection and formatting.
 pub struct LinuxDetector;
@@ -21,8 +21,8 @@ impl DriveDetector for LinuxDetector {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let json: serde_json::Value =
-            serde_json::from_str(&stdout).map_err(|e| format!("Failed to parse lsblk output: {}", e))?;
+        let json: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|e| format!("Failed to parse lsblk output: {}", e))?;
 
         let devices = match json["blockdevices"].as_array() {
             Some(d) => d,

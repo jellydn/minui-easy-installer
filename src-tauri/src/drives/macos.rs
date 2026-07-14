@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::process::Command;
 
-use crate::fs_utils;
 use super::{DriveDetector, RemovableDrive};
+use crate::fs_utils;
 
 /// Classification of a diskutil-reported volume.
 #[derive(Debug, PartialEq, Eq)]

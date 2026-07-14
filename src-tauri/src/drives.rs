@@ -1,11 +1,11 @@
 use serde::Serialize;
 
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-mod linux;
 
 #[cfg(target_os = "macos")]
 // Re-export helpers for tests; some items are only used in drives_tests.rs.
