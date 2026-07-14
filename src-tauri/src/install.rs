@@ -502,3 +502,11 @@ pub async fn install_minui_with_cancel(
 #[cfg(test)]
 #[path = "install_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "install_copy_tests.rs"]
+mod copy_tests;
+
+#[cfg(test)]
+#[path = "install_extras_tests.rs"]
+mod extras_tests;
