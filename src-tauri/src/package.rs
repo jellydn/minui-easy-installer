@@ -134,6 +134,19 @@ pub async fn install_package(
     .await
 }
 
+/// Options for installing a package, received from the frontend via Tauri IPC.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageInstallOptions {
+    pub artifact_url: String,
+    pub checksum: Option<String>,
+    pub sd_mount: String,
+    pub target_dir: String,
+    pub extract_to_root: bool,
+    pub pak_name: String,
+    pub platform: String,
+}
+
 /// Package install with cancellation and download progress support.
 pub async fn install_package_with_cancel(
     artifact_url: &str,

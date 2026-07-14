@@ -57,8 +57,10 @@ export async function installBiosFile(
   base64Payload: string,
 ): Promise<string> {
   return await invoke<string>("install_bios_file", {
-    sdMount,
-    entryId,
-    base64Payload,
+    opts: {
+      sdMount,
+      entryId,
+      base64Payload,
+    },
   });
 }

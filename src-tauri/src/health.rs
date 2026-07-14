@@ -13,6 +13,14 @@ pub struct HealthCheckResult {
     pub support_report: String,
 }
 
+/// Health check options, received from the frontend via Tauri IPC.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthCheckOptions {
+    pub sd_mount: String,
+    pub device_platform: Option<String>,
+}
+
 /// Perform a comprehensive health check on the SD card.
 ///
 /// Checks filesystem, free space, MinUI folders, and package PAK files.

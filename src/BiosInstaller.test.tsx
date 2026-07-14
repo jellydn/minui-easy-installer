@@ -182,9 +182,11 @@ describe("BiosInstaller", () => {
       expect(invoke).toHaveBeenCalledWith(
         "install_bios_file",
         expect.objectContaining({
-          sdMount: "/Volumes/SD",
-          entryId: "gb_bios",
-          base64Payload: expect.any(String),
+          opts: expect.objectContaining({
+            sdMount: "/Volumes/SD",
+            entryId: "gb_bios",
+            base64Payload: expect.any(String),
+          }),
         }),
       );
     });
