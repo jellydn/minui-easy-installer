@@ -10,26 +10,16 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  apiDelay,
+  fetchApi,
+  repoSlug,
+  stripLeadingV,
+  type StoreRegistry,
+} from "./shared";
 
 const STORE_PATH = join(import.meta.dirname, "..", "src", "types", "store.json");
 const OUTPUT_PATH = join(import.meta.dirname, "discovered.json");
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-
-interface StorePak {
-  name: string;
-  repository: string;
-  version: string;
-  pak_name: string;
-  rom_folder?: string;
-  download_url?: string;
-  device?: string[];
-  description?: string;
-}
-
-interface StoreRegistry {
-  emu_paks: StorePak[];
-  tool_paks: StorePak[];
-}
 
 interface GitHubRepo {
   name: string;
@@ -60,25 +50,8 @@ const CONTRIBUTORS = [
   "jiserra",
   "laesetuc",
   "rommapp",
-  // Common MinUI pak authors found across the community
   "shauninman",
 ];
-
-function repoSlug(repository: string): { owner: string; repo: string } | null {
-  const match = repository.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
-  if (!match) return null;
-  return { owner: match[1], repo: match[2] };
-}
-
-function headers(): Record<string, string> {
-  const h: Record<string, string> = {
-    "User-Agent": "minui-easy-installer-package-discoverer",
-  };
-  if (GITHUB_TOKEN) {
-    h["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
-  }
-  return h;
-}
 
 async function fetchRepos(username: string): Promise<GitHubRepo[]> {
   const all: GitHubRepo[] = [];
@@ -86,13 +59,8 @@ async function fetchRepos(username: string): Promise<GitHubRepo[]> {
 
   while (true) {
     const url = `https://api.github.com/users/${username}/repos?per_page=100&page=${page}&sort=updated`;
-    let response: Response;
-    try {
-      response = await fetch(url, { headers: headers() });
-    } catch {
-      console.warn(`  ⚠ Network error fetching repos for ${username}`);
-      break;
-    }
+    const response = await fetchApi(url);
+    if (!response) break;
 
     if (!response.ok) {
       console.warn(`  ⚠ HTTP ${response.status} fetching repos for ${username}`);
@@ -103,13 +71,14 @@ async function fetchRepos(username: string): Promise<GitHubRepo[]> {
     if (repos.length === 0) break;
     all.push(...repos);
     page++;
-    await new Promise((r) => setTimeout(r, 200));
+    await apiDelay();
   }
 
   return all;
 }
 
-/** Check if a repo looks like a MinUI pak. */
+/** Check if a repo looks like a MinUI pak. Uses word-boundary match for "pak"
+ *  to avoid false positives on "package", "webpack", etc. */
 function isMinUIRepo(repo: GitHubRepo): boolean {
   const signals = [repo.name, repo.description ?? "", ...repo.topics]
     .join(" ")
@@ -117,27 +86,22 @@ function isMinUIRepo(repo: GitHubRepo): boolean {
 
   return (
     signals.includes("minui") ||
-    signals.includes("pak") ||
+    /\bpak\b/.test(signals) ||
     repo.name.endsWith("-pak") ||
-    (repo.topics.includes("minui") || repo.topics.includes("minui-pak"))
+    repo.topics.includes("minui") ||
+    repo.topics.includes("minui-pak")
   );
 }
 
 /** Check if a repo has a release with .pak.zip or -MinUI.zip assets. */
 async function hasPakRelease(owner: string, repo: string): Promise<string | null> {
   const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
-  let response: Response;
-  try {
-    response = await fetch(url, { headers: headers() });
-  } catch {
-    return null;
-  }
-
-  if (!response.ok) return null;
+  const response = await fetchApi(url);
+  if (!response?.ok) return null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const release = (await response.json()) as any;
-  const tag = release?.tag_name;
+  const tag: string | undefined = release?.tag_name;
   const assets: Array<{ name: string }> = release?.assets ?? [];
 
   const hasPak = assets.some(
@@ -145,20 +109,20 @@ async function hasPakRelease(owner: string, repo: string): Promise<string | null
   );
 
   if (hasPak && tag) {
-    return tag.startsWith("v") ? tag.slice(1) : tag;
+    return stripLeadingV(tag);
   }
   return null;
 }
 
-/** Guess the pak_name from the repo name. */
+/** Guess the pak_name from the repo name. Falls back to raw name if empty. */
 function guessPakName(repoName: string): string {
-  // Strip common suffixes, convert kebab/snake to words
-  return repoName
+  const guessed = repoName
     .replace(/-pak$/, "")
     .replace(/^minui-/, "")
     .split(/[-_]/)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+  return guessed || repoName;
 }
 
 /** Guess category based on repo name/description keywords. */
@@ -167,9 +131,63 @@ function guessCategory(repo: GitHubRepo): "Emulators" | "Utilities" {
     .join(" ")
     .toLowerCase();
 
-  const emuKeywords = ["emulator", "emu", "core", "mame", "retroarch", "game boy", "nes", "snes", "n64", "psp", "psx", "dreamcast", "ds", "gba", "gbc"];
+  const emuKeywords = [
+    "emulator", "emu", "core", "mame", "retroarch",
+    "game boy", "nes", "snes", "n64", "psp", "psx",
+    "dreamcast", "ds", "gba", "gbc",
+  ];
   return emuKeywords.some((kw) => signals.includes(kw)) ? "Emulators" : "Utilities";
 }
+
+/** Scan a single contributor's repos and return new candidates. */
+async function scanContributor(
+  contributor: string,
+  knownRepos: Set<string>,
+): Promise<Candidate[]> {
+  const candidates: Candidate[] = [];
+  const repos = await fetchRepos(contributor);
+
+  const minuiRepos = repos.filter(isMinUIRepo);
+  console.log(`   ${repos.length} repos, ${minuiRepos.length} MinUI-related`);
+
+  for (const repo of minuiRepos) {
+    const fullName = repo.full_name;
+    if (knownRepos.has(fullName)) {
+      console.log(`   ⏭ ${fullName} — already in store.json`);
+      continue;
+    }
+
+    console.log(`   🔍 Checking ${fullName}...`);
+    const [owner, repoName] = fullName.split("/");
+    const latestVersion = await hasPakRelease(owner, repoName);
+
+    if (latestVersion) {
+      const candidate: Candidate = {
+        name: repo.name,
+        repository: repo.html_url,
+        latest_version: latestVersion,
+        description: repo.description ?? "",
+        author: contributor,
+        stars: repo.stargazers_count,
+        suggested_category: guessCategory(repo),
+        suggested_pak_name: guessPakName(repo.name),
+        found_via: `${contributor}'s repos`,
+      };
+      candidates.push(candidate);
+      console.log(`      ✅ Found! v${latestVersion} (${candidate.suggested_category}, ${repo.stargazers_count} ⭐)`);
+    } else {
+      console.log(`      ⏭ No .pak.zip release found`);
+    }
+
+    await apiDelay();
+  }
+
+  return candidates;
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 
 async function main() {
   console.log("Reading store.json...");
@@ -181,59 +199,22 @@ async function main() {
       .map((s) => `${s!.owner}/${s!.repo}`),
   );
 
-  const candidates: Candidate[] = [];
+  const allCandidates: Candidate[] = [];
 
   for (const contributor of CONTRIBUTORS) {
     console.log(`\n🔍 Scanning repos for ${contributor}...`);
-    const repos = await fetchRepos(contributor);
-    console.log(`   ${repos.length} repos found`);
-
-    const minuiRepos = repos.filter(isMinUIRepo);
-    console.log(`   ${minuiRepos.length} MinUI-related repos`);
-
-    for (const repo of minuiRepos) {
-      const fullName = repo.full_name;
-      if (knownRepos.has(fullName)) {
-        console.log(`   ⏭ ${fullName} — already in store.json`);
-        continue;
-      }
-
-      console.log(`   🔍 Checking ${fullName}...`);
-      const latestVersion = await hasPakRelease(
-        fullName.split("/")[0],
-        fullName.split("/")[1],
-      );
-
-      if (latestVersion) {
-        const candidate: Candidate = {
-          name: repo.name,
-          repository: repo.html_url,
-          latest_version: latestVersion,
-          description: repo.description ?? "",
-          author: contributor,
-          stars: repo.stargazers_count,
-          suggested_category: guessCategory(repo),
-          suggested_pak_name: guessPakName(repo.name),
-          found_via: `${contributor}'s repos`,
-        };
-        candidates.push(candidate);
-        console.log(`      ✅ Found! v${latestVersion} (${candidate.suggested_category}, ${repo.stargazers_count} ⭐)`);
-      } else {
-        console.log(`      ⏭ No .pak.zip release found`);
-      }
-
-      await new Promise((r) => setTimeout(r, 200));
-    }
+    const candidates = await scanContributor(contributor, knownRepos);
+    allCandidates.push(...candidates);
   }
 
   // Report
   console.log(`\n${"=".repeat(60)}`);
-  console.log(`Discovered ${candidates.length} new MinUI pak candidate(s):\n`);
+  console.log(`Discovered ${allCandidates.length} new MinUI pak candidate(s):\n`);
 
-  if (candidates.length === 0) {
+  if (allCandidates.length === 0) {
     console.log("No new packages found.");
   } else {
-    for (const c of candidates) {
+    for (const c of allCandidates) {
       console.log(`  📦 ${c.name}`);
       console.log(`     Repo:     ${c.repository}`);
       console.log(`     Version:  ${c.latest_version}`);
@@ -246,7 +227,7 @@ async function main() {
     }
 
     console.log("Writing candidates to scripts/discovered.json...");
-    writeFileSync(OUTPUT_PATH, JSON.stringify(candidates, null, 2) + "\n");
+    writeFileSync(OUTPUT_PATH, JSON.stringify(allCandidates, null, 2) + "\n");
     console.log(`\nReview the candidates in ${OUTPUT_PATH}, then manually add`);
     console.log("the ones you want to src/types/store.json.");
   }

@@ -244,7 +244,8 @@ pub fn copy_extras_files(
 }
 
 /// Configuration for a MinUI installation.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InstallOptions {
     pub base_url: String,
     pub extras_url: Option<String>,
@@ -311,6 +312,47 @@ pub async fn install_minui(
     .await
 }
 
+/// Download, extract, and copy the base archive to the SD card.
+/// Returns the number of files copied.
+async fn install_base(
+    options: &InstallOptions,
+    progress: ProgressCallback,
+    download_progress: DownloadProgressCallback,
+    cancel: CancellationToken,
+    session: &mut InstallSession,
+) -> Result<u32, String> {
+    let file_name = options.base_url.rsplit('/').next().unwrap_or("MinUI.zip");
+    progress(InstallProgressEvent::phase(
+        "download",
+        &format!("Downloading {}", file_name),
+    ));
+    Pipeline::run(
+        "base",
+        &options.base_url,
+        options.base_checksum.as_deref(),
+        |p| copy_base_files(p.to_str().unwrap(), &options.sd_mount, &options.platform),
+        progress,
+        download_progress,
+        cancel,
+        session,
+    )
+    .await
+}
+
+/// Write version metadata to `minui.txt` on the SD card.
+/// Returns a warning string if the write fails.
+fn write_version_metadata(options: &InstallOptions) -> Option<String> {
+    let fork_label = options.fork_name.as_deref().unwrap_or("MinUI");
+    let minui_txt_path = Path::new(&options.sd_mount).join("minui.txt");
+    match fs::write(&minui_txt_path, format!("{} {}\n", fork_label, options.version)) {
+        Ok(()) => None,
+        Err(e) => {
+            eprintln!("Warning: failed to write version metadata: {}", e);
+            Some(format!("Failed to write version metadata: {}", e))
+        }
+    }
+}
+
 /// Full installation flow with cancellation support.
 ///
 /// Identical to `install_minui` but accepts a `CancellationToken` so the
@@ -324,17 +366,8 @@ pub async fn install_minui_with_cancel(
 ) -> Result<InstallResult, String> {
     let mut session = InstallSession::new();
 
-    // Step 1: Download, extract, and copy base
-    let file_name = options.base_url.rsplit('/').next().unwrap_or("MinUI.zip");
-    progress(InstallProgressEvent::phase(
-        "download",
-        &format!("Downloading {}", file_name),
-    ));
-    let base_files_copied = Pipeline::run(
-        "base",
-        &options.base_url,
-        options.base_checksum.as_deref(),
-        |p| copy_base_files(p.to_str().unwrap(), &options.sd_mount, &options.platform),
+    let base_files_copied = install_base(
+        options,
         progress.clone(),
         download_progress.clone(),
         cancel.clone(),
@@ -342,7 +375,7 @@ pub async fn install_minui_with_cancel(
     )
     .await?;
 
-    // Step 2: Download, extract, and copy extras (if available) — non-fatal
+    // Extras: download, extract, and copy (if available) — non-fatal
     let mut extras_files_copied = 0u32;
     let mut extras_warning: Option<String> = None;
 
@@ -361,32 +394,23 @@ pub async fn install_minui_with_cancel(
         }
     }
 
-    // Step 3: Create standard ROM directories
     progress(InstallProgressEvent::phase(
         "copy",
         "Creating standard ROM directories...",
     ));
     let rom_dirs_created = create_rom_dirs(&options.sd_mount).unwrap_or(0);
 
-    // Write version metadata after successful install
-    let fork_label = options.fork_name.as_deref().unwrap_or("MinUI");
     progress(InstallProgressEvent::phase(
         "finish",
         &format!(
             "Writing version metadata ({} {})",
-            fork_label, options.version
+            options.fork_name.as_deref().unwrap_or("MinUI"),
+            options.version
         ),
     ));
-    let minui_txt_path = Path::new(&options.sd_mount).join("minui.txt");
-    if let Err(e) = fs::write(
-        &minui_txt_path,
-        format!("{} {}\n", fork_label, options.version),
-    ) {
-        // Surface the failure as a non-fatal warning so the UI can
-        // show it. The install itself succeeded; only the metadata
-        // file is missing, so we don't downgrade success.
-        eprintln!("Warning: failed to write version metadata: {}", e);
-        extras_warning = Some(format!("Failed to write version metadata: {}", e));
+    let meta_warning = write_version_metadata(options);
+    if meta_warning.is_some() {
+        extras_warning = meta_warning;
     }
 
     // session drops here — temp dirs cleaned up after all operations complete

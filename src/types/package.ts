@@ -44,13 +44,44 @@ const REGISTRY_URL = "https://packages.minui.dev/registry/index.json";
 /// How long the registry cache is valid before a re-fetch (5 minutes).
 const CACHE_TTL_MS = 5 * 60_000;
 
-// Module-level cache for the remote registry (session-scoped).
-let cachedRegistry: PackageRegistry | null = null;
-let cachedAt: number = 0;
+/// Encapsulates the session-scoped package registry cache.
+/// Each instance owns its cached data and TTL independently —
+/// the module-level singleton is the only instance used in practice,
+/// but the class keeps the cache logic testable and explicit.
+class RegistryCache {
+  private registry: PackageRegistry | null = null;
+  private fetchedAt: number = 0;
+  private readonly ttlMs: number;
+
+  constructor(ttlMs: number = CACHE_TTL_MS) {
+    this.ttlMs = ttlMs;
+  }
+
+  /// Returns the cached registry if still valid, otherwise null.
+  get(): PackageRegistry | null {
+    if (this.registry && Date.now() - this.fetchedAt < this.ttlMs) {
+      return this.registry;
+    }
+    return null;
+  }
+
+  /// Store a freshly fetched registry with a new timestamp.
+  set(registry: PackageRegistry): void {
+    this.registry = registry;
+    this.fetchedAt = Date.now();
+  }
+
+  /// Invalidate the cache so the next fetch will re-request.
+  clear(): void {
+    this.registry = null;
+    this.fetchedAt = 0;
+  }
+}
+
+const registryCache = new RegistryCache();
 
 export function clearRegistryCache(): void {
-  cachedRegistry = null;
-  cachedAt = 0;
+  registryCache.clear();
 }
 
 export async function installPackage(options: {
@@ -380,8 +411,9 @@ function parseRegistryFromJson(data: unknown): PackageRegistryFetchResult {
 
 export async function fetchPackageRegistry(): Promise<PackageRegistryFetchResult> {
   // Return cache if still valid
-  if (cachedRegistry && Date.now() - cachedAt < CACHE_TTL_MS) {
-    return { success: true, data: cachedRegistry };
+  const cached = registryCache.get();
+  if (cached) {
+    return { success: true, data: cached };
   }
 
   // Try fetching remote registry via Tauri backend
@@ -392,8 +424,7 @@ export async function fetchPackageRegistry(): Promise<PackageRegistryFetchResult
     const result = parseRegistryFromJson(json);
 
     if (result.success) {
-      cachedRegistry = result.data;
-      cachedAt = Date.now();
+      registryCache.set(result.data);
       return result;
     }
   } catch {
