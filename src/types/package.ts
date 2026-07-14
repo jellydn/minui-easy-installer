@@ -42,6 +42,12 @@ export interface PackageRegistryError {
 
 const REGISTRY_URL = "https://packages.minui.dev/registry/index.json";
 
+/// Lazily-imported Tauri invoke — shared by all functions that call the backend.
+async function getInvoke() {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke;
+}
+
 /// How long the registry cache is valid before a re-fetch (5 minutes).
 const CACHE_TTL_MS = 5 * 60_000;
 
@@ -95,7 +101,7 @@ export async function installPackage(options: {
   platform: string;
 }): Promise<PackageInstallResultEither> {
   try {
-    const { invoke } = await import("@tauri-apps/api/core");
+    const invoke = await getInvoke();
     const result = await invoke<PackageInstallResult>("install_package", {
       opts: {
         artifactUrl: options.artifactUrl,
@@ -132,7 +138,7 @@ export async function detectInstalledPackages(
   sdMount: string,
 ): Promise<InstalledPackage[]> {
   try {
-    const { invoke } = await import("@tauri-apps/api/core");
+    const invoke = await getInvoke();
     return await invoke<InstalledPackage[]>("detect_installed_packages", {
       sdMount,
     });
@@ -146,7 +152,7 @@ export async function checkPackageUpdates(
   registryPackages: [string, string][],
 ): Promise<PackageUpdateInfo[]> {
   try {
-    const { invoke } = await import("@tauri-apps/api/core");
+    const invoke = await getInvoke();
     return await invoke<PackageUpdateInfo[]>("check_package_updates", {
       opts: {
         sdMount,
@@ -199,7 +205,7 @@ export async function fetchPackageRegistry(): Promise<PackageRegistryFetchResult
 
   // Try fetching remote registry via Tauri backend
   try {
-    const { invoke } = await import("@tauri-apps/api/core");
+    const invoke = await getInvoke();
     const text = await invoke<string>("fetch_url", { url: REGISTRY_URL });
     const json = JSON.parse(text);
     const result = parseRegistryFromJson(json);

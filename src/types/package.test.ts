@@ -170,46 +170,11 @@ describe("RegistryCache", () => {
 
   test("set() with different data doesn't leave stale state", () => {
     const cache = new RegistryCache();
+    const pakA = makeRegistry().packages[0];
+    const pakB = { ...pakA, name: "PakB", version: "2.0.0", category: "Emulators" as const };
 
-    cache.set(
-      makeRegistry({
-        packages: [
-          {
-            name: "PakA",
-            version: "1.0.0",
-            category: "Utilities",
-            description: "A",
-            repository: "https://github.com/a/pak",
-            downloads: null,
-            rating: null,
-            artifactUrl: "https://example.com/a.zip",
-            checksum: null,
-            supportedDevices: [],
-            installPathRules: { targetDir: "/Tools", extractToRoot: false },
-          },
-        ],
-      }),
-    );
-
-    cache.set(
-      makeRegistry({
-        packages: [
-          {
-            name: "PakB",
-            version: "2.0.0",
-            category: "Emulators",
-            description: "B",
-            repository: "https://github.com/b/pak",
-            downloads: null,
-            rating: null,
-            artifactUrl: "https://example.com/b.zip",
-            checksum: null,
-            supportedDevices: [],
-            installPathRules: { targetDir: "/Emus", extractToRoot: true },
-          },
-        ],
-      }),
-    );
+    cache.set(makeRegistry({ packages: [{ ...pakA, name: "PakA", version: "1.0.0" }] }));
+    cache.set(makeRegistry({ packages: [pakB] }));
 
     const result = cache.get()!;
     expect(result.packages[0].name).toBe("PakB");

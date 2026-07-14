@@ -113,14 +113,23 @@ App (src/App.tsx)
 src-tauri/src/
   main.rs          → Entry point
   lib.rs           → All Tauri commands + generate_handler!
-  install.rs       → Install flow (base/extras/ROMs/metadata)
+  lib_tests.rs     → Contract tests for Tauri command handlers
+  install.rs       → Install flow (InstallPlan orchestrator, phases)
+  install_copy_tests.rs → copy_base_files + preserved_path tests
+  install_extras_tests.rs → extras + metadata tests
+  install_tests.rs → Full pipeline integration test
   pipeline.rs      → Download → extract → copy pipeline
   download.rs      → HTTP download with streaming + checksum
   extract.rs       → ZIP extraction to temp dirs
-  drives.rs        → Platform-specific drive detection
+  drives.rs        → Platform-specific drive detection + DriveDetector trait
   drives/macos.rs  → macOS diskutil parsing helpers
+  drives/linux.rs  → Linux lsblk parsing
+  drives/windows.rs→ Windows WMI parsing
   package.rs       → Package install logic
-  wifi.rs          → WiFi config write + network scanning
+  wifi.rs          → WiFi config write + platform dispatchers
+  wifi/macos.rs    → macOS airport + system_profiler WiFi scanning
+  wifi/linux.rs    → Linux nmcli + iwgetid WiFi scanning
+  wifi/windows.rs  → Windows netsh WiFi scanning
   bios.rs          → BIOS catalog + status + file install
   health.rs        → SD card health checks
   validate.rs      → Post-install validation
