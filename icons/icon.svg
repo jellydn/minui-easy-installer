@@ -1,24 +1,70 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#16213e"/>
-      <stop offset="100%" stop-color="#0f3460"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4f46e5"/>
+      <stop offset="100%" style="stop-color:#7c3aed"/>
     </linearGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8fafc"/>
+      <stop offset="100%" style="stop-color:#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981"/>
+      <stop offset="100%" style="stop-color:#059669"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
   </defs>
-  <!-- Background circle -->
-  <rect width="512" height="512" rx="100" fill="url(#bg)"/>
-  <!-- SD Card body -->
-  <rect x="120" y="100" width="272" height="312" rx="24" fill="#e94560" opacity="0.12"/>
-  <rect x="140" y="120" width="232" height="272" rx="16" fill="#e94560" opacity="0.08"/>
-  <!-- SD card notch -->
-  <rect x="296" y="120" width="60" height="36" rx="4" fill="#16213e"/>
-  <!-- Circuit line accents -->
-  <rect x="175" y="180" width="90" height="4" rx="2" fill="#e94560"/>
-  <rect x="175" y="210" width="130" height="4" rx="2" fill="#e94560" opacity="0.7"/>
-  <rect x="175" y="240" width="110" height="4" rx="2" fill="#e94560" opacity="0.5"/>
-  <rect x="175" y="270" width="120" height="4" rx="2" fill="#e94560" opacity="0.3"/>
-  <!-- Text: mi (MinUI Easy Installer) -->
-  <text x="256" y="370" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="bold" font-size="80" fill="#ffffff" letter-spacing="-2">MI</text>
-  <!-- Small subtitle -->
-  <text x="256" y="395" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" fill="#e94560" letter-spacing="3">EASY INSTALLER</text>
+
+  <!-- Background rounded square -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#bg)"/>
+
+  <!-- Subtle inner glow -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#bg)" opacity="0.5"/>
+  <rect x="16" y="16" width="480" height="240" rx="96" ry="96" fill="white" opacity="0.06"/>
+
+  <!-- SD Card group -->
+  <g filter="url(#shadow)">
+    <!-- Card body -->
+    <rect x="152" y="112" width="208" height="288" rx="20" ry="20" fill="url(#card)"/>
+
+    <!-- Card top notch -->
+    <rect x="172" y="112" width="64" height="36" rx="6" ry="6" fill="#cbd5e1"/>
+
+    <!-- Card bottom pins -->
+    <rect x="172" y="358" width="168" height="18" rx="6" ry="6" fill="#94a3b8"/>
+    <line x1="192" y1="358" x2="192" y2="376" stroke="#64748b" stroke-width="2"/>
+    <line x1="216" y1="358" x2="216" y2="376" stroke="#64748b" stroke-width="2"/>
+    <line x1="240" y1="358" x2="240" y2="376" stroke="#64748b" stroke-width="2"/>
+    <line x1="264" y1="358" x2="264" y2="376" stroke="#64748b" stroke-width="2"/>
+    <line x1="288" y1="358" x2="288" y2="376" stroke="#64748b" stroke-width="2"/>
+    <line x1="312" y1="358" x2="312" y2="376" stroke="#64748b" stroke-width="2"/>
+
+    <!-- Screen on card -->
+    <rect x="180" y="172" width="152" height="96" rx="10" ry="10" fill="url(#screen)"/>
+
+    <!-- Screen content: simplified game UI -->
+    <text x="256" y="210" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="bold" fill="#22d3ee" text-anchor="middle">MinUI</text>
+    <rect x="208" y="223" width="96" height="3" rx="1.5" fill="#22d3ee" opacity="0.5"/>
+    <rect x="216" y="233" width="80" height="3" rx="1.5" fill="#22d3ee" opacity="0.3"/>
+    <rect x="224" y="243" width="64" height="3" rx="1.5" fill="#22d3ee" opacity="0.2"/>
+
+    <!-- Install arrow circle -->
+    <circle cx="256" cy="320" r="30" fill="url(#arrow)"/>
+
+    <!-- Download/install arrow -->
+    <path d="M256,308 L256,330 M248,322 L256,332 L264,322" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <line x1="246" y1="308" x2="266" y2="308" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- Sparkles / decorative -->
+  <circle cx="138" cy="152" r="6" fill="#fbbf24" opacity="0.9"/>
+  <circle cx="378" cy="148" r="5" fill="#fbbf24" opacity="0.8"/>
+  <circle cx="146" cy="368" r="4" fill="#fbbf24" opacity="0.7"/>
+  <circle cx="380" cy="356" r="5" fill="#fbbf24" opacity="0.8"/>
 </svg>
