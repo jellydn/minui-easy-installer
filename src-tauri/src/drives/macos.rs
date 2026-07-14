@@ -1,3 +1,9 @@
+use std::path::Path;
+use std::process::Command;
+
+use crate::fs_utils;
+use super::{DriveDetector, RemovableDrive};
+
 /// Classification of a diskutil-reported volume.
 #[derive(Debug, PartialEq, Eq)]
 pub enum VolumeKind {
@@ -80,6 +86,159 @@ pub fn classify_volume(info: &str) -> VolumeKind {
 /// Parse the filesystem name from `diskutil info` output.
 pub fn parse_filesystem_from_info(info: &str) -> Option<String> {
     find_field_value(info, "File System Personality").map(|s| s.to_string())
+}
+
+/// macOS implementation of drive detection and formatting.
+pub struct MacOSDetector;
+
+impl MacOSDetector {
+    fn is_removable_volume(mount_path: &str) -> bool {
+        let output = match Command::new("diskutil").args(["info", mount_path]).output() {
+            Ok(o) if o.status.success() => o,
+            _ => return false,
+        };
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        matches!(classify_volume(&stdout), VolumeKind::External)
+    }
+
+    fn get_filesystem(mount_path: &str) -> Option<String> {
+        let output = Command::new("diskutil")
+            .args(["info", mount_path])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        parse_filesystem_from_info(&stdout)
+    }
+}
+
+impl DriveDetector for MacOSDetector {
+    fn list() -> Result<Vec<RemovableDrive>, String> {
+        let output = Command::new("df")
+            .args(["-k"])
+            .output()
+            .map_err(|e| format!("Failed to run df: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("df failed: {}", stderr));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut drives = Vec::new();
+
+        for line in stdout.lines().skip(1) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 6 {
+                continue;
+            }
+            let mount_path = parts.last().unwrap_or(&"");
+            if !mount_path.starts_with("/Volumes/") {
+                continue;
+            }
+
+            let name = Path::new(mount_path)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if name == "Macintosh HD" || name.starts_with("Macintosh HD") {
+                continue;
+            }
+
+            let is_external = Self::is_removable_volume(mount_path);
+            if !is_external {
+                continue;
+            }
+
+            let filesystem = Self::get_filesystem(mount_path);
+            let available = parts[3].parse::<u64>().ok().map(|k| k * 1024);
+            let size = fs_utils::get_disk_space(mount_path).map(|ds| ds.total);
+
+            drives.push(RemovableDrive {
+                name,
+                mount_path: mount_path.to_string(),
+                size_bytes: size,
+                filesystem,
+                available_bytes: available,
+            });
+        }
+
+        if drives.is_empty() {
+            return Err("No removable volumes found".to_string());
+        }
+
+        Ok(drives)
+    }
+
+    fn format(mount_path: &str, volume_name: &str) -> Result<(), String> {
+        // Find the disk identifier from the mount path
+        let output = Command::new("diskutil")
+            .args(["info", mount_path])
+            .output()
+            .map_err(|e| format!("Failed to get disk info: {}", e))?;
+
+        if !output.status.success() {
+            return Err("Unable to find disk information for the selected volume".to_string());
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut disk_id: Option<String> = None;
+        let mut part_of_whole: Option<String> = None;
+
+        for line in stdout.lines() {
+            if let Some(device) = line.strip_prefix("   Device Node:") {
+                disk_id = Some(device.trim().to_string());
+            }
+            if let Some(whole) = line.strip_prefix("   Part of Whole:") {
+                let val = whole.trim().to_string();
+                if val != "No" {
+                    part_of_whole = Some(val);
+                }
+            }
+        }
+
+        let device = disk_id.ok_or("Could not determine device node")?;
+
+        // If this is a partition, use the parent disk
+        let target = if let Some(ref parent) = part_of_whole {
+            parent.clone()
+        } else {
+            device
+        };
+
+        // Unmount the entire disk first
+        let unmount = Command::new("diskutil")
+            .args(["unmountDisk", &target])
+            .output()
+            .map_err(|e| format!("Failed to unmount disk: {}", e))?;
+
+        if !unmount.status.success() {
+            let stderr = String::from_utf8_lossy(&unmount.stderr);
+            return Err(format!("Failed to unmount disk: {}", stderr));
+        }
+
+        let format_name = volume_name.trim();
+        let format_name = if format_name.is_empty() {
+            "MINUI"
+        } else {
+            format_name
+        };
+        let format_name: String = format_name.chars().take(11).collect();
+
+        let result = Command::new("diskutil")
+            .args(["eraseDisk", "FAT32", &format_name, &target])
+            .output()
+            .map_err(|e| format!("Failed to run diskutil: {}", e))?;
+
+        if result.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&result.stderr);
+            Err(format!("Format failed: {}", stderr))
+        }
+    }
 }
 
 /// Parse a human-readable size string (e.g. "32 GB") into bytes.

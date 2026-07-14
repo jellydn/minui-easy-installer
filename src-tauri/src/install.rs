@@ -356,6 +356,42 @@ fn write_version_metadata(options: &InstallOptions) -> Option<String> {
     }
 }
 
+/// Ordered install phases. The plan is a data structure that describes
+/// *what* the install does; the orchestrator (`install_minui_with_cancel`)
+/// handles *when* each phase runs, emitting progress at phase boundaries
+/// and checking cancellation between phases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InstallPhase {
+    Base,
+    Extras,
+    RomDirs,
+    VersionMetadata,
+}
+
+impl InstallPhase {
+    fn step_label(&self) -> &'static str {
+        match self {
+            Self::Base => "download",
+            Self::Extras => "extract",
+            Self::RomDirs => "copy",
+            Self::VersionMetadata => "finish",
+        }
+    }
+}
+
+/// Build the ordered list of phases for this install.
+/// The extras phase is conditionally included based on whether an
+/// extras URL was provided.
+fn build_install_plan(options: &InstallOptions) -> Vec<InstallPhase> {
+    let mut phases = vec![InstallPhase::Base];
+    if options.extras_url.is_some() {
+        phases.push(InstallPhase::Extras);
+    }
+    phases.push(InstallPhase::RomDirs);
+    phases.push(InstallPhase::VersionMetadata);
+    phases
+}
+
 /// Full installation flow with cancellation support.
 ///
 /// Identical to `install_minui` but accepts a `CancellationToken` so the
@@ -368,6 +404,7 @@ pub async fn install_minui_with_cancel(
     cancel: CancellationToken,
 ) -> Result<InstallResult, String> {
     let mut session = InstallSession::new();
+    let plan = build_install_plan(options);
 
     let base_files_copied = install_base(
         options,
@@ -382,7 +419,7 @@ pub async fn install_minui_with_cancel(
     let mut extras_files_copied = 0u32;
     let mut extras_warning: Option<String> = None;
 
-    if options.extras_url.is_some() {
+    if plan.contains(&InstallPhase::Extras) {
         match try_install_extras(
             options,
             progress.clone(),
@@ -397,14 +434,16 @@ pub async fn install_minui_with_cancel(
         }
     }
 
-    progress(InstallProgressEvent::phase(
-        "copy",
-        "Creating standard ROM directories...",
-    ));
+    if plan.contains(&InstallPhase::RomDirs) {
+        progress(InstallProgressEvent::phase(
+            InstallPhase::RomDirs.step_label(),
+            "Creating standard ROM directories...",
+        ));
+    }
     let rom_dirs_created = create_rom_dirs(&options.sd_mount).unwrap_or(0);
 
     progress(InstallProgressEvent::phase(
-        "finish",
+        InstallPhase::VersionMetadata.step_label(),
         &format!(
             "Writing version metadata ({} {})",
             options.fork_name.as_deref().unwrap_or("MinUI"),

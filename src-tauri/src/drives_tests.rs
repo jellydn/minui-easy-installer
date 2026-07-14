@@ -1,3 +1,4 @@
+use std::path::Path;
 use super::*;
 
 #[test]
