@@ -6,7 +6,7 @@ use super::{DriveDetector, RemovableDrive};
 pub struct WindowsDetector;
 
 impl DriveDetector for WindowsDetector {
-    fn list() -> Result<Vec<RemovableDrive>, String> {
+    fn list(&self) -> Result<Vec<RemovableDrive>, String> {
         let output = Command::new("powershell")
             .args([
                 "-Command",
@@ -67,7 +67,7 @@ impl DriveDetector for WindowsDetector {
         Ok(drives)
     }
 
-    fn format(_mount_path: &str, _volume_name: &str) -> Result<(), String> {
+    fn format(&self, _mount_path: &str, _volume_name: &str) -> Result<(), String> {
         Err("Formatting is not yet supported on Windows".to_string())
     }
 }

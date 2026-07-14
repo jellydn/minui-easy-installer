@@ -115,7 +115,7 @@ impl MacOSDetector {
 }
 
 impl DriveDetector for MacOSDetector {
-    fn list() -> Result<Vec<RemovableDrive>, String> {
+    fn list(&self) -> Result<Vec<RemovableDrive>, String> {
         let output = Command::new("df")
             .args(["-k"])
             .output()
@@ -172,7 +172,7 @@ impl DriveDetector for MacOSDetector {
         Ok(drives)
     }
 
-    fn format(mount_path: &str, volume_name: &str) -> Result<(), String> {
+    fn format(&self, mount_path: &str, volume_name: &str) -> Result<(), String> {
         // Find the disk identifier from the mount path
         let output = Command::new("diskutil")
             .args(["info", mount_path])

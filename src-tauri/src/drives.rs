@@ -30,42 +30,42 @@ pub struct RemovableDrive {
 /// of this file delegate to the compile-time selected implementation via
 /// `#[cfg]` gating — no runtime dispatch overhead.
 pub trait DriveDetector {
-    fn list() -> Result<Vec<RemovableDrive>, String>;
-    fn format(mount_path: &str, volume_name: &str) -> Result<(), String>;
+    fn list(&self) -> Result<Vec<RemovableDrive>, String>;
+    fn format(&self, mount_path: &str, volume_name: &str) -> Result<(), String>;
 }
 
 /// List removable drives detected on this system.
 /// Delegates to the platform-specific `DriveDetector` implementation.
 #[cfg(target_os = "macos")]
 pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
-    macos::MacOSDetector::list()
+    macos::MacOSDetector.list()
 }
 
 #[cfg(target_os = "windows")]
 pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
-    windows::WindowsDetector::list()
+    windows::WindowsDetector.list()
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
-    linux::LinuxDetector::list()
+    linux::LinuxDetector.list()
 }
 
 /// Format a drive on this system.
 /// Delegates to the platform-specific `DriveDetector` implementation.
 #[cfg(target_os = "macos")]
 pub fn format_drive(mount_path: &str, volume_name: &str) -> Result<(), String> {
-    macos::MacOSDetector::format(mount_path, volume_name)
+    macos::MacOSDetector.format(mount_path, volume_name)
 }
 
 #[cfg(target_os = "windows")]
 pub fn format_drive(mount_path: &str, volume_name: &str) -> Result<(), String> {
-    windows::WindowsDetector::format(mount_path, volume_name)
+    windows::WindowsDetector.format(mount_path, volume_name)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn format_drive(mount_path: &str, volume_name: &str) -> Result<(), String> {
-    linux::LinuxDetector::format(mount_path, volume_name)
+    linux::LinuxDetector.format(mount_path, volume_name)
 }
 
 #[cfg(test)]

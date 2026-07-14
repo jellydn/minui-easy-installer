@@ -10,7 +10,7 @@ use super::{DriveDetector, RemovableDrive};
 pub struct LinuxDetector;
 
 impl DriveDetector for LinuxDetector {
-    fn list() -> Result<Vec<RemovableDrive>, String> {
+    fn list(&self) -> Result<Vec<RemovableDrive>, String> {
         let output = Command::new("lsblk")
             .args(["-o", "NAME,SIZE,FSTYPE,MOUNTPOINT,RM", "-ln", "-J"])
             .output()
@@ -68,7 +68,7 @@ impl DriveDetector for LinuxDetector {
         Ok(drives)
     }
 
-    fn format(_mount_path: &str, _volume_name: &str) -> Result<(), String> {
+    fn format(&self, _mount_path: &str, _volume_name: &str) -> Result<(), String> {
         Err("Formatting is not yet supported on this platform".to_string())
     }
 }
