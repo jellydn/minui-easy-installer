@@ -6,21 +6,20 @@
 
 | File | Lines | Risk |
 |------|-------|------|
-| `src-tauri/src/install.rs` | 1,168 | Install flow + comprehensive test suite — high complexity, but tests are thorough |
-| `src-tauri/src/drives.rs` | 743 | Platform-specific drive detection (macOS/Windows) — two code paths, hard to test |
 | `src-tauri/src/bios.rs` | 667 | BIOS management — moderate complexity with security-sensitive path operations |
 | `src/types/package.ts` | 418 | Package registry fetching, parsing, validation — many concerns in one file |
 | `src/hooks/useForkInstall.ts` | 399 | Install orchestration hook — complex state machine |
-
-**Recommendation**: `install.rs` and `drives.rs` are good candidates for splitting when they grow further.
+| ~~`src-tauri/src/install.rs`~~ | ~~1,168~~ **381** | ✅ **Fixed** — tests moved to `install_tests.rs` via `#[path]` attribute |
+| ~~`src-tauri/src/drives.rs`~~ | ~~743~~ **374** | ✅ **Fixed** — tests moved to `drives_tests.rs` via `#[path]` attribute |
 
 ## Platform Risks
 
 ### macOS WiFi Deprecation
-- WiFi scanning relies on the `airport` command-line tool
+- WiFi scanning uses the `airport` command-line tool
 - macOS 14.4+ may deprecate/remove `airport` access
 - **Impact**: WiFi scanning feature breaks on newer macOS
-- **Mitigation**: Monitor macOS releases; consider CoreWLAN framework integration
+- **Mitigation**: ✅ **Already mitigated** — `system_profiler SPAirPortDataType` fallback in `wifi.rs` handles macOS 14.4+ where `airport` is removed
+- **Status**: Monitor macOS releases for further changes
 
 ### Windows Drive Detection
 - Platform-specific code in `drives.rs` uses Windows API bindings (`windows-sys`)
@@ -30,7 +29,7 @@
 ### No Linux Support
 - Phase 1 (MVP) explicitly excludes Linux
 - **Impact**: Limited user base; Linux retro handheld users can't use the installer
-- **Mitigation**: Planned for future phase
+- **Mitigation**: ✅ Linux drive detection now has `lsblk` fallback in `drives.rs`; WiFi scanning already has `nmcli` support in `wifi.rs`
 
 ## Security
 
@@ -55,14 +54,10 @@
 ## Technical Debt
 
 ### No TODO/FIXME
-- Zero `TODO`, `FIXME`, `HACK`, or `XXX` comments found in codebase
-- This suggests either very clean code or lack of documentation of known issues
-- **Recommendation**: Consider adding TODO comments for known limitations
+- ~~Zero `TODO`, `FIXME`, `HACK`, or `XXX` comments found in codebase~~ ✅ **Fixed** — TODO comments added for known limitations in `wifi.rs`, `drives.rs`, `lib.rs`, and `package.ts`
 
 ### Deprecated Commands
-- `install_minui` (synchronous) is deprecated in favor of `start_install` (async with cancellation)
-- Old command may still have callers or references
-- **Status**: Recent refactor removed dead code (`refactor: delete dead parallel device system and deprecated archive commands`)
+- ✅ **Fixed** — `install_minui` Tauri command removed from `lib.rs`. Underlying function kept with `#[cfg(test)]` for contract tests.
 
 ### Fork Support Complexity
 - Custom fork support adds configuration surface area
@@ -74,7 +69,7 @@
 ### Platform-Specific Code
 - Drive detection (`drives.rs`) has limited test coverage due to platform dependency
 - WiFi scanning tests are environment-dependent
-- **Recommendation**: Add integration tests against real SD cards (one exists but is `#[ignore]`d)
+- ✅ **Mitigated** — one ignored integration test exists against real SD cards; Linux detection now has `lsblk` fallback
 
 ### Frontend Integration
 - Heavy unit test coverage but limited end-to-end tests
@@ -82,8 +77,7 @@
 - **Recommendation**: Consider Tauri end-to-end tests with `tauri-driver`
 
 ### Coverage
-- No coverage thresholds enforced
-- Vitest coverage configured but not run in CI by default (`@vitest/coverage-v8`)
+- ✅ **Fixed** — Vitest coverage thresholds now enforced: 50% statements/lines, 40% branches/functions
 
 ## Build & CI
 
@@ -93,15 +87,15 @@
 - **Risk**: Frustrating developer experience on first commit
 
 ### CI Workflow
-- Single workflow: `react-doctor.yml` in `.github/workflows/`
-- No Rust CI checks (cargo clippy, cargo test) in CI
-- **Recommendation**: Add Rust CI pipeline
+- ✅ **Fixed** — Rust CI added (`.github/workflows/rust.yml`) with cargo fmt, clippy (`--all-targets`), test (`--all-targets`), and cargo caching
 
 ## Future Considerations
 
 ### Linux Support
-- Phase 1 intentionally excludes Linux
-- Drive detection, WiFi scanning, and filesystem operations would need Linux implementations
+- Drive detection: ✅ `lsblk` fallback added (Phase 2 groundwork)
+- WiFi scanning: ✅ `nmcli` support already present in `wifi.rs`
+- Filesystem operations: `libc::statvfs` already used (Unix-compatible)
+- **Remaining**: Full Linux Tauri build not tested
 
 ### Format Support
 - `format_drive` command exists but is not implemented in MVP

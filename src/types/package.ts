@@ -41,7 +41,9 @@ export interface PackageRegistryError {
 
 const REGISTRY_URL = "https://packages.minui.dev/registry/index.json";
 
-// Module-level cache for the remote registry (session-scoped)
+// Module-level cache for the remote registry (session-scoped).
+// TODO: consider adding a TTL to the cache so long-running sessions
+// pick up registry updates without a full app restart.
 let cachedRegistry: PackageRegistry | null = null;
 
 export function clearRegistryCache(): void {
