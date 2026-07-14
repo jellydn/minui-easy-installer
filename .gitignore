@@ -17,3 +17,5 @@ Thumbs.db
 .env
 .env.local
 /.agents/skills/react-doctor
+/.agents/skills/react-stinky
+/.claude/skills

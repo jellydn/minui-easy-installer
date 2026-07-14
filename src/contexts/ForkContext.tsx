@@ -9,12 +9,20 @@ import {
 import type { ForkConfig } from "../types/fork";
 import { FORK_PRESETS, rehydrateFork } from "../types/fork";
 
-const STORAGE_KEY = "selectedFork";
+const STORAGE_KEY = "selectedFork:v1";
+const LEGACY_STORAGE_KEY = "selectedFork";
 
 /** Load the persisted fork selection from localStorage, or default to official. */
 function loadPersistedFork(): ForkConfig {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (raw) {
+        localStorage.setItem(STORAGE_KEY, raw);
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
+      }
+    }
     if (raw) {
       const fork = rehydrateFork(JSON.parse(raw));
       if (fork) return fork;

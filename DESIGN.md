@@ -375,8 +375,12 @@ message, and file copy counters. During install the backend emits events
 ### Validation Report
 
 Post-install checklist with pass/fail indicators per check item. Passed items
-show white text. Failed items show muted text. Includes disk space summary and
-Copy Report/Done actions.
+show white text. Failed items show muted text. Includes:
+
+- **Device path**: The platform-specific path the installer checked (e.g. `miyoo` or `rg35xxplus`).
+- **Multiple device folders warning**: A yellow warning box (using the warning color palette) when more than one device folder is detected on the SD card, suggesting the card may have been used for a different device.
+- **Disk space summary**: Free space on the SD card.
+- **Copy Report/Done actions**: Buttons to copy the report or dismiss the dialog.
 
 ### Health Check
 

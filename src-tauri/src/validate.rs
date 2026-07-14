@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::fs_utils;
+use crate::platform::{device_base_item, KNOWN_DEVICE_BASE_ITEMS};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ValidationCheck {
@@ -18,9 +19,37 @@ pub struct ValidationResult {
     pub passed_count: u32,
     pub failed_count: u32,
     pub free_space_bytes: Option<u64>,
+    /// The device-specific path that was validated (e.g. "miyoo", "rg35xxplus", "em_ui.sh").
+    pub device_path: String,
+    /// Warning message when multiple device folders are present on the SD card.
+    pub multiple_device_folders_warning: Option<String>,
 }
 
-const ESSENTIAL_BASE_PATHS: &[&str] = &["MinUI.zip", "minui.txt"];
+/// Detect device-specific folders/files present at the SD card root.
+fn detect_device_base_items(sd_root: &Path) -> Vec<String> {
+    let mut found = Vec::new();
+    for item in KNOWN_DEVICE_BASE_ITEMS {
+        let path = sd_root.join(item);
+        if path.exists() {
+            found.push((*item).to_string());
+        }
+    }
+    found
+}
+
+/// Returns a warning if more than one device-specific folder/file is present
+/// at the SD card root.
+fn check_multiple_device_folders(sd_root: &Path) -> Option<String> {
+    let detected_device_items = detect_device_base_items(sd_root);
+    if detected_device_items.len() > 1 {
+        Some(format!(
+            "Multiple device folders found: {}. Only the folder for the selected device should be on the SD card.",
+            detected_device_items.join(", ")
+        ))
+    } else {
+        None
+    }
+}
 
 fn check_path_exists(sd_root: &Path, relative_path: &str) -> ValidationCheck {
     let full_path = sd_root.join(relative_path.trim_start_matches('/'));
@@ -117,6 +146,7 @@ pub fn format_bytes(bytes: u64) -> String {
 
 pub fn validate_installation(
     sd_mount: &str,
+    platform: &str,
     has_extras: bool,
     extras_dir: &str,
 ) -> Result<ValidationResult, String> {
@@ -126,12 +156,14 @@ pub fn validate_installation(
         return Err(format!("SD card mount path does not exist: {}", sd_mount));
     }
 
-    let mut checks = Vec::new();
+    let device_item = device_base_item(platform);
 
     // Check essential base paths
-    for path in ESSENTIAL_BASE_PATHS {
-        checks.push(check_path_exists(sd_root, path));
-    }
+    let mut checks = vec![
+        check_path_exists(sd_root, "minui.txt"),
+        check_path_exists(sd_root, "MinUI.zip"),
+        check_path_exists(sd_root, device_item),
+    ];
 
     // Check Tools directory exists
     checks.push(check_directory_exists(sd_root, extras_dir));
@@ -157,12 +189,17 @@ pub fn validate_installation(
     let passed_count = checks.iter().filter(|c| c.passed).count() as u32;
     let failed_count = checks.iter().filter(|c| !c.passed).count() as u32;
 
+    // Warn if multiple device folders are present on the SD card.
+    let multiple_device_folders_warning = check_multiple_device_folders(sd_root);
+
     Ok(ValidationResult {
         success: failed_count == 0,
         checks,
         passed_count,
         failed_count,
         free_space_bytes: free_space,
+        device_path: device_item.to_string(),
+        multiple_device_folders_warning,
     })
 }
 
@@ -205,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_validate_missing_sd_card() {
-        let result = validate_installation("/nonexistent/path", false, "/Tools");
+        let result = validate_installation("/nonexistent/path", "miyoo", false, "/Tools");
         assert!(result.is_err());
     }
 
@@ -214,7 +251,8 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let sd_root = temp.path();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), false, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
 
         assert!(!result.success);
         assert!(result.failed_count > 0);
@@ -227,16 +265,18 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let sd_root = temp.path();
 
-        // Create essential files (MinUI install creates MinUI.zip + minui.txt at root)
+        // Create essential files (MinUI install creates MinUI.zip + minui.txt + device folder at root)
         fs::write(sd_root.join("MinUI.zip"), "archive").unwrap();
         fs::write(sd_root.join("minui.txt"), "MinUI 2025.01.01").unwrap();
+        fs::create_dir_all(sd_root.join("miyoo")).unwrap();
         fs::create_dir_all(sd_root.join("Tools")).unwrap();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), false, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
 
         assert!(result.success);
         assert_eq!(result.failed_count, 0);
-        assert!(result.passed_count >= 3); // 2 base + Tools dir
+        assert!(result.passed_count >= 4); // minui.txt + MinUI.zip + miyoo + Tools dir
     }
 
     #[test]
@@ -247,16 +287,18 @@ mod tests {
         // Create essential files
         fs::write(sd_root.join("MinUI.zip"), "archive").unwrap();
         fs::write(sd_root.join("minui.txt"), "MinUI 2025.01.01").unwrap();
+        fs::create_dir_all(sd_root.join("rg35xxplus")).unwrap();
 
         // Create Tools with pak directories (MinUI uses .pak dirs per platform)
         fs::create_dir_all(sd_root.join("Tools/rg35xxplus/wifi.pak")).unwrap();
         fs::create_dir_all(sd_root.join("Emus/rg35xxplus/mgba.pak")).unwrap();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), true, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "rg35xxplus", true, "/Tools").unwrap();
 
         assert!(result.success);
         assert_eq!(result.failed_count, 0);
-        assert!(result.passed_count >= 4); // 2 base + Tools dir + pak count
+        assert!(result.passed_count >= 5); // minui.txt + MinUI.zip + rg35xxplus + Tools dir + pak count
     }
 
     #[test]
@@ -266,13 +308,35 @@ mod tests {
 
         // Create only some base files
         fs::write(sd_root.join("MinUI.zip"), "archive").unwrap();
+        fs::write(sd_root.join("minui.txt"), "MinUI 2025.01.01").unwrap();
+        fs::create_dir_all(sd_root.join("miyoo")).unwrap();
 
-        let result = validate_installation(sd_root.to_str().unwrap(), false, "/Tools").unwrap();
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
 
         assert!(!result.success);
         let tools_check = result.checks.iter().find(|c| c.name.contains("Tools"));
         assert!(tools_check.is_some());
         assert!(!tools_check.unwrap().passed);
+    }
+
+    #[test]
+    fn test_validate_m17_uses_em_ui_sh() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        fs::write(sd_root.join("MinUI.zip"), "archive").unwrap();
+        fs::write(sd_root.join("minui.txt"), "MinUI 2025.01.01").unwrap();
+        fs::write(sd_root.join("em_ui.sh"), "#!/bin/sh").unwrap();
+        fs::create_dir_all(sd_root.join("Tools")).unwrap();
+
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "m17", false, "/Tools").unwrap();
+
+        assert!(result.success);
+        let em_ui_check = result.checks.iter().find(|c| c.name.contains("em_ui.sh"));
+        assert!(em_ui_check.is_some());
+        assert!(em_ui_check.unwrap().passed);
     }
 
     #[test]
@@ -294,6 +358,8 @@ mod tests {
             passed_count: 1,
             failed_count: 1,
             free_space_bytes: Some(1024 * 1024 * 500),
+            device_path: "miyoo".to_string(),
+            multiple_device_folders_warning: None,
         };
 
         let report = format_validation_report(&result);
@@ -301,5 +367,44 @@ mod tests {
         assert!(report.contains("File exists"));
         assert!(report.contains("File missing"));
         assert!(report.contains("500.00 MB"));
+    }
+
+    #[test]
+    fn test_detect_multiple_device_folders_warning() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        fs::write(sd_root.join("MinUI.zip"), "archive").unwrap();
+        fs::write(sd_root.join("minui.txt"), "MinUI 2025.01.01").unwrap();
+        fs::create_dir_all(sd_root.join("miyoo")).unwrap();
+        fs::create_dir_all(sd_root.join("trimui")).unwrap();
+        fs::create_dir_all(sd_root.join("Tools")).unwrap();
+
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
+
+        assert!(result.success);
+        assert!(result.multiple_device_folders_warning.is_some());
+        let warning = result.multiple_device_folders_warning.unwrap();
+        assert!(warning.contains("miyoo"));
+        assert!(warning.contains("trimui"));
+    }
+
+    #[test]
+    fn test_no_warning_with_single_device_folder() {
+        let temp = tempfile::tempdir().unwrap();
+        let sd_root = temp.path();
+
+        fs::write(sd_root.join("MinUI.zip"), "archive").unwrap();
+        fs::write(sd_root.join("minui.txt"), "MinUI 2025.01.01").unwrap();
+        fs::create_dir_all(sd_root.join("miyoo")).unwrap();
+        fs::create_dir_all(sd_root.join("Tools")).unwrap();
+
+        let result =
+            validate_installation(sd_root.to_str().unwrap(), "miyoo", false, "/Tools").unwrap();
+
+        assert!(result.success);
+        assert!(result.multiple_device_folders_warning.is_none());
+        assert_eq!(result.device_path, "miyoo");
     }
 }

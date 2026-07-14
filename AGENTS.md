@@ -30,6 +30,7 @@ Target devices: TrimUI Brick, TrimUI Smart Pro, Miyoo Mini+, Miyoo A30, Miyoo Fl
 - **Package registry**: Static JSON fetched from `https://packages.minui.dev/registry/index.json` with session-scoped cache
 - **CSP**: Tightly scoped in `tauri.conf.json` — allowlist includes `packages.minui.dev`, `api.github.com`, `github.com`, `*.githubusercontent.com`
 - **Install pipeline** (`src-tauri/src/pipeline.rs`): Download → extract → copy, all three phases managed by `InstallSession` which owns temp dirs and drops them atomically on completion
+- **Base archive copy filtering**: `copy_base_files` copies only shared items (`Bios`, `Roms`, `Saves`, `MinUI.zip`) and the selected platform's device folder/file, leaving other device folders and README files behind
 - **Cancellation**: `start_install` spawns in background task with `CancellationToken`, emits `install-progress` / `install-complete` / `install-error` events. Old synchronous `install_minui` command is deprecated.
 - **Device platform mapping**: Device ID = folder name in archive (e.g. `trimui-brick`). All 8 devices use `baseDir="/"`, `extrasDir="/"`, `toolsDir="/Tools"`. Platform names come from `device-install-map.json` (`basePlatform` for base archive, `extrasPlatform` for extras archive — can differ per device).
 - **WiFi config**: `<sd_root>/wifi.txt`, one `SSID:PASSWORD` per line. `#` comments. SSIDs can contain spaces. Same format for all devices.
@@ -77,7 +78,7 @@ Config in `prek.toml`. Auto-rewrites staged files (trailing whitespace, EOF fixe
 
 ## Code Organization
 
-- Frontend entry: `src/main.tsx` → `src/App.tsx` (state-based navigation: "home" | "store" | "wifi")
+- Frontend entry: `src/main.tsx` → `src/App.tsx` (state-based navigation: "home" | "store" | "wifi" | "bios" | "settings")
 - Rust entry: `src-tauri/src/main.rs` → `src-tauri/src/lib.rs` (all Tauri commands registered here)
 - Device profiles: `src/types/device.ts` + `src/types/device-install-map.json`
 - Drive detection: `src-tauri/src/drives.rs` (platform-specific macOS/Windows)
@@ -85,8 +86,9 @@ Config in `prek.toml`. Auto-rewrites staged files (trailing whitespace, EOF fixe
 - Archive download/extraction: `src-tauri/src/download.rs` + `src-tauri/src/extract.rs`
 - Package store: `src/PackageStore.tsx` + `src/types/package.ts` + `src/types/store.json`
 - SD health check: `src-tauri/src/health.rs`
-- Validation: `src-tauri/src/validate.rs`
+- Validation: `src-tauri/src/validate.rs` (post-install checks; reports `device_path` and warns when multiple device folders are present on the SD card)
 - WiFi: `src-tauri/src/wifi.rs` (scan via `airport` on macOS, write config)
+- BIOS: `src-tauri/src/bios.rs` (catalog + status + install_bios_from_bytes) and `src/BiosInstaller.tsx` (UI). The user supplies copyrighted BIOS files; the installer copies them to the right `Bios/<subdir>/` path.
 - Confirmation dialogs: `src/ConfirmDialog.tsx` (overlay modal for write ops)
 - Install progress UI: `src/InstallProgress.tsx`
 
@@ -94,6 +96,7 @@ Config in `prek.toml`. Auto-rewrites staged files (trailing whitespace, EOF fixe
 
 - `pipeline.rs::create_target_within`: Canonicalizes path ancestors to verify they stay within SD card root _before_ creating directories, then re-validates _after_ to catch symlink races
 - `install.rs::copy_extras_files`: Sanitizes `extras_platform` (alphanumeric + hyphens only)
+- `bios.rs::install_bios_from_bytes`: Sanitizes subdir/filename (no traversal, NUL, or path separators), canonicalizes the target parent _before_ write and re-validates the canonical path _after_ write (symlink-race guard)
 - `fs_utils.rs::copy_dir_recursive`: `fs::copy` dereferences symlinks (no symlink escape)
 - Registry data: validate schema before use (see `src/types/validate.ts`)
 

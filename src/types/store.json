@@ -47,6 +47,14 @@
       "pak_name": "PSP",
       "rom_folder": "Roms/PlayStation Portable (PSP)",
       "description": "PlayStation Portable emulator"
+    },
+    {
+      "name": "MAME 2003 Plus",
+      "repository": "https://github.com/josegonzalez/minui-mame2003plus-pak",
+      "version": "0.1.0",
+      "pak_name": "MAME2003PLUS",
+      "rom_folder": "Roms/Arcade (MAME2003PLUS)",
+      "description": "MAME 2003 Plus arcade emulator"
     }
   ],
   "tool_paks": [

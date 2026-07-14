@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMountEffect } from "./hooks/useMountEffect";
 import PackageCard from "./PackageCard";
 import { getDeviceProfile } from "./types/device";
@@ -18,9 +18,10 @@ interface PackageStoreProps {
 const ALL_CATEGORIES: PackageCategory[] = ["Utilities", "Emulators"];
 
 function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
-  const profile = selectedDevice ? getDeviceProfile(selectedDevice) : null;
-  const extrasPlatform =
-    profile?.extrasPlatform || selectedDevice || "{platform}";
+  const extrasPlatform = useMemo(() => {
+    const profile = selectedDevice ? getDeviceProfile(selectedDevice) : null;
+    return profile?.extrasPlatform || selectedDevice || "{platform}";
+  }, [selectedDevice]);
 
   const [registry, setRegistry] = useState<PackageRegistry | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,8 +33,6 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
   const [installStates, setInstallStates] = useState<
     Record<string, PackageInstallState>
   >({});
-  const installStatesRef = useRef(installStates);
-  installStatesRef.current = installStates;
 
   const loadRegistry = useCallback(async () => {
     setIsLoading(true);
@@ -117,21 +116,18 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
   );
 
   const handleInstallAll = useCallback(async () => {
-    // Filter to packages that aren't already done or installing
     const pending = filteredPackages.filter(
-      (pkg) => installStatesRef.current[pkg.name]?.status !== "done",
+      (pkg) => installStates[pkg.name]?.status !== "done",
     );
 
-    // Mark all as installing
     const installing: Record<string, PackageInstallState> = {};
     for (const pkg of pending) {
       installing[pkg.name] = { status: "installing" };
     }
     setInstallStates((prev) => ({ ...prev, ...installing }));
 
-    // Run all installs in parallel (errors are handled per-package inside handleInstall)
     await Promise.allSettled(pending.map((pkg) => handleInstall(pkg)));
-  }, [filteredPackages, handleInstall]);
+  }, [filteredPackages, installStates, handleInstall]);
 
   const installCounts = useMemo(() => {
     const states = Object.values(installStates);
@@ -174,7 +170,7 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
     );
   }
 
-  const hasMultiplePending = filteredPackages.some(
+  const hasPendingPackages = filteredPackages.some(
     (pkg) =>
       !installStates[pkg.name] || installStates[pkg.name]?.status === "idle",
   );
@@ -239,7 +235,7 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
         </div>
       ) : (
         <>
-          {hasMultiplePending && (
+          {hasPendingPackages && (
             <button
               type="button"
               className="install-all-btn"
@@ -253,7 +249,7 @@ function PackageStore({ selectedDevice, selectedDrive }: PackageStoreProps) {
             {filteredPackages.map((pkg) => (
               <PackageCard
                 key={pkg.name}
-                package={pkg}
+                pkg={pkg}
                 installState={installStates[pkg.name] || { status: "idle" }}
                 onInstall={handleInstall}
                 canInstall={!!selectedDrive}

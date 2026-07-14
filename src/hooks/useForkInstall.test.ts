@@ -105,7 +105,15 @@ describe("useForkInstall", () => {
     });
     (validateInstallation as Mock).mockResolvedValue({
       success: true,
-      data: { success: true, checks: [], passed_count: 0, failed_count: 0, free_space_bytes: null },
+      data: {
+        success: true,
+        checks: [],
+        passed_count: 0,
+        failed_count: 0,
+        free_space_bytes: null,
+        device_path: "miyoo354",
+        multiple_device_folders_warning: null,
+      },
     });
 
     const { result } = renderUseForkInstall({

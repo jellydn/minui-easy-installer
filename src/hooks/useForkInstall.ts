@@ -1,5 +1,11 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import { useFork } from "../contexts/ForkContext";
 import { type DeviceProfile, getDeviceProfile } from "../types/device";
 import type { ForkConfig } from "../types/fork";
@@ -152,8 +158,6 @@ export function useForkInstall(
     [],
   );
 
-
-
   const installMinUI = useCallback(async () => {
     if (!selectedDevice || !selectedDriveMount) return;
 
@@ -207,12 +211,14 @@ export function useForkInstall(
           {
             step: "fetch",
             details: `Found ${forkRef.current.label} v${release.version} (${fileName})`,
+            id: generateLogId(),
           },
         ],
       }));
 
       const valResult = await validateInstallation({
         sdMount: selectedDriveMount,
+        platform: profile.platform,
         hasExtras: data.extras_files_copied > 0,
         extrasDir: profile.installPathRules.extrasDir,
       });
@@ -240,6 +246,7 @@ export function useForkInstall(
     const { extrasFilesCopied } = install;
     const valResult = await validateInstallation({
       sdMount: selectedDriveMount,
+      platform: profile.platform,
       hasExtras: extrasFilesCopied > 0,
       extrasDir: profile.installPathRules.extrasDir,
     });
@@ -357,6 +364,10 @@ export function useForkInstall(
   };
 }
 
+function generateLogId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 async function attachProgressListener(
   setInstall: React.Dispatch<React.SetStateAction<InstallState>>,
 ): Promise<UnlistenFn> {
@@ -364,7 +375,8 @@ async function attachProgressListener(
     const { step, details } = event.payload;
     setInstall((s) => {
       const phase = stepToInstallPhase(step, s.phase);
-      return { ...s, phase, message: details, log: [...s.log, event.payload] };
+      const entry = { ...event.payload, id: generateLogId() };
+      return { ...s, phase, message: details, log: [...s.log, entry] };
     });
   });
 }

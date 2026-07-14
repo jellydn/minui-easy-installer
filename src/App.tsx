@@ -1,4 +1,5 @@
 import { useState } from "react";
+import BiosInstaller from "./BiosInstaller";
 import { ForkProvider, useFork } from "./contexts/ForkContext";
 import Home from "./Home";
 import PackageStore from "./PackageStore";
@@ -6,7 +7,7 @@ import Settings from "./Settings";
 import type { RemovableDrive } from "./types/drive";
 import WifiWizard from "./WifiWizard";
 
-type Screen = "home" | "store" | "wifi" | "settings";
+type Screen = "home" | "store" | "wifi" | "bios" | "settings";
 
 function App() {
   return (
@@ -47,6 +48,13 @@ function AppShell() {
           onClick={() => setScreen("wifi")}
         >
           WiFi Setup
+        </button>
+        <button
+          type="button"
+          className={`nav-btn ${screen === "bios" ? "active" : ""}`}
+          onClick={() => setScreen("bios")}
+        >
+          BIOS
         </button>
         <button
           type="button"
@@ -99,6 +107,28 @@ function AppShell() {
           <h1>WiFi Setup</h1>
           <p className="subtitle">
             Configure WiFi credentials for your device.
+          </p>
+          <div className="prerequisite-message">
+            <p>Select an SD card on the Home screen first.</p>
+            <button type="button" onClick={() => setScreen("home")}>
+              Go to Home
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {screen === "bios" && selectedDrive ? (
+        <div className="screen">
+          <BiosInstaller
+            sdMount={selectedDrive.mount_path}
+            onClose={() => setScreen("home")}
+          />
+        </div>
+      ) : screen === "bios" ? (
+        <div className="screen">
+          <h1>BIOS Files</h1>
+          <p className="subtitle">
+            Install copyrighted BIOS files onto your SD card.
           </p>
           <div className="prerequisite-message">
             <p>Select an SD card on the Home screen first.</p>

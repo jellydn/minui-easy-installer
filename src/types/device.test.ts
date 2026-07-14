@@ -16,7 +16,7 @@ describe("getDeviceProfile", () => {
 
   it("returns all supported devices", () => {
     const profiles = getAllDeviceProfiles();
-    expect(profiles).toHaveLength(17);
+    expect(profiles).toHaveLength(18);
   });
 
   it("each profile has required fields", () => {
@@ -32,5 +32,17 @@ describe("getDeviceProfile", () => {
     }
   });
 
+  it("maps Miyoo Mini Flip to the correct platforms", () => {
+    const profile = getDeviceProfile("miyoo-mini-flip");
+    expect(profile).toBeDefined();
+    expect(profile?.platform).toBe("miyoo285");
+    expect(profile?.extrasPlatform).toBe("miyoomini");
+  });
 
+  it("maps Miyoo Flip to the correct extras platform", () => {
+    const profile = getDeviceProfile("miyoo-flip");
+    expect(profile).toBeDefined();
+    expect(profile?.platform).toBe("miyoo355");
+    expect(profile?.extrasPlatform).toBe("my355");
+  });
 });

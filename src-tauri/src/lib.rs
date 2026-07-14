@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 
+mod bios;
 mod download;
 mod drives;
 mod extract;
@@ -11,6 +12,7 @@ mod health;
 mod install;
 mod package;
 mod pipeline;
+mod platform;
 mod validate;
 mod version;
 mod wifi;
@@ -169,10 +171,11 @@ fn cancel_install(registry: tauri::State<'_, Arc<InstallRegistry>>) -> Result<()
 #[tauri::command]
 async fn validate_installation(
     sd_mount: String,
+    platform: String,
     has_extras: bool,
     extras_dir: String,
 ) -> Result<validate::ValidationResult, String> {
-    validate::validate_installation(&sd_mount, has_extras, &extras_dir)
+    validate::validate_installation(&sd_mount, &platform, has_extras, &extras_dir)
 }
 
 #[tauri::command]
@@ -231,6 +234,25 @@ async fn scan_wifi_networks() -> Vec<String> {
 #[tauri::command]
 async fn get_current_wifi_ssid() -> Option<String> {
     wifi::get_current_wifi_ssid()
+}
+
+#[tauri::command]
+fn list_bios_catalog() -> Vec<bios::BiosEntry> {
+    bios::catalog().to_vec()
+}
+
+#[tauri::command]
+async fn get_bios_status(sd_mount: String) -> Result<bios::BiosStatus, String> {
+    bios::status(&sd_mount)
+}
+
+#[tauri::command]
+async fn install_bios_file(
+    sd_mount: String,
+    entry_id: String,
+    base64_payload: String,
+) -> Result<String, String> {
+    bios::install_bios_from_bytes(&sd_mount, &entry_id, &base64_payload)
 }
 
 #[tauri::command]
@@ -296,6 +318,9 @@ pub fn run() {
             write_wifi_config,
             scan_wifi_networks,
             get_current_wifi_ssid,
+            list_bios_catalog,
+            get_bios_status,
+            install_bios_file,
             detect_installed_packages,
             check_package_updates,
             check_sd_card_health,
@@ -383,21 +408,31 @@ mod tests {
 
     #[test]
     fn test_validate_installation_errors_on_nonexistent_mount() {
-        let result =
-            validate::validate_installation("/nonexistent/path/that/cannot/exist", false, "/Tools");
+        let result = validate::validate_installation(
+            "/nonexistent/path/that/cannot/exist",
+            "miyoo",
+            false,
+            "/Tools",
+        );
         assert!(result.is_err());
     }
 
     #[test]
     fn test_validate_installation_on_empty_tempdir() {
         let temp = tempfile::tempdir().unwrap();
-        let result =
-            validate::validate_installation(temp.path().to_str().unwrap(), false, "/Tools");
+        let result = validate::validate_installation(
+            temp.path().to_str().unwrap(),
+            "miyoo",
+            false,
+            "/Tools",
+        );
         assert!(result.is_ok());
         let v = result.unwrap();
         // Empty dir = no MinUI files = failures expected
         assert!(!v.success);
         assert!(v.failed_count > 0);
+        assert_eq!(v.device_path, "miyoo");
+        assert!(v.multiple_device_folders_warning.is_none());
     }
 
     // ---- validate::format_validation_report ----
@@ -421,6 +456,8 @@ mod tests {
             passed_count: 1,
             failed_count: 1,
             free_space_bytes: Some(1024 * 1024 * 1024),
+            device_path: "miyoo".into(),
+            multiple_device_folders_warning: None,
         };
         let report = validate::format_validation_report(&v);
         assert!(report.contains("ok-line"));
@@ -478,6 +515,60 @@ mod tests {
     // ---- wifi::write_wifi_config ----
     // Already covered by `wifi.rs` tests. Contract test in lib.rs would
     // duplicate that work; skip and document.
+
+    // ---- bios::catalog ----
+
+    #[test]
+    fn test_list_bios_catalog_returns_all_entries() {
+        let entries = bios::catalog();
+        // We don't assert the exact count (the catalog can grow), but we
+        // do assert it's non-empty and that all expected ids from issue
+        // #7 are present. Mirrors the unit test in bios.rs.
+        assert!(!entries.is_empty());
+        let ids: Vec<&str> = entries.iter().map(|e| e.id.as_str()).collect();
+        for &required in bios::EXPECTED_BIOS_IDS {
+            assert!(ids.contains(&required), "missing {required} in catalog");
+        }
+    }
+
+    // ---- bios::status ----
+
+    #[test]
+    fn test_get_bios_status_errors_on_missing_mount() {
+        let result = bios::status("/nonexistent/this/should/not/exist");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_bios_status_on_empty_tempdir_reports_zero_installed() {
+        let temp = tempfile::tempdir().unwrap();
+        let result = bios::status(temp.path().to_str().unwrap());
+        assert!(result.is_ok());
+        let s = result.unwrap();
+        assert_eq!(s.installed_count, 0);
+        assert!(s.entries.iter().all(|e| !e.present));
+    }
+
+    // ---- bios::install_bios_from_bytes ----
+
+    #[test]
+    fn test_install_bios_file_underlying_round_trip() {
+        // Mirrors the wifi write_wifi_config contract test: prove the
+        // function works through the bare path the IPC wrapper calls.
+        use base64::engine::general_purpose::STANDARD as BASE64;
+        use base64::Engine as _;
+
+        let temp = tempfile::tempdir().unwrap();
+        let payload = b"hello bios";
+        let result = bios::install_bios_from_bytes(
+            temp.path().to_str().unwrap(),
+            "gb_bios",
+            &BASE64.encode(payload),
+        );
+        assert!(result.is_ok());
+        let written = std::fs::read(temp.path().join("Bios/GB/gb_bios.bin")).unwrap();
+        assert_eq!(written, payload);
+    }
 
     // ---- package::detect_installed_packages ----
 
@@ -561,5 +652,4 @@ mod tests {
         );
         assert_eq!(result, Ok(false));
     }
-
 }

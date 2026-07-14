@@ -2,7 +2,7 @@ import type { PackageRegistryEntry } from "./types/package";
 import type { PackageInstallState } from "./types/install";
 
 interface PackageCardProps {
-  package: PackageRegistryEntry;
+  pkg: PackageRegistryEntry;
   installState: PackageInstallState;
   onInstall: (pkg: PackageRegistryEntry) => void;
   canInstall: boolean;
@@ -24,7 +24,7 @@ function installDestination(
 }
 
 function PackageCard({
-  package: pkg,
+  pkg,
   installState,
   onInstall,
   canInstall,

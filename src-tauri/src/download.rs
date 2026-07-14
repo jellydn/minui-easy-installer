@@ -85,7 +85,7 @@ pub async fn download_archive_streaming(
         // Check cancel every 64 chunks (~512 KB at 8 KB each) — cheap
         // enough to be per-chunk, but amortizes the cost.
         chunks_since_cancel_check += 1;
-        if chunks_since_cancel_check % 64 == 0 && cancel.is_cancelled() {
+        if chunks_since_cancel_check.is_multiple_of(64) && cancel.is_cancelled() {
             let _ = fs::remove_file(&file_path);
             return Err("cancelled".to_string());
         }

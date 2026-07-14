@@ -53,7 +53,8 @@ vi.mock("./types/validate", () => ({
   checkSdCardHealth: vi.fn(),
 }));
 
-const renderWithFork = (ui: ReactElement) => render(<ForkProvider>{ui}</ForkProvider>);
+const renderWithFork = (ui: ReactElement) =>
+  render(<ForkProvider>{ui}</ForkProvider>);
 
 const mockDrive: RemovableDrive = {
   name: "SD_CARD",
