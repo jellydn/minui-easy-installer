@@ -85,6 +85,7 @@ function Home({
               extrasWarning={forkInstall.install.extrasWarning}
               error={forkInstall.install.error}
               onDismiss={forkInstall.dismissInstall}
+              onCancel={forkInstall.cancelInstall}
             />
           )}
         </div>
