@@ -292,11 +292,12 @@ async fn try_install_extras(
     .await
 }
 
-/// Convenience wrapper kept for contract tests in `lib.rs`.
+/// Convenience wrapper that delegates to `install_minui_with_cancel`
+/// without cancellation support. Used by the synchronous `install_minui`
+/// Tauri command for simple installs that don't need progress streaming.
 ///
-/// Production callers should use `install_minui_with_cancel` or the
-/// `start_install` Tauri command which provide cancellation support.
-#[cfg(test)]
+/// Callers that need cancellation should use `install_minui_with_cancel`
+/// or the `start_install` Tauri command.
 pub async fn install_minui(
     options: &InstallOptions,
     progress: ProgressCallback,

@@ -56,6 +56,37 @@ impl InstallRegistry {
 /// as a `install-complete` or `install-error` event.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
+async fn install_minui(
+    base_url: String,
+    extras_url: Option<String>,
+    base_checksum: Option<String>,
+    extras_checksum: Option<String>,
+    sd_mount: String,
+    platform: String,
+    extras_platform: String,
+    version: String,
+    fork_name: Option<String>,
+) -> Result<install::InstallResult, String> {
+    let options = install::InstallOptions {
+        base_url,
+        extras_url,
+        base_checksum,
+        extras_checksum,
+        sd_mount,
+        platform,
+        extras_platform,
+        version,
+        fork_name,
+    };
+    install::install_minui(&options, Arc::new(|_| {})).await
+}
+
+/// Start a cancellable install. Returns immediately with the install id
+/// (currently always "current" since we support one install at a time).
+/// The actual install runs in a background task; the result is emitted
+/// as a `install-complete` or `install-error` event.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn start_install(
     app_handle: AppHandle,
     registry: tauri::State<'_, Arc<InstallRegistry>>,
@@ -280,6 +311,7 @@ pub fn run() {
             get_removable_drives,
             format_drive,
             verify_archive_checksum,
+            install_minui,
             start_install,
             cancel_install,
             validate_installation,
