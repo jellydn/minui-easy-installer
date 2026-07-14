@@ -1,6 +1,59 @@
 use super::*;
 use std::path::Path;
 
+/// Fake detector that returns pre-configured drives without shelling out.
+/// Proves that `DriveDetector` is object-safe — callers can pass
+/// `&dyn DriveDetector` for mock testing.
+struct FakeDetector {
+    drives: Vec<RemovableDrive>,
+}
+
+impl DriveDetector for FakeDetector {
+    fn list(&self) -> Result<Vec<RemovableDrive>, String> {
+        Ok(self.drives.clone())
+    }
+
+    fn format(&self, _mount_path: &str, _volume_name: &str) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+#[test]
+fn test_fake_detector_via_trait_object() {
+    let fake = FakeDetector {
+        drives: vec![RemovableDrive {
+            name: "FAKE_SD".to_string(),
+            mount_path: "/mnt/fake".to_string(),
+            size_bytes: Some(64_000_000_000),
+            filesystem: Some("FAT32".to_string()),
+            available_bytes: Some(32_000_000_000),
+        }],
+    };
+
+    // Cast to trait object — proves object safety.
+    let detector: &dyn DriveDetector = &fake;
+
+    let drives = detector.list().unwrap();
+    assert_eq!(drives.len(), 1);
+    assert_eq!(drives[0].name, "FAKE_SD");
+    assert_eq!(drives[0].mount_path, "/mnt/fake");
+    assert_eq!(drives[0].size_bytes, Some(64_000_000_000));
+    assert_eq!(drives[0].filesystem.as_deref(), Some("FAT32"));
+    assert_eq!(drives[0].available_bytes, Some(32_000_000_000));
+
+    // Format through trait object.
+    assert!(detector.format("/mnt/fake", "MINUI").is_ok());
+}
+
+#[test]
+fn test_fake_detector_empty_drives() {
+    let fake = FakeDetector { drives: vec![] };
+    let detector: &dyn DriveDetector = &fake;
+
+    let drives = detector.list().unwrap();
+    assert!(drives.is_empty());
+}
+
 #[test]
 fn test_removable_drive_serialization() {
     let drive = RemovableDrive {
