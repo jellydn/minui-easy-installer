@@ -1,0 +1,51 @@
+# Auto-update package registry versions from GitHub releases.
+#
+# Runs daily at midnight UTC. Queries the GitHub API for the latest
+# release of each package in src/types/store.json and updates the
+# version field if a newer non-draft release is found. Creates a PR
+# if there are changes.
+#
+# Uses the built-in GITHUB_TOKEN for authenticated API requests
+# (5,000 req/hr per repo, well above the ~30 repos in the registry).
+
+name: Update Package Registry
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
+  workflow_dispatch: # manual trigger for testing
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Run update script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun run scripts/update-registry.ts
+
+      - name: Create pull request if changes exist
+        id: create-pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(registry): update package versions from GitHub releases"
+          title: "chore(registry): update package versions"
+          body: |
+            Auto-updated package versions by querying the latest GitHub
+            release for each repository in the registry.
+
+            This PR was created by the `update-registry` workflow.
+          branch: chore/update-registry
+          delete-branch: true
+          labels: automated,registry
