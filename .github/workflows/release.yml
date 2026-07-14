@@ -1,13 +1,21 @@
 # Release CI - builds distributable Tauri bundles (DMG for macOS, MSI for
 # Windows) and creates a GitHub Release with the artifacts attached.
 #
-# Triggered by pushing a tag matching 'v*' (e.g. 'v0.1.0', 'v1.0.0-beta').
+# Triggered by pushing a tag matching 'v*' (e.g. 'v0.1.0', 'v1.0.0-beta'),
+# or manually via the Actions UI with a tag name input.
 
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tagName:
+        description: 'Tag to release (e.g. v0.1.0, v0.2.0-beta)'
+        required: true
+        type: string
+        default: 'v0.1.0'
 
 permissions:
   contents: write
@@ -44,10 +52,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "MinUI Easy Installer ${{ github.ref_name }}"
+          tagName: ${{ inputs.tagName || github.ref_name }}
+          releaseName: "MinUI Easy Installer ${{ inputs.tagName || github.ref_name }}"
           releaseBody: |
-            ## MinUI Easy Installer ${{ github.ref_name }}
+            ## MinUI Easy Installer ${{ inputs.tagName || github.ref_name }}
 
             **Platforms**: macOS (Apple Silicon + Intel), Windows (x64)
 
@@ -56,7 +64,7 @@ jobs:
             2. macOS: open the `.dmg` and drag to Applications
             3. Windows: run the `.msi` installer
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+          prerelease: ${{ contains(inputs.tagName || github.ref_name, 'beta') || contains(inputs.tagName || github.ref_name, 'alpha') || contains(inputs.tagName || github.ref_name, 'rc') }}
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -98,10 +106,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "MinUI Easy Installer ${{ github.ref_name }}"
+          tagName: ${{ inputs.tagName || github.ref_name }}
+          releaseName: "MinUI Easy Installer ${{ inputs.tagName || github.ref_name }}"
           releaseBody: |
-            ## MinUI Easy Installer ${{ github.ref_name }}
+            ## MinUI Easy Installer ${{ inputs.tagName || github.ref_name }}
 
             **Platforms**: macOS (Apple Silicon + Intel), Windows (x64)
 
@@ -110,7 +118,7 @@ jobs:
             2. macOS: open the `.dmg` and drag to Applications
             3. Windows: run the `.msi` installer
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+          prerelease: ${{ contains(inputs.tagName || github.ref_name, 'beta') || contains(inputs.tagName || github.ref_name, 'alpha') || contains(inputs.tagName || github.ref_name, 'rc') }}
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
