@@ -49,7 +49,7 @@ const CACHE_TTL_MS = 5 * 60_000;
 /// Each instance owns its cached data and TTL independently —
 /// the module-level singleton is the only instance used in practice,
 /// but the class keeps the cache logic testable and explicit.
-class RegistryCache {
+export class RegistryCache {
   private registry: PackageRegistry | null = null;
   private fetchedAt: number = 0;
   private readonly ttlMs: number;

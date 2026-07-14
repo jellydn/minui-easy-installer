@@ -1,5 +1,221 @@
-import { describe, expect, test } from "vitest";
-import { fetchPackageRegistry } from "./package";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { fetchPackageRegistry, RegistryCache } from "./package";
+import type { PackageRegistry } from "./package";
+
+function makeRegistry(overrides?: Partial<PackageRegistry>): PackageRegistry {
+  return {
+    version: "1.0.0",
+    packages: [
+      {
+        name: "TestPak",
+        version: "1.0.0",
+        category: "Utilities",
+        description: "A test package",
+        repository: "https://github.com/test/pak",
+        downloads: 100,
+        rating: 4.5,
+        artifactUrl: "https://example.com/pak.zip",
+        checksum: null,
+        supportedDevices: [],
+        installPathRules: {
+          targetDir: "/Tools",
+          extractToRoot: false,
+        },
+      },
+    ],
+    ...overrides,
+  };
+}
+
+describe("RegistryCache", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("get() returns null when cache is empty", () => {
+    const cache = new RegistryCache();
+    expect(cache.get()).toBeNull();
+  });
+
+  test("set/get roundtrip — stores and retrieves a registry", () => {
+    const cache = new RegistryCache();
+    const registry = makeRegistry();
+
+    cache.set(registry);
+    const result = cache.get();
+
+    expect(result).not.toBeNull();
+    expect(result!.version).toBe("1.0.0");
+    expect(result!.packages[0].name).toBe("TestPak");
+  });
+
+  test("get() returns null after TTL expires", () => {
+    const cache = new RegistryCache(0); // instant expiry
+    const registry = makeRegistry();
+
+    cache.set(registry);
+
+    // Advance time past the TTL (0ms + 1ms)
+    vi.advanceTimersByTime(1);
+
+    expect(cache.get()).toBeNull();
+  });
+
+  test("get() returns cached value before TTL expires", () => {
+    const cache = new RegistryCache(60_000); // 1 minute TTL
+    const registry = makeRegistry();
+
+    cache.set(registry);
+
+    // Advance time to just before expiry
+    vi.advanceTimersByTime(59_999);
+
+    const result = cache.get();
+    expect(result).not.toBeNull();
+    expect(result!.version).toBe("1.0.0");
+  });
+
+  test("get() returns null exactly at TTL boundary", () => {
+    const cache = new RegistryCache(10_000);
+    cache.set(makeRegistry());
+
+    vi.advanceTimersByTime(10_000);
+
+    expect(cache.get()).toBeNull();
+  });
+
+  test("clear() invalidates the cache", () => {
+    const cache = new RegistryCache();
+    cache.set(makeRegistry());
+
+    expect(cache.get()).not.toBeNull();
+
+    cache.clear();
+    expect(cache.get()).toBeNull();
+  });
+
+  test("clear() on empty cache is a no-op", () => {
+    const cache = new RegistryCache();
+    expect(cache.get()).toBeNull();
+    cache.clear();
+    expect(cache.get()).toBeNull();
+  });
+
+  test("multiple set/get cycles work correctly", () => {
+    const cache = new RegistryCache(60_000);
+
+    // First set
+    cache.set(makeRegistry({ version: "1.0.0" }));
+    expect(cache.get()!.version).toBe("1.0.0");
+
+    // Overwrite
+    cache.set(makeRegistry({ version: "2.0.0" }));
+    expect(cache.get()!.version).toBe("2.0.0");
+
+    // Clear and re-set
+    cache.clear();
+    expect(cache.get()).toBeNull();
+
+    cache.set(makeRegistry({ version: "3.0.0" }));
+    expect(cache.get()!.version).toBe("3.0.0");
+  });
+
+  test("set() updates the timestamp — TTL resets on each set", () => {
+    const cache = new RegistryCache(60_000);
+    cache.set(makeRegistry());
+
+    // Advance 55 seconds
+    vi.advanceTimersByTime(55_000);
+    expect(cache.get()).not.toBeNull(); // still valid
+
+    // Re-set resets the timer
+    cache.set(makeRegistry({ version: "2.0.0" }));
+
+    // Advance another 55 seconds — should still be valid because set reset the timer
+    vi.advanceTimersByTime(55_000);
+    expect(cache.get()).not.toBeNull();
+  });
+
+  test("cache instances are independent", () => {
+    const cacheA = new RegistryCache();
+    const cacheB = new RegistryCache();
+
+    cacheA.set(makeRegistry({ version: "A" }));
+    cacheB.set(makeRegistry({ version: "B" }));
+
+    expect(cacheA.get()!.version).toBe("A");
+    expect(cacheB.get()!.version).toBe("B");
+
+    cacheA.clear();
+    expect(cacheA.get()).toBeNull();
+    expect(cacheB.get()!.version).toBe("B"); // cacheB unaffected
+  });
+
+  test("default TTL is 5 minutes", () => {
+    const cache = new RegistryCache();
+    cache.set(makeRegistry());
+
+    // Advance 4 minutes 59 seconds — should still be valid
+    vi.advanceTimersByTime(4 * 60_000 + 59_000);
+    expect(cache.get()).not.toBeNull();
+
+    // Advance 1 more second to hit exactly 5 minutes
+    vi.advanceTimersByTime(1_000);
+    expect(cache.get()).toBeNull();
+  });
+
+  test("set() with different data doesn't leave stale state", () => {
+    const cache = new RegistryCache();
+
+    cache.set(
+      makeRegistry({
+        packages: [
+          {
+            name: "PakA",
+            version: "1.0.0",
+            category: "Utilities",
+            description: "A",
+            repository: "https://github.com/a/pak",
+            downloads: null,
+            rating: null,
+            artifactUrl: "https://example.com/a.zip",
+            checksum: null,
+            supportedDevices: [],
+            installPathRules: { targetDir: "/Tools", extractToRoot: false },
+          },
+        ],
+      }),
+    );
+
+    cache.set(
+      makeRegistry({
+        packages: [
+          {
+            name: "PakB",
+            version: "2.0.0",
+            category: "Emulators",
+            description: "B",
+            repository: "https://github.com/b/pak",
+            downloads: null,
+            rating: null,
+            artifactUrl: "https://example.com/b.zip",
+            checksum: null,
+            supportedDevices: [],
+            installPathRules: { targetDir: "/Emus", extractToRoot: true },
+          },
+        ],
+      }),
+    );
+
+    const result = cache.get()!;
+    expect(result.packages[0].name).toBe("PakB");
+    expect(result.packages).toHaveLength(1);
+  });
+});
 
 describe("fetchPackageRegistry", () => {
   test("loads and converts local store.json", async () => {
