@@ -142,8 +142,7 @@ fn test_install_writes_payload_to_expected_path() {
     let payload = b"gb boot rom contents";
     let encoded = BASE64.encode(payload);
 
-    let path =
-        install_bios_from_bytes(temp.path().to_str().unwrap(), "gb_bios", &encoded).unwrap();
+    let path = install_bios_from_bytes(temp.path().to_str().unwrap(), "gb_bios", &encoded).unwrap();
 
     let expected = temp.path().join("Bios/GB/gb_bios.bin");
     assert_eq!(path, expected.display().to_string());

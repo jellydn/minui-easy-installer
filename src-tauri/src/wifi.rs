@@ -265,7 +265,13 @@ fn get_current_wifi_ssid_linux() -> Option<String> {
 
     // Fall back to nmcli — filter to WiFi devices only.
     if let Ok(output) = Command::new("nmcli")
-        .args(["-t", "-f", "GENERAL.TYPE,GENERAL.CONNECTION", "device", "show"])
+        .args([
+            "-t",
+            "-f",
+            "GENERAL.TYPE,GENERAL.CONNECTION",
+            "device",
+            "show",
+        ])
         .output()
     {
         if output.status.success() {
@@ -278,7 +284,10 @@ fn get_current_wifi_ssid_linux() -> Option<String> {
                     continue;
                 }
                 if saw_wifi && trimmed.starts_with("GENERAL.CONNECTION:") {
-                    let ssid = trimmed.strip_prefix("GENERAL.CONNECTION:").unwrap_or("").trim();
+                    let ssid = trimmed
+                        .strip_prefix("GENERAL.CONNECTION:")
+                        .unwrap_or("")
+                        .trim();
                     if !ssid.is_empty() {
                         return Some(ssid.to_string());
                     }
