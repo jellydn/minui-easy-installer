@@ -52,9 +52,7 @@ impl InstallRegistry {
 
 /// Synchronous install (deprecated — prefer start_install for progress streaming).
 #[tauri::command]
-async fn install_minui(
-    options: install::InstallOptions,
-) -> Result<install::InstallResult, String> {
+async fn install_minui(options: install::InstallOptions) -> Result<install::InstallResult, String> {
     install::install_minui(&options, Arc::new(|_| {})).await
 }
 
@@ -103,13 +101,8 @@ async fn start_install(
     let registry_for_task = registry.inner().clone();
     let result_handle = app_handle.clone();
     tokio::spawn(async move {
-        let res = install::install_minui_with_cancel(
-            &options,
-            progress,
-            download_progress,
-            token,
-        )
-        .await;
+        let res =
+            install::install_minui_with_cancel(&options, progress, download_progress, token).await;
         if let Ok(mut slot) = registry_for_task.token.lock() {
             *slot = None;
         }

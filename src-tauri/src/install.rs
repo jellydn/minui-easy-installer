@@ -344,7 +344,10 @@ async fn install_base(
 fn write_version_metadata(options: &InstallOptions) -> Option<String> {
     let fork_label = options.fork_name.as_deref().unwrap_or("MinUI");
     let minui_txt_path = Path::new(&options.sd_mount).join("minui.txt");
-    match fs::write(&minui_txt_path, format!("{} {}\n", fork_label, options.version)) {
+    match fs::write(
+        &minui_txt_path,
+        format!("{} {}\n", fork_label, options.version),
+    ) {
         Ok(()) => None,
         Err(e) => {
             eprintln!("Warning: failed to write version metadata: {}", e);
