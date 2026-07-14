@@ -385,11 +385,11 @@ pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
                     let mut drives = Vec::new();
                     for device in devices {
                         // Only include removable devices (RM=1 or "true").
-                        let rm = device["rm"];
+                        let rm = &device["rm"];
                         let is_removable = match rm {
-                            Some(serde_json::Value::String(s)) => s == "1" || s == "true",
-                            Some(serde_json::Value::Number(n)) => n.as_u64() == Some(1),
-                            Some(serde_json::Value::Bool(b)) => *b,
+                            serde_json::Value::String(s) => s == "1" || s == "true",
+                            serde_json::Value::Number(n) => n.as_u64() == Some(1),
+                            serde_json::Value::Bool(b) => *b,
                             _ => false,
                         };
                         if !is_removable {
