@@ -70,12 +70,15 @@ jobs:
 
       - name: Ad-hoc sign macOS bundle
         run: |
-          APP_PATH="src-tauri/target/release/bundle/macos/"*.app
-          if [ -d $APP_PATH ]; then
+          echo "Looking for .app bundle..."
+          ls -R src-tauri/target/release/bundle/macos/ || true
+          APP_PATH=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name "*.app" -type d | head -1)
+          if [ -n "$APP_PATH" ] && [ -d "$APP_PATH" ]; then
+            echo "Found: $APP_PATH"
             codesign --force --deep --sign - "$APP_PATH"
             echo "Ad-hoc signed: $APP_PATH"
           else
-            echo "No .app bundle found for signing"
+            echo "No .app bundle found for signing (non-fatal)"
           fi
 
       - name: Upload macOS artifacts
