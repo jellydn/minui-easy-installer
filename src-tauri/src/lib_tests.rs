@@ -159,12 +159,8 @@ fn test_validate_installation_errors_on_nonexistent_mount() {
 #[test]
 fn test_validate_installation_on_empty_tempdir() {
     let temp = tempfile::tempdir().unwrap();
-    let result = validate::validate_installation(
-        temp.path().to_str().unwrap(),
-        "miyoo",
-        false,
-        "/Tools",
-    );
+    let result =
+        validate::validate_installation(temp.path().to_str().unwrap(), "miyoo", false, "/Tools");
     assert!(result.is_ok());
     let v = result.unwrap();
     // Empty dir = no MinUI files = failures expected
