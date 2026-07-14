@@ -1,60 +1,51 @@
 # External Integrations
 
-## Overview
-
-The MinUI Easy Installer connects to external services for release discovery, package management, and artifact downloads. All external connections are governed by a strict Content Security Policy.
-
 ## GitHub API
 
-**Purpose**: Discover the latest MinUI release.
+**Endpoint:** `https://api.github.com/repos/shauninman/MinUI/releases/latest`
 
-- **Endpoint**: `https://api.github.com/repos/shauninman/MinUI/releases/latest`
-- **Used by**: `src/types/release.ts` (ts) / `src-tauri/src/download.rs` (rs)
-- **Data**: Release metadata, version tag, asset URLs, SHA-256 checksums
-- **Auth**: None (public repository, rate-limited by GitHub)
+Used by `src/types/release.ts` to fetch the latest MinUI release metadata:
+- Version number
+- Archive URLs (base + extras)
+- Checksums
+- Release notes
 
-## GitHub Releases (Artifact Downloads)
+Also used by fork support (`src/types/fork.ts`) to query alternative MinUI forks.
 
-**Purpose**: Download MinUI base and extras archives, plus package artifacts.
+**Rate limiting:** 60 req/hr unauthenticated, 5,000 req/hr with `GITHUB_TOKEN`.
 
-- **Domains**: `github.com`, `*.githubusercontent.com`
-- **Used by**: `src-tauri/src/download.rs` — streaming HTTP downloads
-- **Features**: Streaming downloads with progress callbacks, SHA-256 checksum verification, cancellation support via `CancellationToken`
+## GitHub Releases (Archive Downloads)
+
+**Endpoint:** `https://github.com/*/releases/download/*`
+
+Archive files (`.zip`) are downloaded from GitHub Releases. The CSP allows `https://github.com` and `https://*.githubusercontent.com`.
 
 ## Package Registry
 
-**Purpose**: Catalog of community-contributed emulator and utility packages.
+**Endpoint:** `https://packages.minui.dev/registry/index.json`
 
-- **Remote URL**: `https://packages.minui.dev/registry/index.json`
-- **Bundled fallback**: `src/types/store.json`
-- **Used by**: `src/types/package.ts` — `fetchPackageRegistry()`
-- **Caching**: Session-scoped (cleared on app restart via `clearRegistryCache()`)
-- **Schema**: Validated before use (treat registry data as untrusted)
-  - `emu_paks[]` — Emulator packages with `name`, `repository`, `version`, `pak_name`, `rom_folder`
-  - `tool_paks[]` — Utility packages with `name`, `repository`, `version`, `pak_name`, optional `device[]` filter
-- **Error handling**: Falls back to bundled `store.json` on network failure
+Fetched by `src/types/package.ts` → `fetchPackageRegistry()`.
 
-## Package Artifact Downloads
+**Format:** Static JSON with `emu_paks` and `tool_paks` arrays. Each entry has:
+- `name`, `version`, `repository`, `pak_name`
+- Optional: `description`, `checksum`, `device[]`, `download_url`
+- Emu paks require `rom_folder`
 
-**Purpose**: Download individual `.pak.zip` files for community packages.
+**Caching:** 5-minute TTL via `RegistryCache` class in `package.ts`. Falls back to bundled `src/types/store.json` when the remote fetch fails.
 
-- **Pattern**: `https://github.com/{owner}/{repo}/releases/download/{version}/{pak_name}.pak.zip`
-- **Override**: Individual tool packages can specify a custom `download_url`
-- **Used by**: `src-tauri/src/package.rs` — `install_package` Tauri command
+## No External Services
 
-## CSP Whitelist
+This application does not integrate with:
 
-All external domains are explicitly allowed in `src-tauri/tauri.conf.json`:
+| Category | Status |
+|----------|--------|
+| Authentication providers | None |
+| Databases | None |
+| Payment processors | None |
+| Email services | None |
+| Analytics / Telemetry | None |
+| Error tracking (Sentry, etc.) | None |
+| CDN | None |
+| Cloud storage | None |
 
-| Domain | Purpose |
-|--------|---------|
-| `packages.minui.dev` | Package registry JSON |
-| `api.github.com` | GitHub REST API (release metadata) |
-| `github.com` | Release asset downloads |
-| `*.githubusercontent.com` | Raw content downloads |
-
-No other external domains are accessible from the frontend.
-
-## No External Auth, Databases, or Payments
-
-The application is fully local-first with no user accounts, authentication providers, databases, or payment integrations.
+The application operates entirely locally — all data lives on the user's SD card.

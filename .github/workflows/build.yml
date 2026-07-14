@@ -1,0 +1,73 @@
+# Build CI - compiles the full Tauri app on macOS and Windows to catch
+# platform-specific compilation errors that the Linux-only rust.yml can miss
+# (e.g. macOS-only APIs behind #[cfg(target_os = "macos")], Windows FFI).
+#
+# Runs on PRs (opened, sync, reopen) and pushes to main. Does NOT bundle;
+# just verifies `cargo build --release` passes with the frontend built.
+
+name: Build
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    concurrency:
+      group: build-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os }}
+      cancel-in-progress: true
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-build-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: cargo-build-${{ runner.os }}-
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # Tauri v2 needs the WebKit framework - included in macOS by default.
+          echo "No extra system deps needed on macOS."
+
+      - name: Install system dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          # Tauri v2 needs WebView2 - pre-installed on Windows 10+ / Server 2022.
+          echo "No extra system deps needed on Windows."
+
+      - name: Build frontend
+        run: bun run build
+
+      - name: Build Rust (release)
+        working-directory: src-tauri
+        run: cargo build --release

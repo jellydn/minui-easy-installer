@@ -125,6 +125,60 @@ export async function startInstall(options: {
 }
 
 /**
+ * Start a cancellable install and wait for the result via Tauri events.
+ *
+ * Calls `startInstall()` (fire-and-forget), then listens for the
+ * `install-complete` or `install-error` event and resolves/rejects
+ * the returned promise. Progress events are emitted separately and
+ * handled by the caller's `install-progress` listener.
+ */
+export async function startInstallAndWait(options: {
+  baseUrl: string;
+  extrasUrl?: string;
+  baseChecksum?: string;
+  extrasChecksum?: string;
+  sdMount: string;
+  platform: string;
+  extrasPlatform: string;
+  version: string;
+  forkName?: string;
+}): Promise<InstallResult> {
+  const { listen } = await import("@tauri-apps/api/event");
+
+  return new Promise<InstallResult>(async (resolve, reject) => {
+    const unlistens: (() => void)[] = [];
+
+    const cleanup = () => {
+      for (const u of unlistens) u();
+    };
+
+    try {
+      // Attach listeners BEFORE starting the install to avoid
+      // a race where the event fires before we subscribe.
+      const completeUnlisten = await listen<InstallResult>(
+        "install-complete",
+        (event) => {
+          cleanup();
+          resolve(event.payload);
+        },
+      );
+      unlistens.push(completeUnlisten);
+
+      const errorUnlisten = await listen<string>("install-error", (event) => {
+        cleanup();
+        reject(new Error(event.payload));
+      });
+      unlistens.push(errorUnlisten);
+
+      await startInstall(options);
+    } catch (err) {
+      cleanup();
+      reject(err);
+    }
+  });
+}
+
+/**
  * Cancel the in-flight install, if any. No-op when no install is running.
  */
 export async function cancelInstall(): Promise<void> {

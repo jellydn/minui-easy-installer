@@ -98,10 +98,10 @@ impl Pipeline {
             session,
         )
         .await?;
-        progress(InstallProgressEvent {
-            step: "copy".to_string(),
-            details: format!("Copying {} files", label),
-        });
+        progress(InstallProgressEvent::phase(
+            "copy",
+            &format!("Copying {} files", label),
+        ));
         copy(extracted)
     }
 
@@ -119,10 +119,10 @@ impl Pipeline {
         if cancel.is_cancelled() {
             return Err("Install cancelled".to_string());
         }
-        progress(InstallProgressEvent {
-            step: "download".to_string(),
-            details: format!("Downloading {} archive", label),
-        });
+        progress(InstallProgressEvent::phase(
+            "download",
+            &format!("Downloading {} archive", label),
+        ));
         let archive_path: PathBuf = download::download_archive_streaming(
             session.slot_archive(label),
             url,
@@ -135,10 +135,10 @@ impl Pipeline {
         if cancel.is_cancelled() {
             return Err("Install cancelled".to_string());
         }
-        progress(InstallProgressEvent {
-            step: "extract".to_string(),
-            details: format!("Extracting {} archive", label),
-        });
+        progress(InstallProgressEvent::phase(
+            "extract",
+            &format!("Extracting {} archive", label),
+        ));
         let extracted =
             extract::extract_archive_into(session.slot_extracted(label), &archive_path, None)?;
         Ok(extracted)

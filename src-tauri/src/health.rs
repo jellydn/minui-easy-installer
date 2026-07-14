@@ -111,6 +111,7 @@ pub fn check_sd_card_health(
     })
 }
 
+#[allow(unused_variables)]
 fn detect_filesystem(sd_mount: &str) -> Option<String> {
     #[cfg(target_os = "macos")]
     {

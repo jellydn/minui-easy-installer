@@ -1,114 +1,105 @@
 # Technical Concerns
 
-## Code Complexity
+## File Size & Complexity
 
-### Largest Files
+The following files warrant attention for potential refactoring:
 
-| File | Lines | Risk |
-|------|-------|------|
-| `src-tauri/src/install.rs` | 1,168 | Install flow + comprehensive test suite — high complexity, but tests are thorough |
-| `src-tauri/src/drives.rs` | 743 | Platform-specific drive detection (macOS/Windows) — two code paths, hard to test |
-| `src-tauri/src/bios.rs` | 667 | BIOS management — moderate complexity with security-sensitive path operations |
-| `src/types/package.ts` | 418 | Package registry fetching, parsing, validation — many concerns in one file |
-| `src/hooks/useForkInstall.ts` | 399 | Install orchestration hook — complex state machine |
+| File | Lines | Concern |
+|------|-------|---------|
+| `src-tauri/src/install_tests.rs` | 789 | Very large test file — could be split by concern (base/extras/ROMs) |
+| `src-tauri/src/lib.rs` | 647 | Mix of command handlers + `InstallRegistry` + extensive inline tests — multiple responsibilities |
+| `src-tauri/src/wifi.rs` | 535 | Platform-specific logic for macOS `airport`, Linux `iwgetid`/`nmcli` |
+| `src/types/package.ts` | 455 | Registry validation, conversion, caching, and fetch logic in one file |
+| `src-tauri/src/install.rs` | 429 | Install orchestration + copy helpers + ROM dirs + version metadata |
 
-**Recommendation**: `install.rs` and `drives.rs` are good candidates for splitting when they grow further.
+### Recent mitigations
 
-## Platform Risks
+- `drives.rs` was recently reduced from 503→390 lines by extracting `macos.rs` submodule
+- `install_tests.rs` was split from inline tests in `install.rs`
+- `install_minui_with_cancel` complexity was reduced by extracting `install_base()` and `write_version_metadata()` helpers
 
-### macOS WiFi Deprecation
-- WiFi scanning relies on the `airport` command-line tool
-- macOS 14.4+ may deprecate/remove `airport` access
-- **Impact**: WiFi scanning feature breaks on newer macOS
-- **Mitigation**: Monitor macOS releases; consider CoreWLAN framework integration
+## Panic Risks (Rust)
 
-### Windows Drive Detection
-- Platform-specific code in `drives.rs` uses Windows API bindings (`windows-sys`)
-- Drive letter enumeration and filesystem detection are OS-dependent
-- **Impact**: Edge cases on exotic Windows configurations
+Several `.unwrap()` calls exist in production code (not just tests):
 
-### No Linux Support
-- Phase 1 (MVP) explicitly excludes Linux
-- **Impact**: Limited user base; Linux retro handheld users can't use the installer
-- **Mitigation**: Planned for future phase
+| File | Pattern | Risk |
+|------|---------|------|
+| `lib.rs` | `registry.token.lock().unwrap()` | Mutex poisoning on `cancel_install` |
+| `lib.rs` | `app.get_webview_window("main").unwrap()` | Window not found in `setup` |
+| `download.rs` | `tempfile::tempdir().unwrap()` | Disk full / permissions |
+| `health.rs` | Various unwraps | IO errors during health checks |
 
-## Security
+**Note:** The `install_minui_with_cancel` callbacks use `if let Err(e) = ...` for event emission (non-panicking), which is the correct pattern.
 
-### Symlink Race Guards
-- Multiple places implement symlink race protection (canonicalize → create → re-validate)
-- Currently covered in: `pipeline.rs::create_target_within`, `bios.rs::install_bios_from_bytes`
-- **Risk**: New file-writing code paths could miss these guards
-- **Mitigation**: Use `create_target_within` and `copy_dir_recursive` helpers consistently
+## Mutex Patterns
 
-### CSP Restrictions
-- Content Security Policy is tightly scoped to specific external domains
-- Adding new external services requires CSP update in `tauri.conf.json`
-- **Risk**: Forgetting to update CSP when adding new integrations
-- **Mitigation**: Document CSP in architecture docs; test with CSP violations
+`lib.rs` uses two different patterns:
 
-### Registry Trust
-- Package registry data (`packages.minui.dev`) is treated as untrusted
-- Schema validation exists via `validateStoreEntry()`
-- **Risk**: New registry fields or formats could bypass validation
-- **Mitigation**: Regular review of validation logic when registry schema changes
+```rust
+// Pattern 1: unwrap (panic on poison)
+let mut slot = registry.token.lock().unwrap();
 
-## Technical Debt
+// Pattern 2: if let Ok (silent on poison)
+if let Ok(mut slot) = registry_for_task.token.lock() {
+    *slot = None;
+}
+```
 
-### No TODO/FIXME
-- Zero `TODO`, `FIXME`, `HACK`, or `XXX` comments found in codebase
-- This suggests either very clean code or lack of documentation of known issues
-- **Recommendation**: Consider adding TODO comments for known limitations
+The second pattern is used in the `tokio::spawn` cleanup path — it's safer because a Mutex poison in a spawned task shouldn't crash the app. The first pattern is fine for the main thread (poison here means the app is in an unrecoverable state).
 
-### Deprecated Commands
-- `install_minui` (synchronous) is deprecated in favor of `start_install` (async with cancellation)
-- Old command may still have callers or references
-- **Status**: Recent refactor removed dead code (`refactor: delete dead parallel device system and deprecated archive commands`)
+## `unsafe` Usage
 
-### Fork Support Complexity
-- Custom fork support adds configuration surface area
-- `ForkContext`, `useForkInstall`, fork-specific version tracking
-- **Risk**: Fork-specific edge cases (different archive structures, version formats)
+One `unsafe` block in `src-tauri/src/fs_utils.rs` (line 17-18):
 
-## Testing Gaps
+```rust
+unsafe { libc::statvfs(path.as_ptr() as *const i8, &mut stat) }
+```
 
-### Platform-Specific Code
-- Drive detection (`drives.rs`) has limited test coverage due to platform dependency
-- WiFi scanning tests are environment-dependent
-- **Recommendation**: Add integration tests against real SD cards (one exists but is `#[ignore]`d)
+This is for calling `libc::statvfs` to get disk space on Unix. It's a well-audited pattern, but any change here should be carefully reviewed.
 
-### Frontend Integration
-- Heavy unit test coverage but limited end-to-end tests
-- No tests for Tauri IPC contract compliance from the frontend side
-- **Recommendation**: Consider Tauri end-to-end tests with `tauri-driver`
+## Debug Logging in Production
 
-### Coverage
-- No coverage thresholds enforced
-- Vitest coverage configured but not run in CI by default (`@vitest/coverage-v8`)
+| File | Statement | When |
+|------|-----------|------|
+| `lib.rs` | `eprintln!("Warning: failed to emit install progress event: {}", e)` | Event emit failure |
+| `extract.rs` | `eprintln!("Warning: failed to remove temp archive: {}", e)` | Temp cleanup failure |
+| `install.rs` | `eprintln!("Warning: failed to write version metadata: {}", e)` | Metadata write failure |
+| `pipeline.rs` | `eprintln!("create_target_within: cleanup failed for escaped path {}: {}", ...)` | Security cleanup failure |
 
-## Build & CI
+These are all non-fatal warnings — they log to stderr but don't crash. Consider whether these should be surfaced to the UI or redirected to a log file in production builds.
 
-### Pre-commit Complexity
-- `prek` hooks can conflict if two hooks touch the same file
-- Requires `git add -u` and retry on conflict
-- **Risk**: Frustrating developer experience on first commit
+## Frontend `console` Usage
 
-### CI Workflow
-- Single workflow: `react-doctor.yml` in `.github/workflows/`
-- No Rust CI checks (cargo clippy, cargo test) in CI
-- **Recommendation**: Add Rust CI pipeline
+- `src/hooks/useVersionCheck.ts` — `console.error` on version check failure
 
-## Future Considerations
+No `console.log` or `console.warn` in production code (excluding tests).
 
-### Linux Support
-- Phase 1 intentionally excludes Linux
-- Drive detection, WiFi scanning, and filesystem operations would need Linux implementations
+## TypeScript `any` Usage
 
-### Format Support
-- `format_drive` command exists but is not implemented in MVP
-- Confirmation dialog (`FormatConfirmDialog.tsx`) exists but is unused
+Minimal — only a well-documented instance in scripts (`scripts/discover-packages.ts`) for the GitHub API JSON response. No `@ts-ignore` or `@ts-expect-error` directives in the main `src/` codebase.
 
-### Package Store Scaling
-- Current `store.json` bundled fallback is static
-- Remote registry (`packages.minui.dev`) has session-scoped cache
-- **Risk**: Registry growth could slow initial load
-- **Recommendation**: Consider pagination or incremental updates for large registries
+## Known Gaps
+
+| Area | Gap | Priority |
+|------|-----|----------|
+| Linux support | Drive detection exists but not tested in CI | Low (not MVP) |
+| macOS 14.4+ | `airport` WiFi scanning may break (Apple deprecation) | Medium |
+| Windows formatting | `format_drive` returns error — not yet implemented | Low |
+| Package registry | Hardcoded versions in `store.json` — mitigated by daily cron auto-update | Low |
+| Install cancellation | Backend supports cancellation but frontend UI doesn't expose a cancel button | Medium |
+
+## TODOs & FIXMEs
+
+No `TODO`, `FIXME`, `HACK`, `XXX`, `WORKAROUND`, or `BUG` annotations found in the codebase. This is a positive signal — tracked work is managed in GitHub Issues rather than inline comments.
+
+## Resolved Concerns
+
+These items from the previous architecture review have been addressed:
+
+| Concern | Resolution |
+|---------|------------|
+| `install_minui` gated behind `#[cfg(test)]` | Fixed — restored with compile-time guard test |
+| Shallow Tauri command layer (9 individual params) | Fixed — `InstallOptions` now accepted as single struct |
+| Module-level cache globals in `package.ts` | Fixed — `RegistryCache` class with encapsulated TTL |
+| `install_minui_with_cancel` inline orchestration | Improved — extracted `install_base()` + `write_version_metadata()` |
+| `drives.rs` platform sprawl (503 lines) | Fixed — extracted `macos.rs` submodule |

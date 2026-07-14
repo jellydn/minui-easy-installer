@@ -1,117 +1,133 @@
 # Testing
 
-## Overview
+## Test Frameworks
 
-The project uses **Vitest** for frontend testing and Rust's built-in test framework for backend testing. Total test coverage spans ~2,585 lines across 18 test files.
+| Layer | Framework | Runner | Environment |
+|-------|-----------|--------|-------------|
+| Frontend | Vitest | `bun test` / `npx vitest` | `jsdom` |
+| Backend | Rust built-in | `cargo test` | Native |
 
-## Frontend Testing (Vitest)
-
-### Configuration
-
-```typescript
-// vitest.config.ts
-environment: "jsdom"
-setupFiles: ["./vitest.setup.ts"]
-include: ["src/**/*.test.{ts,tsx}"]
-```
-
-- **Test runner**: Vitest
-- **Environment**: jsdom (browser-like DOM)
-- **Setup**: `vitest.setup.ts` imports `@testing-library/jest-dom/vitest` for DOM matchers
-
-### Test Files (17 files, 2,585 lines)
-
-| Test File | Lines | Focus |
-|-----------|-------|-------|
-| `src/types/release.test.ts` | 315 | GitHub release parsing |
-| `src/hooks/useVersionCheck.test.ts` | 272 | Version checking hook |
-| `src/types/install.test.ts` | 260 | Install flow types |
-| `src/BiosInstaller.test.tsx` | 250 | BIOS installer component |
-| `src/Home.test.tsx` | 237 | Home screen component |
-| `src/PackageStore.test.tsx` | 190 | Package store component |
-| `src/WifiWizard.test.tsx` | 180 | WiFi wizard component |
-| `src/hooks/useForkInstall.test.ts` | 149 | Fork install hook |
-| `src/types/validate.test.ts` | 135 | Validation types |
-| `src/Settings.test.tsx` | 120 | Settings component |
-| `src/types/fork.test.ts` | 112 | Fork types |
-| `src/DriveSelector.test.tsx` | 106 | Drive selector component |
-| `src/types/drive.test.ts` | 60 | Drive types |
-| `src/types/version.test.ts` | 54 | Version parsing |
-| `src/types/package.test.ts` | 54 | Package types |
-| `src/types/device.test.ts` | 48 | Device profiles |
-| `src/types/bios.test.ts` | 43 | BIOS types |
-
-### Testing Libraries
-- `@testing-library/react` — Render components, query DOM
-- `@testing-library/user-event` — Simulate user interactions
-- `@testing-library/jest-dom` — Extended DOM matchers (`toBeInTheDocument()`, etc.)
-
-### Patterns
-- **Co-located tests**: Test files next to source files (`src/types/device.test.ts` alongside `src/types/device.ts`)
-- **Component tests**: Render with test props, assert DOM content
-- **Hook tests**: `renderHook()` from testing library, act() for state changes
-- **Type tests**: Pure function tests for validation/parsing logic
-
-### Running Tests
-
-```bash
-bun test                    # vitest run (all tests)
-bun test -- --reporter=verbose  # verbose output
-bun run test:coverage       # vitest run --coverage
-```
-
-## Backend Testing (Rust)
-
-### Framework
-- Built-in Rust `#[test]` attribute
-- `#[tokio::test]` for async test functions
-- `#[cfg(test)]` modules within source files
-
-### Test Locations
-
-| Module | Test Location | Focus |
-|--------|--------------|-------|
-| `lib.rs` | Inline `#[cfg(test)]` | IPC contract tests (error propagation, return shapes) |
-| `install.rs` | Inline `#[cfg(test)]` | Copy operations, preserved folders, full pipeline |
-| `version/tests.rs` | Separate test file | Version parsing edge cases |
-| `fs_utils.rs` | Inline tests | copy_dir_recursive, get_free_space |
-
-### Testing Patterns
-- **tempfile**: `tempfile::tempdir()` for filesystem simulation (no real SD card needed)
-- **Mock servers**: `TcpListener` one-shot HTTP servers for download tests
-- **Full pipeline**: `test_install_minui_with_cancel_full_pipeline` exercises download → extract → copy
-- **Cross-platform**: `/nonexistent` paths for health check/file-not-found edge cases
-- **Environment-dependent**: WiFi tests have no specific network assertions
-
-### Known Test Quirks
-- WiFi tests are environment-dependent (no specific networks asserted)
-- Health check tests use `/nonexistent` paths (works cross-platform)
-
-### Running Tests
-
-```bash
-cd src-tauri && cargo test           # All Rust tests
-cd src-tauri && cargo test --lib     # Library tests only
-cd src-tauri && cargo test -- --nocapture  # Show println output
-```
-
-## Mocking & Fixtures
+## Configuration
 
 ### Frontend
-- **Mock hooks**: Custom hook mocks via `vi.mock()`
-- **Mock Tauri API**: `vi.mock("@tauri-apps/api/core")` for IPC simulation
-- **Test data**: Inline test fixtures (no shared fixture files)
+
+| File | Purpose |
+|------|---------|
+| `vitest.config.ts` | Includes `src/**/*.test.{ts,tsx}`, jsdom env, coverage thresholds |
+| `vitest.setup.ts` | Imports `@testing-library/jest-dom/vitest` for DOM matchers |
 
 ### Backend
-- **Inline test data**: ZIP archives created programmatically in tests
-- **One-shot servers**: `start_one_shot_file_server()` for HTTP mocking
-- **Temp directories**: `tempfile::tempdir()` for all filesystem tests
 
-## All Checks
+Rust tests use:
+- `#[test]` or `#[tokio::test]` annotations
+- `tempfile` crate for isolated temp directories
+- Tests are located either inline (`#[cfg(test)] mod tests`) or external (`#[path = "drives_tests.rs"]`)
 
-```bash
-just check    # lint + typecheck + cargo fmt --check + cargo clippy
-just fmt      # oxfmt + cargo fmt
+## Test File Inventory
+
+### Frontend (17 test files)
+
+| File | Tests |
+|------|-------|
+| `src/Home.test.tsx` | Home screen rendering + state transitions |
+| `src/PackageStore.test.tsx` | Package store browse + install |
+| `src/DriveSelector.test.tsx` | Drive picker interaction |
+| `src/WifiWizard.test.tsx` | WiFi config form |
+| `src/BiosInstaller.test.tsx` | BIOS catalog + install flow |
+| `src/Settings.test.tsx` | Settings screen |
+| `src/hooks/useForkInstall.test.ts` | Install orchestration hook (mocked IPC) |
+| `src/hooks/useVersionCheck.test.ts` | Version comparison hook |
+| `src/types/install.test.ts` | Install types + IPC contract |
+| `src/types/package.test.ts` | Package registry validation |
+| `src/types/release.test.ts` | GitHub release parsing |
+| `src/types/device.test.ts` | Device profile lookups |
+| `src/types/fork.test.ts` | Fork configuration |
+| `src/types/bios.test.ts` | BIOS catalog types |
+| `src/types/validate.test.ts` | Validation report types |
+| `src/types/version.test.ts` | Version parsing |
+| `src/types/drive.test.ts` | RemovableDrive type |
+
+### Backend (4 test files)
+
+| File | Lines | Tests |
+|------|-------|-------|
+| `src-tauri/src/install_tests.rs` | 789 | Install flow unit tests (temp dirs) |
+| `src-tauri/src/drives_tests.rs` | ~230 | Drive detection + serialization (macOS-focused) |
+| `src-tauri/src/bios_tests.rs` | 310 | BIOS catalog + install round-trip |
+| `src-tauri/src/version/tests.rs` | — | Version parsing + comparison |
+
+### Inline tests
+
+`lib.rs` contains extensive inline `#[cfg(test)] mod tests` with **contract tests** for every Tauri command handler:
+- `test_get_removable_drives_returns_result_shape`
+- `test_install_minui_command_errors_on_bad_url`
+- `test_validate_installation_on_empty_tempdir`
+- `test_check_minui_version_on_empty_tempdir`
+- `test_install_package_underlying_errors_on_bad_url`
+- `test_scan_wifi_networks_returns_vec`
+- `test_list_bios_catalog_returns_all_entries`
+- `test_install_bios_file_underlying_round_trip`
+- `test_detect_installed_packages_empty_tempdir`
+- `test_check_package_updates_empty_input`
+- `test_check_sd_card_health_errors_on_nonexistent`
+- `test_fetch_url_errors_on_unreachable`
+- `test_verify_archive_checksum_matches_correct_hash`
+
+These contract tests verify that commands return proper error shapes, not Tauri transport errors — catching the `#[cfg(test)]` regression where a command was removed from the production handler but still called by the frontend.
+
+## Mocking Patterns
+
+### Frontend (Vitest)
+
+```typescript
+// Mock Tauri invoke
+import { invoke } from "@tauri-apps/api/core";
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+const mockInvoke = invoke as Mock;
+mockInvoke.mockResolvedValue({ success: true });
+
+// Mock Tauri event listener
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(),
+}));
 ```
 
-Pre-commit via `prek.toml` runs lint and typecheck on staged files.
+### Backend (Rust)
+
+Rust tests use real implementations — no mocking framework:
+- `tempfile::tempdir()` for isolated filesystem state
+- Unreachable URLs (`http://127.0.0.1:1/never.zip`) to test error paths
+- Known-good binary data for round-trip tests (BIOS, checksums)
+
+## Test Isolation
+
+| Layer | Strategy |
+|-------|----------|
+| Rust | `tempfile::tempdir()` — each test gets a fresh temp directory, dropped on scope exit |
+| TS | `vi.mock()` resets with `vi.resetAllMocks()` (auto via vitest config) |
+
+## Running Tests
+
+```bash
+# Frontend
+bun test                    # All TS tests
+bun test -- --reporter=verbose
+
+# Backend
+cargo test                  # All Rust tests
+cargo test --lib install    # Specific module tests
+cargo test -- --ignored     # Include ignored tests (e.g., real SD card)
+
+# Full check
+just check                  # lint + typecheck + fmt + clippy + test
+```
+
+## CI Test Coverage
+
+| Workflow | Tests Run |
+|----------|-----------|
+| `rust.yml` | `cargo fmt --check` + `cargo clippy -- -D warnings` + `cargo test` |
+| `build.yml` | `cargo build` on macOS + Windows (catches platform-specific compile errors) |
+| `react-doctor.yml` | React best-practices linting |

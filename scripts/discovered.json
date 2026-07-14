@@ -1,0 +1,35 @@
+[
+  {
+    "name": "minui-sftpgo-server-pak",
+    "repository": "https://github.com/josegonzalez/minui-sftpgo-server-pak",
+    "latest_version": "0.7.0",
+    "description": "A Minui app wrapping sftpgo, an sftp server.",
+    "author": "josegonzalez",
+    "stars": 8,
+    "suggested_category": "Utilities",
+    "suggested_pak_name": "Sftpgo Server",
+    "found_via": "josegonzalez's repos"
+  },
+  {
+    "name": "minui-filebrowser-pak",
+    "repository": "https://github.com/josegonzalez/minui-filebrowser-pak",
+    "latest_version": "0.9.0",
+    "description": "A MinUI app wrapping filebrowser, an http file server",
+    "author": "josegonzalez",
+    "stars": 14,
+    "suggested_category": "Utilities",
+    "suggested_pak_name": "Filebrowser",
+    "found_via": "josegonzalez's repos"
+  },
+  {
+    "name": "trimui-brick-fn-editor-pak",
+    "repository": "https://github.com/josegonzalez/trimui-brick-fn-editor-pak",
+    "latest_version": "0.4.0",
+    "description": "A TrimUI Brick app wrapping the built-in Function Key Editor app",
+    "author": "josegonzalez",
+    "stars": 6,
+    "suggested_category": "Utilities",
+    "suggested_pak_name": "Trimui Brick Fn Editor",
+    "found_via": "josegonzalez's repos"
+  }
+]

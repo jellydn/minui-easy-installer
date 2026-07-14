@@ -11,20 +11,13 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-
-interface StorePak {
-  name: string;
-  repository: string;
-  version: string;
-  pak_name: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
-}
-
-interface StoreRegistry {
-  emu_paks: StorePak[];
-  tool_paks: StorePak[];
-}
+import {
+  apiDelay,
+  fetchApi,
+  repoSlug,
+  stripLeadingV,
+  type StoreRegistry,
+} from "./shared";
 
 interface GitHubRelease {
   tag_name: string;
@@ -33,37 +26,14 @@ interface GitHubRelease {
 }
 
 const STORE_PATH = join(import.meta.dirname, "..", "src", "types", "store.json");
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-
-function repoSlug(repository: string): { owner: string; repo: string } | null {
-  const match = repository.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
-  if (!match) return null;
-  return { owner: match[1], repo: match[2] };
-}
-
-function stripLeadingV(tag: string): string {
-  return tag.startsWith("v") ? tag.slice(1) : tag;
-}
 
 async function fetchLatestRelease(
   owner: string,
   repo: string,
 ): Promise<GitHubRelease | null> {
-  const headers: Record<string, string> = {
-    "User-Agent": "minui-easy-installer-registry-updater",
-  };
-  if (GITHUB_TOKEN) {
-    headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
-  }
-
   const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
-  let response: Response;
-  try {
-    response = await fetch(url, { headers });
-  } catch {
-    console.warn(`  ⚠ Network error fetching ${owner}/${repo}`);
-    return null;
-  }
+  const response = await fetchApi(url);
+  if (!response) return null;
 
   if (response.status === 404) {
     // No releases — repo may use tags without releases
@@ -161,7 +131,7 @@ async function main() {
     }
 
     // Small delay between requests to be polite to the API
-    await new Promise((r) => setTimeout(r, 200));
+    await apiDelay();
   }
 
   if (changed) {

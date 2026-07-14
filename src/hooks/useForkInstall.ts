@@ -14,7 +14,7 @@ import type {
   InstallProgressEvent,
   InstallResult,
 } from "../types/install";
-import { installMinui } from "../types/install";
+import { startInstallAndWait } from "../types/install";
 import { fetchPackageRegistry, installPackage } from "../types/package";
 import { fetchMinUIRelease, type MinUIRelease } from "../types/release";
 import type { ValidationResult } from "../types/validate";
@@ -100,24 +100,25 @@ async function fetchAndInstallRelease(
     };
   }
   const release = releaseResult.data;
-  const result = await installMinui({
-    baseUrl: release.baseArchiveUrl,
-    extrasUrl: release.extrasArchiveUrl || undefined,
-    baseChecksum: release.checksums?.base || undefined,
-    extrasChecksum: release.checksums?.extras || undefined,
-    sdMount,
-    platform: profile.platform,
-    extrasPlatform: profile.extrasPlatform,
-    version: release.version,
-    forkName: forkRef.current.minuiTxtPrefix,
-  });
-  if (!result.success) {
+  try {
+    const data = await startInstallAndWait({
+      baseUrl: release.baseArchiveUrl,
+      extrasUrl: release.extrasArchiveUrl || undefined,
+      baseChecksum: release.checksums?.base || undefined,
+      extrasChecksum: release.checksums?.extras || undefined,
+      sdMount,
+      platform: profile.platform,
+      extrasPlatform: profile.extrasPlatform,
+      version: release.version,
+      forkName: forkRef.current.minuiTxtPrefix,
+    });
+    return { kind: "ok", release, data };
+  } catch (err) {
     return {
       kind: "err",
-      message: `${forkRef.current.label} install failed: ${result.error.message}`,
+      message: `${forkRef.current.label} install failed: ${errorMessage(err)}`,
     };
   }
-  return { kind: "ok", release, data: result.data };
 }
 
 /**

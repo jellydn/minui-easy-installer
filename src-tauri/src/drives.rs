@@ -1,8 +1,19 @@
 use serde::Serialize;
+#[cfg(target_os = "macos")]
 use std::path::Path;
 use std::process::Command;
 
 use crate::fs_utils;
+
+#[cfg(target_os = "macos")]
+mod macos;
+
+#[cfg(target_os = "macos")]
+// Re-export for tests; some items are only used in drives_tests.rs.
+#[allow(unused_imports)]
+pub(crate) use macos::{
+    classify_volume, find_field_value, parse_filesystem_from_info, parse_size_str, VolumeKind,
+};
 
 #[derive(Debug, Serialize, Clone)]
 pub struct RemovableDrive {
@@ -76,87 +87,6 @@ pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
     }
 
     Ok(drives)
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Debug, PartialEq, Eq)]
-enum VolumeKind {
-    External,
-    Internal,
-    DiskImage,
-    Network,
-    Unknown,
-}
-
-/// Look up a field's value in `diskutil info` output.
-///
-/// `diskutil info` produces column-aligned output where the field name and
-/// value are separated by a variable run of spaces (e.g.
-/// `   File System Personality:  MS-DOS FAT32`). This helper tolerates that
-/// layout by splitting each line on the first `:`, trimming the key for
-/// comparison, and returning the trimmed value as a borrow into the input.
-///
-/// Returns `None` if the field is absent.
-#[cfg(target_os = "macos")]
-fn find_field_value<'a>(info: &'a str, field: &str) -> Option<&'a str> {
-    for line in info.lines() {
-        if let Some((key, value)) = line.split_once(':') {
-            if key.trim() == field {
-                return Some(value.trim());
-            }
-        }
-    }
-    None
-}
-
-/// Classify a `diskutil info` output into a high-level volume kind.
-///
-/// This is split out from `is_removable_volume` so the parsing logic can be
-/// unit-tested against known-good and known-bad samples of `diskutil` output.
-#[cfg(target_os = "macos")]
-fn classify_volume(info: &str) -> VolumeKind {
-    let network = find_field_value(info, "Network Volume");
-    let disk_image = find_field_value(info, "Disk Image");
-    let virtual_disk = find_field_value(info, "Virtual");
-    let device_location = find_field_value(info, "Device Location");
-    let internal = find_field_value(info, "Internal");
-    let removable_media = find_field_value(info, "Removable Media");
-    let removable_or_external = find_field_value(info, "Removable Media Or External Device");
-
-    let is_yes = |v: Option<&str>| v == Some("Yes");
-
-    // Exclusions first: even if other fields suggest external, never treat
-    // disk images, virtual disks, or network mounts as removable media.
-    if is_yes(network) {
-        return VolumeKind::Network;
-    }
-    if is_yes(disk_image) || is_yes(virtual_disk) {
-        return VolumeKind::DiskImage;
-    }
-
-    // `Device Location:` is the most reliable signal — `diskutil` writes
-    // `External` for SD cards and USB sticks, and `Internal` for the boot
-    // disk and built-in SSDs. Absent from some legacy / non-physical outputs.
-    if device_location == Some("External") {
-        return VolumeKind::External;
-    }
-
-    // Removable media takes priority over Device Location.
-    // Built-in SD card readers report Device Location: Internal,
-    // but Removable Media: Removable — the media IS removable.
-    if removable_media == Some("Removable")
-        || is_yes(removable_media)
-        || is_yes(removable_or_external)
-    {
-        return VolumeKind::External;
-    }
-
-    // Not external and not removable — classify as internal.
-    if device_location == Some("Internal") || is_yes(internal) {
-        return VolumeKind::Internal;
-    }
-
-    VolumeKind::Unknown
 }
 
 #[cfg(target_os = "macos")]
@@ -262,11 +192,6 @@ pub fn format_drive(_mount_path: &str, _volume_name: &str) -> Result<(), String>
 }
 
 #[cfg(target_os = "macos")]
-fn parse_filesystem_from_info(info: &str) -> Option<String> {
-    find_field_value(info, "File System Personality").map(|s| s.to_string())
-}
-
-#[cfg(target_os = "macos")]
 fn get_filesystem(mount_path: &str) -> Option<String> {
     let output = Command::new("diskutil")
         .args(["info", mount_path])
@@ -279,29 +204,6 @@ fn get_filesystem(mount_path: &str) -> Option<String> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     parse_filesystem_from_info(&stdout)
-}
-
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-fn parse_size_str(s: &str) -> Option<u64> {
-    let s = s.trim();
-    let (num_str, unit) = if let Some(pos) = s.find(char::is_alphabetic) {
-        s.split_at(pos)
-    } else {
-        (s, "")
-    };
-
-    let num: f64 = num_str.trim().parse().ok()?;
-    let multiplier = match unit.trim().to_lowercase().as_str() {
-        "bytes" | "b" => 1.0,
-        "kb" | "k" => 1024.0,
-        "mb" | "m" => 1024.0 * 1024.0,
-        "gb" | "g" => 1024.0 * 1024.0 * 1024.0,
-        "tb" | "t" => 1024.0 * 1024.0 * 1024.0 * 1024.0,
-        _ => 1.0,
-    };
-
-    Some((num * multiplier) as u64)
 }
 
 #[cfg(target_os = "windows")]
@@ -369,375 +271,60 @@ pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
 #[cfg(not(target_os = "macos"))]
 #[cfg(not(target_os = "windows"))]
 pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
+    // Use lsblk with the RM (removable) column so we can filter out
+    // internal drives. On Linux, internal SSDs/HDDs have RM=0 while SD
+    // cards and USB sticks report RM=1.
+    let output = Command::new("lsblk")
+        .args(["-o", "NAME,SIZE,FSTYPE,MOUNTPOINT,RM", "-ln", "-J"])
+        .output();
+
+    if let Ok(output) = output {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                if let Some(devices) = json["blockdevices"].as_array() {
+                    let mut drives = Vec::new();
+                    for device in devices {
+                        // Only include removable devices (RM=1 or "true").
+                        let rm = &device["rm"];
+                        let is_removable = match rm {
+                            serde_json::Value::String(s) => s == "1" || s == "true",
+                            serde_json::Value::Number(n) => n.as_u64() == Some(1),
+                            serde_json::Value::Bool(b) => *b,
+                            _ => false,
+                        };
+                        if !is_removable {
+                            continue;
+                        }
+
+                        let mountpoint = device["mountpoint"].as_str().unwrap_or("");
+                        if mountpoint.is_empty() {
+                            continue;
+                        }
+                        let name = device["name"].as_str().unwrap_or(mountpoint).to_string();
+                        let filesystem = device["fstype"].as_str().map(|s| s.to_string());
+                        let size_str = device["size"].as_str().unwrap_or("0");
+                        let size_bytes = size_str.parse::<u64>().ok();
+                        let available = fs_utils::get_free_space(mountpoint);
+                        drives.push(RemovableDrive {
+                            name,
+                            mount_path: mountpoint.to_string(),
+                            size_bytes,
+                            filesystem,
+                            available_bytes: available,
+                        });
+                    }
+                    if !drives.is_empty() {
+                        return Ok(drives);
+                    }
+                }
+            }
+        }
+    }
+
     Err("Unsupported platform for drive detection".to_string())
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_removable_drive_serialization() {
-        let drive = RemovableDrive {
-            name: "SD_CARD".to_string(),
-            mount_path: "/Volumes/SD_CARD".to_string(),
-            size_bytes: Some(32_000_000_000),
-            filesystem: Some("FAT32".to_string()),
-            available_bytes: Some(28_000_000_000),
-        };
-
-        let json = serde_json::to_string(&drive).unwrap();
-        assert!(json.contains("SD_CARD"));
-        assert!(json.contains("/Volumes/SD_CARD"));
-        assert!(json.contains("FAT32"));
-    }
-
-    #[test]
-    fn test_removable_drive_missing_filesystem() {
-        let drive = RemovableDrive {
-            name: "UNKNOWN".to_string(),
-            mount_path: "/Volumes/UNKNOWN".to_string(),
-            size_bytes: None,
-            filesystem: None,
-            available_bytes: None,
-        };
-
-        let json = serde_json::to_string(&drive).unwrap();
-        assert!(json.contains("UNKNOWN"));
-        assert!(json.contains("null"));
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_parse_size_str() {
-        assert_eq!(parse_size_str("1024 bytes"), Some(1024));
-        assert_eq!(parse_size_str("1 KB"), Some(1024));
-        assert_eq!(parse_size_str("1.5 MB"), Some(1_572_864));
-        assert_eq!(parse_size_str("32 GB"), Some(34_359_738_368));
-        assert!(parse_size_str("invalid").is_none());
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_classify_volume_external_sd_card() {
-        // Real `diskutil info` output for a FAT32 SD card mounted at
-        // /Volumes/MinUI on macOS. Note the absence of `Internal:`,
-        // `Virtual:`, `Disk Image:`, `Network Volume:`, and
-        // `Removable Media Or External Device:` lines — the previous
-        // implementation incorrectly defaulted missing keys to "internal".
-        let info = "   Device Identifier:        disk6s1\n\
-                    Device Node:              /dev/disk6s1\n\
-                    Whole:                    No\n\
-                    Part of Whole:            disk6\n\
-                    \n\
-                    Volume Name:              MinUI\n\
-                    Mounted:                  Yes\n\
-                    Mount Point:              /Volumes/MinUI\n\
-                    \n\
-                    Partition Type:           Windows_FAT_32\n\
-                    File System Personality:  MS-DOS FAT32\n\
-                    Type (Bundle):            msdos\n\
-                    \n\
-                    Protocol:                 USB\n\
-                    \n\
-                    Device Location:          External\n\
-                    Removable Media:          Removable\n\
-                    Media Removal:            Software-Activated\n\
-                    Solid State:              Info not available\n";
-        assert_eq!(classify_volume(info), VolumeKind::External);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_classify_volume_internal_drive() {
-        let info = "   Device Location:        Internal\n\
-                    Removable Media:        Fixed\n\
-                    Internal:               Yes\n";
-        assert_eq!(classify_volume(info), VolumeKind::Internal);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_classify_volume_legacy_internal_no_device_location() {
-        // Older macOS or non-physical outputs may omit `Device Location:`.
-        let info = "   Internal:               Yes\n\
-                    Removable Media:        Fixed\n";
-        assert_eq!(classify_volume(info), VolumeKind::Internal);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_classify_volume_disk_image() {
-        let info = "   Device Location:        Internal\n\
-                    Disk Image:             Yes\n\
-                    Removable Media:        Fixed\n";
-        assert_eq!(classify_volume(info), VolumeKind::DiskImage);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_classify_volume_network_mount() {
-        let info = "   Network Volume:         Yes\n\
-                    Mount Point:            /Volumes/SomeShare\n";
-        assert_eq!(classify_volume(info), VolumeKind::Network);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_classify_volume_legacy_removable_yes() {
-        // Pre-Catalina format used `Removable Media: Yes` / `No`.
-        let info = "   Internal:               No\n\
-                    Removable Media:        Yes\n";
-        assert_eq!(classify_volume(info), VolumeKind::External);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_classify_volume_unknown_when_no_signals() {
-        // Empty / unrecognized output should not be classified as external.
-        let info = "";
-        assert_eq!(classify_volume(info), VolumeKind::Unknown);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_classify_volume_internal_sd_card_reader() {
-        // MacBook built-in SD card reader: the reader is internal
-        // but the SD card media is removable. Must be classified as
-        // External so list_removable_drives() includes it.
-        let info = "   Device Location:        Internal\n\
-                    Removable Media:        Removable\n\
-                    Protocol:               Secure Digital\n";
-        assert_eq!(classify_volume(info), VolumeKind::External);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_find_field_value_column_aligned() {
-        let info = "   File System Personality:  MS-DOS FAT32\n\
-                    Volume Name:              MinUI\n\
-                    Device Location:          External\n";
-        assert_eq!(
-            find_field_value(info, "File System Personality"),
-            Some("MS-DOS FAT32")
-        );
-        assert_eq!(find_field_value(info, "Volume Name"), Some("MinUI"));
-        assert_eq!(find_field_value(info, "Device Location"), Some("External"));
-        assert_eq!(find_field_value(info, "Missing Field"), None);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_find_field_value_empty_input() {
-        assert_eq!(find_field_value("", "Device Location"), None);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_find_field_value_no_colon() {
-        // Lines without a colon should be skipped, not cause a panic.
-        let info = "Some header line\n   Device Location: External\n";
-        assert_eq!(find_field_value(info, "Device Location"), Some("External"));
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_find_field_value_substring_field_does_not_match() {
-        // `Internal` should not match a field named `Internal Foo` via
-        // `contains`, because we use `==` on the trimmed key.
-        let info = "   Internal Foo:          Bar\n   Internal:               No\n";
-        assert_eq!(find_field_value(info, "Internal"), Some("No"));
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_find_field_value_substring_prefix_does_not_match_for_filesystem() {
-        // The same `==` invariant should hold for the filesystem field: a
-        // hypothetical `File System Personality Or Other:` must not match a
-        // lookup of `File System Personality`. Guards against regressions to
-        // the previous `contains("Field:")` behavior in `get_filesystem`.
-        let info = "   File System Personality Or Other:  X\n\
-                    File System Personality:            MS-DOS FAT32\n";
-        assert_eq!(
-            find_field_value(info, "File System Personality"),
-            Some("MS-DOS FAT32")
-        );
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_find_field_value_empty_value_returns_empty_string() {
-        // A line like `   Field:   ` has an empty value after trim. The
-        // helper should return `Some("")` (not `None`) so callers can
-        // distinguish "field present, value empty" from "field absent".
-        let info = "   Field:   \n   Other:  X\n";
-        assert_eq!(find_field_value(info, "Field"), Some(""));
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_find_field_value_first_match_wins_on_duplicate_field() {
-        // If a field is repeated in the output, the first occurrence wins.
-        // Documents the behavior so a future refactor doesn't silently
-        // flip to last-wins.
-        let info = "   Device Location:  External\n   Other:  Y\n\
-                    Device Location:  Internal\n";
-        assert_eq!(find_field_value(info, "Device Location"), Some("External"));
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_parse_filesystem_fat32() {
-        let info = "   File System Personality:  MS-DOS FAT32\n";
-        assert_eq!(
-            parse_filesystem_from_info(info),
-            Some("MS-DOS FAT32".to_string())
-        );
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_parse_filesystem_apfs() {
-        let info = "   File System Personality:    APFS\n";
-        assert_eq!(parse_filesystem_from_info(info), Some("APFS".to_string()));
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_parse_filesystem_missing() {
-        let info = "   Volume Name:        MinUI\n";
-        assert_eq!(parse_filesystem_from_info(info), None);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_parse_filesystem_from_real_sd_card_output() {
-        // Real `diskutil info` output snippet from /Volumes/MinUI.
-        let info = "   File System Personality:  MS-DOS FAT32\n\
-                    Type (Bundle):            msdos\n\
-                    Name (User Visible):      MS-DOS (FAT32)\n";
-        assert_eq!(
-            parse_filesystem_from_info(info),
-            Some("MS-DOS FAT32".to_string())
-        );
-    }
-
-    /// Integration test against a real mounted SD card.
-    ///
-    /// This test calls the production `list_removable_drives()` function —
-    /// which shells out to `df` and `diskutil` — and asserts that the SD
-    /// card mounted at the configured mount path is returned with the
-    /// expected fields. It guards against regressions of the bug where
-    /// the detection logic excluded real SD cards because `diskutil info`
-    /// output does not contain an `Internal:` field for removable media.
-    ///
-    /// Marked `#[ignore]` because it requires physical hardware (an SD card
-    /// inserted into the Mac) and a specific mount path. To run:
-    ///
-    /// ```sh
-    /// cargo test --lib drives -- --ignored list_removable_drives_finds_real_sd_card
-    /// ```
-    ///
-    /// If the configured volume is not currently mounted, the test returns
-    /// early with a printed message instead of failing — making it safe to
-    /// run on a developer machine that doesn't have the SD card inserted
-    /// at the moment.
-    #[cfg(target_os = "macos")]
-    #[test]
-    #[ignore = "requires a real SD card mounted at the configured path; run with `cargo test -- --ignored`"]
-    fn test_list_removable_drives_finds_real_sd_card() {
-        // The SD card volume name configuration.
-        // Compared case-insensitively because macOS HFS+/APFS is
-        // case-insensitive, so `Path::exists` check is case-insensitive.
-        let sd_card_name = std::env::var("SD_CARD_NAME").unwrap_or_else(|_| "KNULLI".to_string());
-        let sd_card_probe_path = std::env::var("SD_CARD_PROBE_PATH")
-            .unwrap_or_else(|_| format!("/Volumes/{}", sd_card_name));
-
-        if !Path::new(&sd_card_probe_path).exists() {
-            eprintln!(
-                "test_list_removable_drives_finds_real_sd_card: {sd_card_probe_path} \
-                 is not mounted on this machine — skipping assertion. \
-                 Insert the SD card and re-run to verify the fix end-to-end."
-            );
-            return;
-        }
-
-        let drives = list_removable_drives().unwrap_or_else(|err| {
-            panic!(
-                "list_removable_drives() failed with \"{err}\" even though \
-                 {sd_card_probe_path} is mounted. This is the regression we \
-                 are guarding against: the SD card should be detected."
-            )
-        });
-
-        eprintln!(
-            "list_removable_drives() returned {} drive(s):",
-            drives.len()
-        );
-        for drive in &drives {
-            eprintln!(
-                "  - name={:?} mount={:?} fs={:?} size={:?} avail={:?}",
-                drive.name,
-                drive.mount_path,
-                drive.filesystem,
-                drive.size_bytes,
-                drive.available_bytes
-            );
-        }
-
-        // Match by volume name case-insensitively. `d.name` is derived
-        // from the leaf of `d.mount_path`, so a single check is enough.
-        let sd_card = drives
-            .iter()
-            .find(|d| d.name.eq_ignore_ascii_case(&sd_card_name))
-            .unwrap_or_else(|| {
-                panic!(
-                    "SD card with volume name {sd_card_name:?} (case-insensitive) \
-                     was not returned by list_removable_drives(). This is the \
-                     bug the test guards against: real SD cards were \
-                     incorrectly excluded because their `diskutil info` \
-                     output lacks an `Internal:` field."
-                )
-            });
-
-        // The function's other contract: internal drives like
-        // "Macintosh HD" must NOT appear in the results. Catches a
-        // regression where someone "fixes" inclusion by dropping the
-        // internal-drive exclusion entirely.
-        for drive in &drives {
-            assert!(
-                !drive.name.starts_with("Macintosh HD"),
-                "internal drive {:?} was incorrectly returned by \
-                 list_removable_drives() (mount={:?})",
-                drive.name,
-                drive.mount_path
-            );
-        }
-
-        // The MinUI SD card is formatted as FAT32. The function reports
-        // it as `MS-DOS FAT32` (matching the diskutil personality string).
-        let fs = sd_card
-            .filesystem
-            .as_deref()
-            .unwrap_or_else(|| panic!("filesystem should be populated for the SD card"));
-        let fs_upper = fs.to_uppercase();
-        assert!(
-            fs_upper.contains("FAT32") || fs_upper.contains("MS-DOS"),
-            "expected FAT32/MS-DOS filesystem for the SD card, got: {fs:?}"
-        );
-
-        // The `df`-derived free space should be populated and smaller than
-        // the total size.
-        let size = sd_card
-            .size_bytes
-            .unwrap_or_else(|| panic!("size_bytes should be populated for the SD card"));
-        let avail = sd_card
-            .available_bytes
-            .unwrap_or_else(|| panic!("available_bytes should be populated for the SD card"));
-        assert!(
-            avail <= size,
-            "available_bytes ({avail}) should be <= size_bytes ({size})"
-        );
-        assert!(size > 0, "size_bytes should be > 0 for a real SD card");
-    }
-}
+#[path = "drives_tests.rs"]
+mod tests;

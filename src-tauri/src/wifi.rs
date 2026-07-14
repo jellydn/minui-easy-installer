@@ -76,7 +76,12 @@ pub fn get_current_wifi_ssid() -> Option<String> {
         get_current_wifi_ssid_macos()
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        get_current_wifi_ssid_linux()
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         None
     }
@@ -240,6 +245,59 @@ fn scan_wifi_linux() -> Vec<String> {
     }
 
     Vec::new()
+}
+
+/// Get the currently connected WiFi SSID on Linux.
+///
+/// Tries `iwgetid -r` first (WiFi-only, part of wireless-tools).
+/// Falls back to `nmcli` filtered to WiFi devices (NetworkManager).
+#[cfg(target_os = "linux")]
+fn get_current_wifi_ssid_linux() -> Option<String> {
+    // Try iwgetid first — it only returns WiFi SSIDs, never ethernet.
+    if let Ok(output) = Command::new("iwgetid").arg("-r").output() {
+        if output.status.success() {
+            let ssid = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !ssid.is_empty() {
+                return Some(ssid);
+            }
+        }
+    }
+
+    // Fall back to nmcli — filter to WiFi devices only.
+    if let Ok(output) = Command::new("nmcli")
+        .args([
+            "-t",
+            "-f",
+            "GENERAL.TYPE,GENERAL.CONNECTION",
+            "device",
+            "show",
+        ])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut saw_wifi = false;
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if trimmed == "GENERAL.TYPE:wifi" {
+                    saw_wifi = true;
+                    continue;
+                }
+                if saw_wifi && trimmed.starts_with("GENERAL.CONNECTION:") {
+                    let ssid = trimmed
+                        .strip_prefix("GENERAL.CONNECTION:")
+                        .unwrap_or("")
+                        .trim();
+                    if !ssid.is_empty() {
+                        return Some(ssid.to_string());
+                    }
+                }
+                saw_wifi = false;
+            }
+        }
+    }
+
+    None
 }
 
 #[cfg(target_os = "windows")]
@@ -409,6 +467,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_parse_airport_output() {
         let output =
             "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
@@ -420,6 +479,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_parse_airport_output_skips_hidden_ssids() {
         // Hidden network: airport leaves the SSID column empty and the
         // BSSID slides into the first column. We must not report the BSSID
@@ -433,6 +493,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_parse_airport_output_keeps_ssids_with_colons() {
         // An SSID that contains colons and is NOT in strict 2-hex-per-segment
         // BSSID format must be kept. The old check
@@ -447,6 +508,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_parse_airport_output_still_drops_strict_bssids() {
         // Regression: a 17-char 2-hex-per-segment string in column 0 must
         // still be dropped (it's a real BSSID, either a hidden-SSID

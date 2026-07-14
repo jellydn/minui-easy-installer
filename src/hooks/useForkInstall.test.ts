@@ -14,7 +14,8 @@ vi.mock("../types/release", () => ({
 }));
 
 vi.mock("../types/install", () => ({
-  installMinui: vi.fn(),
+  startInstallAndWait: vi.fn(),
+  cancelInstall: vi.fn(),
 }));
 
 vi.mock("../types/validate", () => ({
@@ -36,9 +37,9 @@ describe("useForkInstall", () => {
     vi.clearAllMocks();
   });
 
-  it("installMinUI surfaces an error when installMinui returns failure", async () => {
+  it("installMinUI surfaces an error when startInstallAndWait throws", async () => {
     const { fetchMinUIRelease } = await import("../types/release");
-    const { installMinui } = await import("../types/install");
+    const { startInstallAndWait } = await import("../types/install");
 
     (fetchMinUIRelease as Mock).mockResolvedValue({
       success: true,
@@ -50,14 +51,7 @@ describe("useForkInstall", () => {
         fork: FORK_PRESETS.official,
       },
     });
-    (installMinui as Mock).mockResolvedValue({
-      success: false,
-      error: { message: "SD card full", code: "COPY_ERROR" },
-      base_files_copied: 0,
-      extras_files_copied: 0,
-      extras_warning: null,
-      rom_dirs_created: 0,
-    });
+    (startInstallAndWait as Mock).mockRejectedValue(new Error("SD card full"));
 
     const { result } = renderUseForkInstall({
       selectedDevice: "miyoo-mini-plus",
@@ -79,7 +73,7 @@ describe("useForkInstall", () => {
 
   it("installMinUI surfaces the version-metadata warning via extrasWarning", async () => {
     const { fetchMinUIRelease } = await import("../types/release");
-    const { installMinui } = await import("../types/install");
+    const { startInstallAndWait } = await import("../types/install");
     const { validateInstallation } = await import("../types/validate");
 
     (fetchMinUIRelease as Mock).mockResolvedValue({
@@ -92,16 +86,13 @@ describe("useForkInstall", () => {
         fork: FORK_PRESETS.official,
       },
     });
-    (installMinui as Mock).mockResolvedValue({
+    (startInstallAndWait as Mock).mockResolvedValue({
       success: true,
-      data: {
-        success: true,
-        error: null,
-        base_files_copied: 5,
-        extras_files_copied: 0,
-        extras_warning: "Failed to write version metadata: permission denied",
-        rom_dirs_created: 0,
-      },
+      error: null,
+      base_files_copied: 5,
+      extras_files_copied: 0,
+      extras_warning: "Failed to write version metadata: permission denied",
+      rom_dirs_created: 0,
     });
     (validateInstallation as Mock).mockResolvedValue({
       success: true,

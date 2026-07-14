@@ -32,40 +32,6 @@ fn verify_archive_checksum(file_path: String, expected_checksum: String) -> Resu
     download::verify_checksum(&file_path, &expected_checksum)
 }
 
-#[allow(clippy::too_many_arguments)]
-#[tauri::command]
-async fn install_minui(
-    app_handle: AppHandle,
-    base_url: String,
-    extras_url: Option<String>,
-    base_checksum: Option<String>,
-    extras_checksum: Option<String>,
-    sd_mount: String,
-    platform: String,
-    extras_platform: String,
-    version: String,
-    fork_name: Option<String>,
-) -> Result<install::InstallResult, String> {
-    let handle = app_handle.clone();
-    let progress = Arc::new(move |event: install::InstallProgressEvent| {
-        if let Err(e) = handle.emit("install-progress", event) {
-            eprintln!("Warning: failed to emit install progress event: {}", e);
-        }
-    });
-    let options = install::InstallOptions {
-        base_url,
-        extras_url,
-        base_checksum,
-        extras_checksum,
-        sd_mount,
-        platform,
-        extras_platform,
-        version,
-        fork_name,
-    };
-    install::install_minui(&options, progress).await
-}
-
 /// Registry of in-flight install cancellation tokens.
 ///
 /// The UI never runs concurrent installs in a single window, so we keep
@@ -84,29 +50,30 @@ impl InstallRegistry {
     }
 }
 
+/// Synchronous install (deprecated — prefer start_install for progress streaming).
+#[tauri::command]
+async fn install_minui(
+    options: install::InstallOptions,
+) -> Result<install::InstallResult, String> {
+    install::install_minui(&options, Arc::new(|_| {})).await
+}
+
 /// Start a cancellable install. Returns immediately with the install id
 /// (currently always "current" since we support one install at a time).
 /// The actual install runs in a background task; the result is emitted
 /// as a `install-complete` or `install-error` event.
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
 async fn start_install(
     app_handle: AppHandle,
     registry: tauri::State<'_, Arc<InstallRegistry>>,
-    base_url: String,
-    extras_url: Option<String>,
-    base_checksum: Option<String>,
-    extras_checksum: Option<String>,
-    sd_mount: String,
-    platform: String,
-    extras_platform: String,
-    version: String,
-    fork_name: Option<String>,
+    options: install::InstallOptions,
 ) -> Result<String, String> {
     let token = CancellationToken::new();
     {
-        let mut slot = registry.token.lock().unwrap();
-        // Cancel any prior install before replacing.
+        let mut slot = registry
+            .token
+            .lock()
+            .map_err(|_| "Internal error: state lock is poisoned".to_string())?;
         if let Some(old) = slot.take() {
             old.cancel();
         }
@@ -119,30 +86,30 @@ async fn start_install(
             eprintln!("Warning: failed to emit install progress event: {}", e);
         }
     });
-    let download_progress: pipeline::DownloadProgressCallback = Arc::new(move |_bytes, _total| {
-        // Byte-level progress events are emitted via the existing
-        // install-progress channel with the `step: "download"` label.
-        // Future enhancement: extend InstallProgressEvent with
-        // currentBytes / totalBytes and emit them here.
+
+    let handle_for_dl = app_handle.clone();
+    let download_progress: pipeline::DownloadProgressCallback = Arc::new(move |bytes, total| {
+        let event = install::InstallProgressEvent {
+            step: "download".to_string(),
+            details: String::new(),
+            current_bytes: Some(bytes),
+            total_bytes: total,
+        };
+        if let Err(e) = handle_for_dl.emit("install-progress", event) {
+            eprintln!("Warning: failed to emit download progress event: {}", e);
+        }
     });
-    let options = install::InstallOptions {
-        base_url,
-        extras_url,
-        base_checksum,
-        extras_checksum,
-        sd_mount,
-        platform,
-        extras_platform,
-        version,
-        fork_name,
-    };
 
     let registry_for_task = registry.inner().clone();
     let result_handle = app_handle.clone();
     tokio::spawn(async move {
-        let res =
-            install::install_minui_with_cancel(&options, progress, download_progress, token).await;
-        // Clear the slot on completion.
+        let res = install::install_minui_with_cancel(
+            &options,
+            progress,
+            download_progress,
+            token,
+        )
+        .await;
         if let Ok(mut slot) = registry_for_task.token.lock() {
             *slot = None;
         }
@@ -162,7 +129,11 @@ async fn start_install(
 /// Cancel an in-flight install. No-op if no install is running.
 #[tauri::command]
 fn cancel_install(registry: tauri::State<'_, Arc<InstallRegistry>>) -> Result<(), String> {
-    if let Some(token) = registry.token.lock().unwrap().as_ref() {
+    let slot = registry
+        .token
+        .lock()
+        .map_err(|_| "Internal error: state lock is poisoned".to_string())?;
+    if let Some(token) = slot.as_ref() {
         token.cancel();
     }
     Ok(())
@@ -329,8 +300,9 @@ pub fn run() {
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
-                let window = app.get_webview_window("main").unwrap();
-                window.open_devtools();
+                if let Some(window) = app.get_webview_window("main") {
+                    window.open_devtools();
+                }
             }
             Ok(())
         })
@@ -402,6 +374,52 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(!err.is_empty());
+    }
+
+    // ---- install_minui (IPC command wrapper) ----
+    //
+    // This test calls the #[tauri::command] wrapper directly to prove
+    // the command is registered and not gated behind #[cfg(test)].
+    // If someone adds #[cfg(test)] back to the underlying function, the
+    // wrapper won't compile — catching the regression in CI.
+
+    #[tokio::test]
+    async fn test_install_minui_command_errors_on_bad_url() {
+        let options = install::InstallOptions {
+            base_url: "http://127.0.0.1:1/never-exists.zip".to_string(),
+            extras_url: None,
+            base_checksum: None,
+            extras_checksum: None,
+            sd_mount: "/tmp".to_string(),
+            platform: "trimui-brick".to_string(),
+            extras_platform: "trimui-brick".to_string(),
+            version: "test".to_string(),
+            fork_name: None,
+        };
+        let result = install_minui(options).await;
+        // The command should return a proper Err(String), not panic
+        // and not return a Tauri "command not found" transport error.
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(!err.is_empty());
+    }
+
+    // ---- start_install (IPC command wrapper) ----
+    //
+    // Compile-time guard: proves start_install exists in the module
+    // scope with the correct Tauri command signature. We can't easily
+    // call it (needs AppHandle + State from a running app), but this
+    // test catches the same class of regression that broke
+    // install_minui — if someone removes the function from the module
+    // or renames it, this symbol reference won't compile.
+    //
+    // Note: #[cfg(test)] gating is undetectable from within tests
+    // (the symbol would still be visible here). The generate_handler!
+    // macro at the top of the file is the runtime guard for that.
+
+    #[test]
+    fn test_start_install_command_is_registered() {
+        let _ = start_install;
     }
 
     // ---- validate::validate_installation ----
