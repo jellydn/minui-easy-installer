@@ -407,6 +407,34 @@ mod tests {
         assert!(!err.is_empty());
     }
 
+    // ---- install_minui (IPC command wrapper) ----
+    //
+    // This test calls the #[tauri::command] wrapper directly to prove
+    // the command is registered and not gated behind #[cfg(test)].
+    // If someone adds #[cfg(test)] back to the underlying function, the
+    // wrapper won't compile — catching the regression in CI.
+
+    #[tokio::test]
+    async fn test_install_minui_command_errors_on_bad_url() {
+        let result = install_minui(
+            "http://127.0.0.1:1/never-exists.zip".to_string(),
+            None,
+            None,
+            None,
+            "/tmp".to_string(),
+            "trimui-brick".to_string(),
+            "trimui-brick".to_string(),
+            "test".to_string(),
+            None,
+        )
+        .await;
+        // The command should return a proper Err(String), not panic
+        // and not return a Tauri "command not found" transport error.
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(!err.is_empty());
+    }
+
     // ---- validate::validate_installation ----
 
     #[test]
