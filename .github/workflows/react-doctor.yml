@@ -42,6 +42,9 @@ jobs:
           persist-credentials: false
 
       - uses: millionco/react-doctor@547e1e4ecdb70315d81a91ec3605701d58616ee2 # v2
+        continue-on-error: true
+        with:
+          blocking: none
         # Advisory by default: React Doctor reports findings on every PR — a
         # sticky summary comment, inline review comments, and a commit status
         # with the health score — but never fails the check, so it won't red-X

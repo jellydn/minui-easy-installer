@@ -1,0 +1,122 @@
+# Release CI — builds distributable Tauri bundles (DMG for macOS, MSI for
+# Windows) and creates a GitHub Release with the artifacts attached.
+#
+# Triggered by pushing a tag matching 'v*' (e.g. 'v0.1.0', 'v1.0.0-beta').
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-release-macos-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: cargo-release-macos-
+
+      - name: Build and bundle (macOS)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "MinUI Easy Installer ${{ github.ref_name }}"
+          releaseBody: |
+            ## MinUI Easy Installer ${{ github.ref_name }}
+
+            **Platforms**: macOS (Apple Silicon + Intel), Windows (x64)
+
+            ### Installation
+            1. Download the installer for your platform
+            2. macOS: open the `.dmg` and drag to Applications
+            3. Windows: run the `.msi` installer
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app.tar.gz
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-release-windows-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: cargo-release-windows-
+
+      - name: Build and bundle (Windows)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "MinUI Easy Installer ${{ github.ref_name }}"
+          releaseBody: |
+            ## MinUI Easy Installer ${{ github.ref_name }}
+
+            **Platforms**: macOS (Apple Silicon + Intel), Windows (x64)
+
+            ### Installation
+            1. Download the installer for your platform
+            2. macOS: open the `.dmg` and drag to Applications
+            3. Windows: run the `.msi` installer
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
