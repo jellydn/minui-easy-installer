@@ -1,11 +1,11 @@
-# Release CI — builds distributable Tauri bundles (DMG for macOS, MSI for
+# Release CI - builds distributable Tauri bundles (DMG for macOS, MSI for
 # Windows) and creates a GitHub Release with the artifacts attached.
 #
 # Triggered by pushing a tag matching 'v*' (e.g. 'v0.1.0', 'v1.0.0-beta').
 
 name: Release
 
-"on":
+on:
   push:
     tags: ["v*"]
 

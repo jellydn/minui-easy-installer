@@ -1,13 +1,13 @@
-# Build CI — compiles the full Tauri app on macOS and Windows to catch
+# Build CI - compiles the full Tauri app on macOS and Windows to catch
 # platform-specific compilation errors that the Linux-only rust.yml can miss
 # (e.g. macOS-only APIs behind #[cfg(target_os = "macos")], Windows FFI).
 #
-# Runs on PRs (opened, sync, reopen) and pushes to main. Does NOT bundle —
+# Runs on PRs (opened, sync, reopen) and pushes to main. Does NOT bundle;
 # just verifies `cargo build --release` passes with the frontend built.
 
 name: Build
 
-"on":
+on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
@@ -56,13 +56,13 @@ jobs:
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          # Tauri v2 needs the WebKit framework — included in macOS by default.
+          # Tauri v2 needs the WebKit framework - included in macOS by default.
           echo "No extra system deps needed on macOS."
 
       - name: Install system dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
-          # Tauri v2 needs WebView2 — pre-installed on Windows 10+ / Server 2022.
+          # Tauri v2 needs WebView2 - pre-installed on Windows 10+ / Server 2022.
           echo "No extra system deps needed on Windows."
 
       - name: Build frontend
