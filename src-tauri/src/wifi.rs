@@ -70,16 +70,18 @@ pub fn write_wifi_config(sd_mount: &str, ssid: &str, password: &str) -> Result<(
 ///
 /// Returns the SSID of the network currently connected, or None if not
 /// connected to WiFi or if the platform doesn't support detection.
-///
-/// TODO(linux): Linux currently has no get_current_wifi_ssid implementation.
-/// Could use `nmcli -t -f ACTIVE,SSID dev wifi` or `iwgetid -r`.
 pub fn get_current_wifi_ssid() -> Option<String> {
     #[cfg(target_os = "macos")]
     {
         get_current_wifi_ssid_macos()
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        get_current_wifi_ssid_linux()
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         None
     }
@@ -243,6 +245,50 @@ fn scan_wifi_linux() -> Vec<String> {
     }
 
     Vec::new()
+}
+
+/// Get the currently connected WiFi SSID on Linux.
+///
+/// Tries `iwgetid -r` first (WiFi-only, part of wireless-tools).
+/// Falls back to `nmcli` filtered to WiFi devices (NetworkManager).
+#[cfg(target_os = "linux")]
+fn get_current_wifi_ssid_linux() -> Option<String> {
+    // Try iwgetid first — it only returns WiFi SSIDs, never ethernet.
+    if let Ok(output) = Command::new("iwgetid").arg("-r").output() {
+        if output.status.success() {
+            let ssid = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !ssid.is_empty() {
+                return Some(ssid);
+            }
+        }
+    }
+
+    // Fall back to nmcli — filter to WiFi devices only.
+    if let Ok(output) = Command::new("nmcli")
+        .args(["-t", "-f", "GENERAL.TYPE,GENERAL.CONNECTION", "device", "show"])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut saw_wifi = false;
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if trimmed == "GENERAL.TYPE:wifi" {
+                    saw_wifi = true;
+                    continue;
+                }
+                if saw_wifi && trimmed.starts_with("GENERAL.CONNECTION:") {
+                    let ssid = trimmed.strip_prefix("GENERAL.CONNECTION:").unwrap_or("").trim();
+                    if !ssid.is_empty() {
+                        return Some(ssid.to_string());
+                    }
+                }
+                saw_wifi = false;
+            }
+        }
+    }
+
+    None
 }
 
 #[cfg(target_os = "windows")]

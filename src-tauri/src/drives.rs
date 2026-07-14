@@ -370,12 +370,11 @@ pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
 #[cfg(not(target_os = "macos"))]
 #[cfg(not(target_os = "windows"))]
 pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
-    // TODO(linux): add udev-based removable detection via /sys/block/*/removable.
-    // The current lsblk fallback returns all block devices including internal drives.
-    // For Phase 2: filter by `lsblk -o RM` (removable flag) and cross-reference
-    // with /proc/mounts to get filesystem info.
+    // Use lsblk with the RM (removable) column so we can filter out
+    // internal drives. On Linux, internal SSDs/HDDs have RM=0 while SD
+    // cards and USB sticks report RM=1.
     let output = Command::new("lsblk")
-        .args(["-o", "NAME,SIZE,FSTYPE,MOUNTPOINT", "-ln", "-J"])
+        .args(["-o", "NAME,SIZE,FSTYPE,MOUNTPOINT,RM", "-ln", "-J"])
         .output();
 
     if let Ok(output) = output {
@@ -385,6 +384,18 @@ pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> {
                 if let Some(devices) = json["blockdevices"].as_array() {
                     let mut drives = Vec::new();
                     for device in devices {
+                        // Only include removable devices (RM=1 or "true").
+                        let rm = device["rm"];
+                        let is_removable = match rm {
+                            Some(serde_json::Value::String(s)) => s == "1" || s == "true",
+                            Some(serde_json::Value::Number(n)) => n.as_u64() == Some(1),
+                            Some(serde_json::Value::Bool(b)) => *b,
+                            _ => false,
+                        };
+                        if !is_removable {
+                            continue;
+                        }
+
                         let mountpoint = device["mountpoint"].as_str().unwrap_or("");
                         if mountpoint.is_empty() {
                             continue;
