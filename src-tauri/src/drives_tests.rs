@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(target_os = "macos")]
 use std::path::Path;
 
 /// Fake detector that returns pre-configured drives without shelling out.

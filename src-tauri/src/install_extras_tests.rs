@@ -1,7 +1,6 @@
 //! Tests for extras archive copying and version metadata writing.
 
 use super::*;
-use std::io::Write;
 
 #[test]
 fn test_copy_extras_files_filters_by_platform() {
