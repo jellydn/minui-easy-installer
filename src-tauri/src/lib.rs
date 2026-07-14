@@ -22,14 +22,30 @@ async fn get_removable_drives() -> Result<Vec<drives::RemovableDrive>, String> {
     drives::list_removable_drives()
 }
 
-#[tauri::command]
-async fn format_drive(mount_path: String, volume_name: String) -> Result<(), String> {
-    drives::format_drive(&mount_path, &volume_name)
+/// Options for formatting a drive, received from the frontend via Tauri IPC.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatDriveOptions {
+    pub mount_path: String,
+    pub volume_name: String,
 }
 
 #[tauri::command]
-fn verify_archive_checksum(file_path: String, expected_checksum: String) -> Result<bool, String> {
-    download::verify_checksum(&file_path, &expected_checksum)
+async fn format_drive(opts: FormatDriveOptions) -> Result<(), String> {
+    drives::format_drive(&opts.mount_path, &opts.volume_name)
+}
+
+/// Options for verifying an archive checksum, received from the frontend via Tauri IPC.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyChecksumOptions {
+    pub file_path: String,
+    pub expected_checksum: String,
+}
+
+#[tauri::command]
+fn verify_archive_checksum(opts: VerifyChecksumOptions) -> Result<bool, String> {
+    download::verify_checksum(&opts.file_path, &opts.expected_checksum)
 }
 
 /// Registry of in-flight install cancellation tokens.
@@ -202,13 +218,18 @@ async fn get_bios_status(sd_mount: String) -> Result<bios::BiosStatus, String> {
     bios::status(&sd_mount)
 }
 
+/// Options for installing a BIOS file, received from the frontend via Tauri IPC.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BiosInstallOptions {
+    pub sd_mount: String,
+    pub entry_id: String,
+    pub base64_payload: String,
+}
+
 #[tauri::command]
-async fn install_bios_file(
-    sd_mount: String,
-    entry_id: String,
-    base64_payload: String,
-) -> Result<String, String> {
-    bios::install_bios_from_bytes(&sd_mount, &entry_id, &base64_payload)
+async fn install_bios_file(opts: BiosInstallOptions) -> Result<String, String> {
+    bios::install_bios_from_bytes(&opts.sd_mount, &opts.entry_id, &opts.base64_payload)
 }
 
 #[tauri::command]
@@ -216,12 +237,19 @@ async fn detect_installed_packages(sd_mount: String) -> Vec<package::InstalledPa
     package::detect_installed_packages(&sd_mount)
 }
 
+/// Options for checking package updates, received from the frontend via Tauri IPC.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckPackageUpdatesOptions {
+    pub sd_mount: String,
+    pub registry_packages: Vec<(String, String)>,
+}
+
 #[tauri::command]
 async fn check_package_updates(
-    sd_mount: String,
-    registry_packages: Vec<(String, String)>,
+    opts: CheckPackageUpdatesOptions,
 ) -> Vec<package::PackageUpdateInfo> {
-    package::check_package_updates(&sd_mount, &registry_packages)
+    package::check_package_updates(&opts.sd_mount, &opts.registry_packages)
 }
 
 #[tauri::command]
@@ -231,8 +259,18 @@ async fn check_sd_card_health(
     health::check_sd_card_health(&opts.sd_mount, opts.device_platform.as_deref())
 }
 
+/// Allowed URLs for fetch_url. Prevents SSRF by restricting HTTP
+/// fetches to known endpoints. Add new endpoints here as needed.
+const ALLOWED_URLS: &[&str] = &[
+    "https://packages.minui.dev/registry/index.json",
+];
+
 #[tauri::command]
 async fn fetch_url(url: String) -> Result<String, String> {
+    if !ALLOWED_URLS.iter().any(|allowed| url == *allowed) {
+        return Err(format!("URL not allowed: {}", url));
+    }
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -507,7 +545,11 @@ mod tests {
     #[test]
     fn test_check_minui_version_on_empty_tempdir() {
         let temp = tempfile::tempdir().unwrap();
-        let result = version::check_for_updates(temp.path().to_str().unwrap(), Some("2025.01.01"));
+        let result = version::check_for_updates_with_prefix(
+            temp.path().to_str().unwrap(),
+            Some("2025.01.01"),
+            None,
+        );
         // No minui.txt on a fresh card → installed = None, update_available = true
         assert!(result.installed.is_none());
         assert!(result.update_available);

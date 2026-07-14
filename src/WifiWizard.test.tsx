@@ -171,9 +171,11 @@ describe("WifiWizard", () => {
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("write_wifi_config", {
-        sdMount: "/Volumes/SD",
-        ssid: "MyNetwork",
-        password: "secret123",
+        opts: {
+          sdMount: "/Volumes/SD",
+          ssid: "MyNetwork",
+          password: "secret123",
+        },
       });
     });
   });

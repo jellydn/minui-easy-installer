@@ -1,6 +1,15 @@
 use std::fs;
 use std::path::Path;
 
+/// Options for version check, received from the frontend via Tauri IPC.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionCheckOptions {
+    pub sd_mount: String,
+    pub latest_version: Option<String>,
+    pub expected_prefix: Option<String>,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InstalledVersion {
     pub version: String,
@@ -205,24 +214,6 @@ pub fn is_update_available(installed: &str, latest: &str) -> bool {
     compare_versions(installed, latest)
 }
 
-/// Check for version updates by comparing installed version with latest release.
-#[allow(dead_code)]
-pub fn check_for_updates(sd_mount: &str, latest_version: Option<&str>) -> VersionCheckResult {
-    // Backwards compat: no prefix filter by default.
-    check_for_updates_with_prefix(sd_mount, latest_version, None)
-}
-
-/// Version check options, received from the frontend via Tauri IPC.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VersionCheckOptions {
-    pub sd_mount: String,
-    pub latest_version: Option<String>,
-    pub expected_prefix: Option<String>,
-}
-
-/// Check for version updates, only accepting installations where the
-/// minui.txt prefix matches `expected_prefix` (e.g. "MinUI", "MinUI-Zero").
 pub fn check_for_updates_with_prefix(
     sd_mount: &str,
     latest_version: Option<&str>,

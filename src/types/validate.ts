@@ -43,10 +43,12 @@ export async function validateInstallation(options: {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const result = await invoke<ValidationResult>("validate_installation", {
-      sdMount: options.sdMount,
-      platform: options.platform,
-      hasExtras: options.hasExtras,
-      extrasDir: options.extrasDir,
+      opts: {
+        sdMount: options.sdMount,
+        platform: options.platform,
+        hasExtras: options.hasExtras,
+        extrasDir: options.extrasDir,
+      },
     });
 
     return { success: true, data: result };
@@ -124,8 +126,10 @@ export async function checkSdCardHealth(options: {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const result = await invoke<HealthCheckResult>("check_sd_card_health", {
-      sdMount: options.sdMount,
-      devicePlatform: options.devicePlatform || null,
+      opts: {
+        sdMount: options.sdMount,
+        devicePlatform: options.devicePlatform || null,
+      },
     });
 
     return { success: true, data: result };

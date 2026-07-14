@@ -26,9 +26,11 @@ export async function checkMinuiVersion(options: {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const result = await invoke<VersionCheckResult>("check_minui_version", {
-      sdMount: options.sdMount,
-      latestVersion: options.latestVersion || null,
-      expectedPrefix: options.expectedPrefix || null,
+      opts: {
+        sdMount: options.sdMount,
+        latestVersion: options.latestVersion || null,
+        expectedPrefix: options.expectedPrefix || null,
+      },
     });
 
     return { success: true, data: result };

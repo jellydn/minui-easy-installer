@@ -97,13 +97,15 @@ export async function installPackage(options: {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const result = await invoke<PackageInstallResult>("install_package", {
-      artifactUrl: options.artifactUrl,
-      checksum: options.checksum || null,
-      sdMount: options.sdMount,
-      targetDir: options.targetDir,
-      extractToRoot: options.extractToRoot,
-      pakName: options.pakName,
-      platform: options.platform,
+      opts: {
+        artifactUrl: options.artifactUrl,
+        checksum: options.checksum || null,
+        sdMount: options.sdMount,
+        targetDir: options.targetDir,
+        extractToRoot: options.extractToRoot,
+        pakName: options.pakName,
+        platform: options.platform,
+      },
     });
 
     if (result.success) {
@@ -146,8 +148,10 @@ export async function checkPackageUpdates(
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     return await invoke<PackageUpdateInfo[]>("check_package_updates", {
-      sdMount,
-      registryPackages,
+      opts: {
+        sdMount,
+        registryPackages,
+      },
     });
   } catch {
     return [];

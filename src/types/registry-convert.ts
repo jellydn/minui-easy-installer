@@ -4,6 +4,9 @@ import type {
   PackageRegistryFetchResult,
 } from "./package";
 
+/// Length of a SHA-256 hex digest string.
+const SHA256_HEX_LENGTH = 64;
+
 // ---- Store JSON format interfaces ----
 
 interface StoreEmuPak {
@@ -102,7 +105,10 @@ function validateStoreEntry(
     }
   }
   if (pak.checksum !== undefined) {
-    if (typeof pak.checksum !== "string" || pak.checksum.length !== 64) {
+    if (
+      typeof pak.checksum !== "string" ||
+      pak.checksum.length !== SHA256_HEX_LENGTH
+    ) {
       return {
         entryName: pak.name,
         field: "checksum",

@@ -63,9 +63,11 @@ function WifiWizard({ sdMount, onComplete, onCancel }: WifiWizardProps) {
 
     try {
       await invoke("write_wifi_config", {
-        sdMount,
-        ssid: ssid.trim(),
-        password,
+        opts: {
+          sdMount,
+          ssid: ssid.trim(),
+          password,
+        },
       });
 
       setSuccess(true);

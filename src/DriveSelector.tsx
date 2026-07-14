@@ -44,8 +44,10 @@ function DriveSelector({ selectedDrive, onSelectDrive }: DriveSelectorProps) {
 
     try {
       await invoke("format_drive", {
-        mountPath: selectedDrive.mount_path,
-        volumeName: selectedDrive.name,
+        opts: {
+          mountPath: selectedDrive.mount_path,
+          volumeName: selectedDrive.name,
+        },
       });
       setFormatSuccess(true);
       setShowFormatConfirm(false);

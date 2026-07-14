@@ -340,7 +340,7 @@ fn test_check_for_updates_with_install() {
     f.write_all(b"MinUI v2024.12.25").unwrap();
     drop(f);
 
-    let result = check_for_updates(sd_root.to_str().unwrap(), Some("2025.01.01"));
+    let result = check_for_updates_with_prefix(sd_root.to_str().unwrap(), Some("2025.01.01"), None);
     assert!(result.update_available);
     assert!(result.installed.is_some());
     assert_eq!(result.latest, Some("2025.01.01".to_string()));
@@ -349,7 +349,7 @@ fn test_check_for_updates_with_install() {
 #[test]
 fn test_check_for_updates_no_install() {
     let temp = tempfile::tempdir().unwrap();
-    let result = check_for_updates(temp.path().to_str().unwrap(), Some("2025.01.01"));
+    let result = check_for_updates_with_prefix(temp.path().to_str().unwrap(), Some("2025.01.01"), None);
     assert!(result.update_available);
     assert!(result.installed.is_none());
 }
@@ -363,6 +363,6 @@ fn test_check_for_updates_up_to_date() {
     f.write_all(b"MinUI v2025.01.01").unwrap();
     drop(f);
 
-    let result = check_for_updates(sd_root.to_str().unwrap(), Some("2025.01.01"));
+    let result = check_for_updates_with_prefix(sd_root.to_str().unwrap(), Some("2025.01.01"), None);
     assert!(!result.update_available);
 }
