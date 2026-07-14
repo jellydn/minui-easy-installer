@@ -63,8 +63,20 @@ jobs:
             1. Download the installer for your platform
             2. macOS: open the `.dmg` and drag to Applications
             3. Windows: run the `.msi` installer
+
+            > **macOS users:** On first launch, right-click the app and select "Open" to bypass Gatekeeper.
           releaseDraft: true
           prerelease: ${{ contains(inputs.tagName || github.ref_name, 'beta') || contains(inputs.tagName || github.ref_name, 'alpha') || contains(inputs.tagName || github.ref_name, 'rc') }}
+
+      - name: Ad-hoc sign macOS bundle
+        run: |
+          APP_PATH="src-tauri/target/release/bundle/macos/"*.app
+          if [ -d $APP_PATH ]; then
+            codesign --force --deep --sign - "$APP_PATH"
+            echo "Ad-hoc signed: $APP_PATH"
+          else
+            echo "No .app bundle found for signing"
+          fi
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -117,6 +129,8 @@ jobs:
             1. Download the installer for your platform
             2. macOS: open the `.dmg` and drag to Applications
             3. Windows: run the `.msi` installer
+
+            > **macOS users:** On first launch, right-click the app and select "Open" to bypass Gatekeeper.
           releaseDraft: true
           prerelease: ${{ contains(inputs.tagName || github.ref_name, 'beta') || contains(inputs.tagName || github.ref_name, 'alpha') || contains(inputs.tagName || github.ref_name, 'rc') }}
 

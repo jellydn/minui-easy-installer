@@ -7,7 +7,8 @@
 
 > The easiest way to install and manage MinUI on retro handheld devices.
 
-Think "Balena Etcher for MinUI" — insert an SD card, select your device, click install.
+> **macOS users:** On first launch, right-click the app and select "Open" to bypass Gatekeeper.
+> If that doesn't work, run `xattr -cr /Applications/MinUI\ Easy\ Installer.app` in Terminal, then open again.
 
 ## ✨ Features
 
@@ -73,6 +74,7 @@ just check        # Run all checks (lint + typecheck + Rust fmt/clippy)
 just fmt          # Format all code
 just lint         # Lint with oxlint
 just tauri-dev    # Run Tauri dev
+just sign         # Ad-hoc sign macOS .app bundle (fixes Gatekeeper)
 ```
 
 ## Project Structure

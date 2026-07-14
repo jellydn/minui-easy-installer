@@ -44,6 +44,15 @@ check:
 fmt: fmt-ts
     cd src-tauri && cargo fmt
 
+# Ad-hoc sign the macOS app bundle (fixes Gatekeeper "damaged" error)
+sign:
+    @APP=$$(ls -d src-tauri/target/release/bundle/macos/*.app 2>/dev/null | head -1); \
+    if [ -n "$$APP" ]; then \
+        codesign --force --deep --sign - "$$APP" && echo "Signed: $$APP"; \
+    else \
+        echo "No .app bundle found. Run 'cargo tauri build' first."; \
+    fi
+
 # Run pre-commit hooks
 pre-commit:
     prek run --all-files
