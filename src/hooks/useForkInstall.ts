@@ -14,7 +14,7 @@ import type {
   InstallProgressEvent,
   InstallResult,
 } from "../types/install";
-import { startInstallAndWait } from "../types/install";
+import { cancelInstall, startInstallAndWait } from "../types/install";
 import { fetchPackageRegistry, installPackage } from "../types/package";
 import { fetchMinUIRelease, type MinUIRelease } from "../types/release";
 import type { ValidationResult } from "../types/validate";
@@ -53,6 +53,8 @@ export interface UseForkInstallResult {
   isInstalling: boolean;
   /** Run a single MinUI install (called from the Confirm dialog). */
   installMinUI: () => Promise<void>;
+  /** Cancel the in-flight install, if any. */
+  cancelInstall: () => void;
   /** Update MinUI + all pending packages concurrently. */
   updateAll: () => Promise<void>;
   /** Status of the "update all" flow, surfaced separately from `install`. */
@@ -234,8 +236,15 @@ export function useForkInstall(
         validationResult: valResult.success ? valResult.data : null,
       }));
     } catch (err) {
-      setInstall((s) => ({ ...s, error: errorMessage(err), phase: "error" }));
+      // When the user explicitly cancelled, keep the cancellation message
+      // instead of overwriting it with the backend's error string.
+      if (cancelledRef.current) {
+        setInstall((s) => ({ ...s, phase: "error" }));
+      } else {
+        setInstall((s) => ({ ...s, error: errorMessage(err), phase: "error" }));
+      }
     } finally {
+      cancelledRef.current = false;
       unlisten?.();
     }
   }, [selectedDevice, selectedDriveMount]);
@@ -351,8 +360,24 @@ export function useForkInstall(
     install.phase !== "complete" &&
     install.phase !== "error";
 
+  // Track explicit cancellation so the backend's install-error event
+  // (fired after a cancel) doesn't overwrite the user-facing message.
+  const cancelledRef = useRef(false);
+
+  const cancelAndReset = useCallback(() => {
+    cancelledRef.current = true;
+    void cancelInstall();
+    setInstall((s) => ({
+      ...s,
+      phase: "error",
+      error: "Installation cancelled",
+      message: "",
+    }));
+  }, []);
+
   return {
     install,
+    cancelInstall: cancelAndReset,
     isInstalling,
     installMinUI,
     updateAll,
