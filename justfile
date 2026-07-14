@@ -53,6 +53,15 @@ sign:
         echo "No .app bundle found. Run 'cargo tauri build' first."; \
     fi
 
+# Verify the macOS app bundle code signature
+verify-sign:
+    @APP=$$(ls -d src-tauri/target/release/bundle/macos/*.app 2>/dev/null | head -1); \
+    if [ -n "$$APP" ]; then \
+        codesign -vvv --deep --strict "$$APP" && echo "Signature valid: $$APP"; \
+    else \
+        echo "No .app bundle found. Run 'cargo tauri build' first."; \
+    fi
+
 # Run pre-commit hooks
 pre-commit:
     prek run --all-files

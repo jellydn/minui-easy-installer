@@ -64,7 +64,7 @@ jobs:
             2. macOS: open the `.dmg` and drag to Applications
             3. Windows: run the `.msi` installer
 
-            > **macOS users:** On first launch, right-click the app and select "Open" to bypass Gatekeeper.
+            > **macOS users:** After dragging to Applications, [right-click the app, select Open](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac) to approve it. Or run `xattr -cr /Applications/MinUI\ Easy\ Installer.app` in Terminal.
           releaseDraft: true
           prerelease: ${{ contains(inputs.tagName || github.ref_name, 'beta') || contains(inputs.tagName || github.ref_name, 'alpha') || contains(inputs.tagName || github.ref_name, 'rc') }}
 
@@ -77,6 +77,9 @@ jobs:
             echo "Found: $APP_PATH"
             codesign --force --deep --sign - "$APP_PATH"
             echo "Ad-hoc signed: $APP_PATH"
+            echo "Verifying signature..."
+            codesign -vvv --deep --strict "$APP_PATH"
+            echo "Signature valid."
           else
             echo "No .app bundle found for signing (non-fatal)"
           fi
@@ -133,7 +136,7 @@ jobs:
             2. macOS: open the `.dmg` and drag to Applications
             3. Windows: run the `.msi` installer
 
-            > **macOS users:** On first launch, right-click the app and select "Open" to bypass Gatekeeper.
+            > **macOS users:** After dragging to Applications, [right-click the app, select Open](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac) to approve it. Or run `xattr -cr /Applications/MinUI\ Easy\ Installer.app` in Terminal.
           releaseDraft: true
           prerelease: ${{ contains(inputs.tagName || github.ref_name, 'beta') || contains(inputs.tagName || github.ref_name, 'alpha') || contains(inputs.tagName || github.ref_name, 'rc') }}
 

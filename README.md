@@ -7,8 +7,8 @@
 
 > The easiest way to install and manage MinUI on retro handheld devices.
 
-> **macOS users:** On first launch, right-click the app and select "Open" to bypass Gatekeeper.
-> If that doesn't work, run `xattr -cr /Applications/MinUI\ Easy\ Installer.app` in Terminal, then open again.
+> **macOS users:** After dragging to Applications, [right-click the app and select Open](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac) to approve it on first launch.
+> If you see "is damaged and can't be opened", run `xattr -cr /Applications/MinUI\ Easy\ Installer.app` in Terminal — this clears the quarantine flag that macOS adds to downloaded apps.
 
 ## ✨ Features
 
