@@ -70,6 +70,9 @@ pub fn write_wifi_config(sd_mount: &str, ssid: &str, password: &str) -> Result<(
 ///
 /// Returns the SSID of the network currently connected, or None if not
 /// connected to WiFi or if the platform doesn't support detection.
+///
+/// TODO(linux): Linux currently has no get_current_wifi_ssid implementation.
+/// Could use `nmcli -t -f ACTIVE,SSID dev wifi` or `iwgetid -r`.
 pub fn get_current_wifi_ssid() -> Option<String> {
     #[cfg(target_os = "macos")]
     {
@@ -409,6 +412,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_parse_airport_output() {
         let output =
             "                            SSID BSSID             RSSI CHANNEL HT CC SECURITY\n\
@@ -420,6 +424,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_parse_airport_output_skips_hidden_ssids() {
         // Hidden network: airport leaves the SSID column empty and the
         // BSSID slides into the first column. We must not report the BSSID
@@ -433,6 +438,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_parse_airport_output_keeps_ssids_with_colons() {
         // An SSID that contains colons and is NOT in strict 2-hex-per-segment
         // BSSID format must be kept. The old check
@@ -447,6 +453,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_parse_airport_output_still_drops_strict_bssids() {
         // Regression: a 17-char 2-hex-per-segment string in column 0 must
         // still be dropped (it's a real BSSID, either a hidden-SSID

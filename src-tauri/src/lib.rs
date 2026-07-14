@@ -32,40 +32,6 @@ fn verify_archive_checksum(file_path: String, expected_checksum: String) -> Resu
     download::verify_checksum(&file_path, &expected_checksum)
 }
 
-#[allow(clippy::too_many_arguments)]
-#[tauri::command]
-async fn install_minui(
-    app_handle: AppHandle,
-    base_url: String,
-    extras_url: Option<String>,
-    base_checksum: Option<String>,
-    extras_checksum: Option<String>,
-    sd_mount: String,
-    platform: String,
-    extras_platform: String,
-    version: String,
-    fork_name: Option<String>,
-) -> Result<install::InstallResult, String> {
-    let handle = app_handle.clone();
-    let progress = Arc::new(move |event: install::InstallProgressEvent| {
-        if let Err(e) = handle.emit("install-progress", event) {
-            eprintln!("Warning: failed to emit install progress event: {}", e);
-        }
-    });
-    let options = install::InstallOptions {
-        base_url,
-        extras_url,
-        base_checksum,
-        extras_checksum,
-        sd_mount,
-        platform,
-        extras_platform,
-        version,
-        fork_name,
-    };
-    install::install_minui(&options, progress).await
-}
-
 /// Registry of in-flight install cancellation tokens.
 ///
 /// The UI never runs concurrent installs in a single window, so we keep
@@ -120,10 +86,9 @@ async fn start_install(
         }
     });
     let download_progress: pipeline::DownloadProgressCallback = Arc::new(move |_bytes, _total| {
-        // Byte-level progress events are emitted via the existing
-        // install-progress channel with the `step: "download"` label.
-        // Future enhancement: extend InstallProgressEvent with
-        // currentBytes / totalBytes and emit them here.
+        // TODO: extend InstallProgressEvent with currentBytes / totalBytes.
+        // Currently byte-level progress is discarded; only phase-level events
+        // ("download", "extract", "copy", "finish") reach the frontend.
     });
     let options = install::InstallOptions {
         base_url,
@@ -308,7 +273,6 @@ pub fn run() {
             get_removable_drives,
             format_drive,
             verify_archive_checksum,
-            install_minui,
             start_install,
             cancel_install,
             validate_installation,

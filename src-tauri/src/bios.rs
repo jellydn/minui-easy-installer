@@ -314,8 +314,13 @@ pub fn install_bios_from_bytes(
     // If target exists (or is a symlink), remove it to break any potential symlink escapes.
     if let Ok(meta) = fs::symlink_metadata(&target) {
         if meta.is_file() || meta.file_type().is_symlink() {
-            fs::remove_file(&target)
-                .map_err(|e| format!("Failed to remove existing file/symlink at target {}: {}", target.display(), e))?;
+            fs::remove_file(&target).map_err(|e| {
+                format!(
+                    "Failed to remove existing file/symlink at target {}: {}",
+                    target.display(),
+                    e
+                )
+            })?;
         }
     }
 
@@ -338,7 +343,6 @@ pub fn install_bios_from_bytes(
 
     Ok(target.display().to_string())
 }
-
 
 #[cfg(test)]
 pub(crate) const EXPECTED_BIOS_IDS: &[&str] = &[
@@ -647,11 +651,8 @@ mod tests {
         // Create a symlink at target pointing to outside
         symlink(&outside_file, &target_file).unwrap();
 
-        let result = install_bios_from_bytes(
-            sd.to_str().unwrap(),
-            "gb_bios",
-            &BASE64.encode(b"new_data"),
-        );
+        let result =
+            install_bios_from_bytes(sd.to_str().unwrap(), "gb_bios", &BASE64.encode(b"new_data"));
 
         assert!(result.is_ok());
         // Verify outside file was NOT modified/followed
