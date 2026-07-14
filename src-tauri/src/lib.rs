@@ -52,9 +52,7 @@ impl InstallRegistry {
 
 /// Synchronous install (deprecated — prefer start_install for progress streaming).
 #[tauri::command]
-async fn install_minui(
-    options: install::InstallOptions,
-) -> Result<install::InstallResult, String> {
+async fn install_minui(options: install::InstallOptions) -> Result<install::InstallResult, String> {
     install::install_minui(&options, Arc::new(|_| {})).await
 }
 
@@ -103,13 +101,8 @@ async fn start_install(
     let registry_for_task = registry.inner().clone();
     let result_handle = app_handle.clone();
     tokio::spawn(async move {
-        let res = install::install_minui_with_cancel(
-            &options,
-            progress,
-            download_progress,
-            token,
-        )
-        .await;
+        let res =
+            install::install_minui_with_cancel(&options, progress, download_progress, token).await;
         if let Ok(mut slot) = registry_for_task.token.lock() {
             *slot = None;
         }
@@ -143,7 +136,12 @@ fn cancel_install(registry: tauri::State<'_, Arc<InstallRegistry>>) -> Result<()
 async fn validate_installation(
     opts: validate::ValidateOptions,
 ) -> Result<validate::ValidationResult, String> {
-    validate::validate_installation(&opts.sd_mount, &opts.platform, opts.has_extras, &opts.extras_dir)
+    validate::validate_installation(
+        &opts.sd_mount,
+        &opts.platform,
+        opts.has_extras,
+        &opts.extras_dir,
+    )
 }
 
 #[tauri::command]
@@ -152,9 +150,7 @@ fn format_validation_report(result: validate::ValidationResult) -> String {
 }
 
 #[tauri::command]
-async fn check_minui_version(
-    opts: version::VersionCheckOptions,
-) -> version::VersionCheckResult {
+async fn check_minui_version(opts: version::VersionCheckOptions) -> version::VersionCheckResult {
     version::check_for_updates_with_prefix(
         &opts.sd_mount,
         opts.latest_version.as_deref(),
