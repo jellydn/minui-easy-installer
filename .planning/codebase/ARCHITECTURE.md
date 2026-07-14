@@ -1,151 +1,139 @@
 # Architecture
 
-## Pattern: Tauri v2 Desktop App
+## Overview
+
+MinUI Easy Installer is a **Tauri v2 desktop application** with a Rust backend and React 18 frontend. It installs/updates MinUI on retro handheld SD cards and provides a package store for community emulators and tools.
 
 ```
-┌─────────────────────────────────────┐
-│            React Frontend            │
-│  (src/) TypeScript + CSS            │
-│                                      │
-│  App.tsx → state-based navigation   │
-│  ├── Home (install/update)          │
-│  ├── PackageStore (browse/install)  │
-│  ├── WifiWizard (scan/config)       │
-│  ├── BiosInstaller (upload/copy)    │
-│  └── Settings (fork selection)      │
-│                                      │
-│  invoke("command", args) ─────────┐ │
-│  listen("event", callback) ←────┐ │ │
-└──────────────────────────────────┼─┼─┘
-                                   │ │
-                    Tauri IPC Bridge │
-                                   │ │
-┌──────────────────────────────────┼─┼─┐
-│            Rust Backend           │ │ │
-│  (src-tauri/src/)                │ │ │
-│                                   │ │ │
-│  lib.rs — 17 Tauri commands ─────┘ │ │
-│  ├── get_removable_drives          │ │
-│  ├── start_install                 │ │
-│  ├── cancel_install                │ │
-│  ├── validate_installation         │ │
-│  ├── install_package               │ │
-│  ├── write_wifi_config             │ │
-│  ├── scan_wifi_networks            │ │
-│  ├── install_bios_file             │ │
-│  ├── check_sd_card_health          │ │
-│  └── ...                           │ │
-│                                     │ │
-│  Emit events ───────────────────────┘ │
-│  ├── install-progress                │
-│  ├── install-complete                │
-│  └── install-error                   │
-└───────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│                    Tauri v2                       │
+│  ┌──────────────────┐   ┌──────────────────────┐ │
+│  │  Rust Backend    │◄──│  React Frontend       │ │
+│  │  (20 commands)   │IPC│  (AppShell → screens) │ │
+│  │                  │──►│                       │ │
+│  │  Shell out to:   │   │  Home, PackageStore,  │ │
+│  │  df, diskutil,    │   │  WifiWizard,         │ │
+│  │  powershell,      │   │  BiosInstaller,      │ │
+│  │  airport, nmcli   │   │  Settings             │ │
+│  └──────────────────┘   └──────────────────────┘ │
+└──────────────────────────────────────────────────┘
 ```
+
+## IPC Layer
+
+The backend exposes **20 Tauri commands** registered in `src-tauri/src/lib.rs` via `generate_handler!`:
+
+| Category | Commands |
+|----------|----------|
+| **Drives** | `get_removable_drives`, `format_drive` |
+| **Install** | `install_minui`, `start_install`, `cancel_install` |
+| **Validation** | `validate_installation`, `format_validation_report` |
+| **Package store** | `install_package`, `detect_installed_packages`, `check_package_updates` |
+| **WiFi** | `write_wifi_config`, `scan_wifi_networks`, `get_current_wifi_ssid` |
+| **BIOS** | `list_bios_catalog`, `get_bios_status`, `install_bios_file` |
+| **Health** | `check_sd_card_health` |
+| **Version** | `check_minui_version` |
+| **Download** | `verify_archive_checksum` |
+| **Network** | `fetch_url` |
 
 ## Install Pipeline
 
-The core architecture follows a **Pipeline** pattern: Download → Extract → Copy.
-
 ```
-Pipeline::run(label, url, checksum, copy_fn, progress, cancel, session)
-    │
-    ├── 1. DOWNLOAD (streaming)
-    │   download_archive_streaming() → TempDir
-    │   - Checks CancellationToken before starting
-    │   - Verifies SHA-256 checksum if provided
-    │   - Emits byte-level progress (frontend not yet wired)
-    │
-    ├── 2. EXTRACT
-    │   extract_archive_into() → TempDir
-    │   - Checks CancellationToken before starting
-    │   - Extracts to temp dir (never directly to SD card)
-    │
-    └── 3. COPY
-        copy_fn(extracted_path) → u32 (files_copied)
-        - copy_base_files: shared items + device folder
-        - copy_extras_files: extras platform folder (non-fatal on failure)
-        - copy_dir_recursive: walks tree, skips preserved folders
+startInstallAndWait() (frontend)
+  ├─ listen("install-complete") ───┐
+  ├─ listen("install-error") ──────┤─ promise
+  └─ startInstall(options) ────────┘
+
+start_install (Rust command)
+  ├─ Create CancellationToken
+  ├─ Register in InstallRegistry
+  └─ tokio::spawn:
+       └─ install_minui_with_cancel()
+            ├─ install_base()      → Pipeline::run("base")
+            ├─ try_install_extras() → Pipeline::run("extras")
+            ├─ create_rom_dirs()
+            └─ write_version_metadata()
+            └─ emit("install-complete") or emit("install-error")
 ```
 
-### InstallSession
+### Pipeline phases
 
-`InstallSession` owns all `TempDir` handles for the lifetime of an install:
+Each archive (base/extras/package) goes through:
 
-```rust
-pub struct InstallSession {
-    _base_archive: Option<TempDir>,
-    _base_extracted: Option<TempDir>,
-    _extras_archive: Option<TempDir>,
-    _extras_extracted: Option<TempDir>,
-    _package_archive: Option<TempDir>,
-    _package_extracted: Option<TempDir>,
-}
+```
+Download → Extract → Copy
+   │           │         │
+   ▼           ▼         ▼
+  TempDir    TempDir    SD card
 ```
 
-When `InstallSession` drops, all temp directories are cleaned up atomically — even on cancellation or error.
+`InstallSession` owns all `TempDir` handles — they're cleaned up atomically when the session drops.
 
 ### Cancellation
 
-- Single `InstallRegistry` (global `Arc<Mutex<Option<CancellationToken>>>`)
-- New install cancels any prior install (replaces token)
-- `start_install` spawns background task, returns immediately with `"current"`
-- `cancel_install` triggers the token; pipeline checks at phase boundaries
-- Frontend receives `install-error` with "Install cancelled" on cancellation
+- `CancellationToken` from `tokio-util` is checked at the start of each pipeline phase
+- `cancel_install()` cancels the token
+- `InstallRegistry` ensures only one install runs at a time
 
 ## Frontend Architecture
 
-### Navigation (State-based)
+```
+App (src/App.tsx)
+  └─ ForkProvider (src/contexts/ForkContext.tsx)
+       └─ AppShell: state-based navigation
+            ├─ "home"   → Home (useForkInstall, useVersionCheck)
+            ├─ "store"  → PackageStore
+            ├─ "wifi"   → WifiWizard
+            ├─ "bios"   → BiosInstaller
+            └─ "settings" → Settings
+```
 
-`App.tsx` uses a `Screen` type with 5 states:
+### State management
 
-| Screen | Component | Requires |
-|--------|-----------|----------|
-| `home` | `Home` | — |
-| `store` | `PackageStore` | Device + Drive selected |
-| `wifi` | `WifiWizard` | Drive selected |
-| `bios` | `BiosInstaller` | Drive selected |
-| `settings` | `Settings` | — |
+| Mechanism | Scope | Owned by |
+|-----------|-------|----------|
+| `ForkProvider` | Global | `useFork()` hook — active fork config |
+| `RegistryCache` | Module | `package.ts` — 5-min TTL cache |
+| `InstallRegistry` | Tauri state | `lib.rs` — in-flight install token |
+| `useState` | Component-local | Each screen |
 
-### State Management
+### Key hooks
 
-- **ForkContext** (`src/contexts/ForkContext.tsx`): Selected MinUI fork (default or custom), provides `fork` + `setFork`
-- **Local state**: Each screen manages its own UI state (device selection, drive selection, install progress)
-- **Custom hooks**: `useForkInstall` (install orchestration), `useVersionCheck` (version polling), `useMountEffect` (mount-side-effect), `useScrollToBottom` (progress log auto-scroll)
+| Hook | Purpose |
+|------|---------|
+| `useForkInstall` | Orchestrates MinUI install + update-all flow |
+| `useVersionCheck` | Compares installed vs latest MinUI version |
+| `useFork` | Reads current fork config from context |
+| `useMountEffect` | Runs effect only on mount (not re-renders) |
+| `useScrollToBottom` | Auto-scrolls install progress log |
 
-### Data Flow
+## Rust Module Map
 
 ```
-User action → invoke Tauri command → Rust backend → emit event → frontend listener → state update → re-render
+src-tauri/src/
+  main.rs          → Entry point
+  lib.rs           → All Tauri commands + generate_handler!
+  install.rs       → Install flow (base/extras/ROMs/metadata)
+  pipeline.rs      → Download → extract → copy pipeline
+  download.rs      → HTTP download with streaming + checksum
+  extract.rs       → ZIP extraction to temp dirs
+  drives.rs        → Platform-specific drive detection
+  drives/macos.rs  → macOS diskutil parsing helpers
+  package.rs       → Package install logic
+  wifi.rs          → WiFi config write + network scanning
+  bios.rs          → BIOS catalog + status + file install
+  health.rs        → SD card health checks
+  validate.rs      → Post-install validation
+  version.rs       → MinUI version check (minui.txt)
+  platform.rs      → Device ↔ platform mapping
+  fs_utils.rs      → Directory copy, disk space, canonicalize
 ```
 
 ## Security Patterns
 
-### Path Containment (create_target_within)
-
-`pipeline.rs::create_target_within` validates that package install paths stay within the SD card:
-1. Canonicalize SD card root
-2. Walk up target parent to first existing ancestor, canonicalize
-3. Verify ancestor is within SD card root **before** creating directories
-4. Create directories
-5. Re-canonicalize and re-verify **after** creation (symlink race guard)
-6. On violation: best-effort cleanup of newly-created directories only
-
-### Symlink Safety
-
-- `fs_utils::copy_dir_recursive` uses `fs::copy` which dereferences symlinks (copies target contents, not symlinks)
-- `canonicalize_existing_ancestor` resolves symlinks, so path-escaping symlinks are detected
-- BIOS install sanitizes subdir/filename (no traversal, NUL, or path separators)
-
-### Input Validation
-
-- Registry data validated via `src/types/validate.ts` before use
-- Extras platform name sanitized (alphanumeric + hyphens only)
-- Package repository URLs must start with `https://github.com/`
-
-## Device Platform Mapping
-
-16 device profiles in `src/types/device.ts`:
-- Each device has `id`, `platform` (base archive folder), `extrasPlatform` (extras archive folder)
-- Platform names can differ: e.g. TrimUI uses `trimui` for base, `tg5040` for extras
-- `src-tauri/src/platform.rs` maps platforms to base archive items (mostly folders, `em_ui.sh` for M17)
+- **Symlink escape prevention:** `create_target_within` and `install_bios_from_bytes` canonicalize ancestors before AND after directory creation
+- **Never write without confirmation:** All SD card writes require explicit user confirmation via `ConfirmDialog`
+- **Never format implicitly:** Formatting is opt-in only
+- **No secrets in logs:** WiFi passwords are never logged in plaintext
+- **Input sanitization:** `extras_platform` restricted to alphanumeric + hyphens; BIOS paths reject path separators and NUL bytes
+- **Registry data treated as untrusted:** Validated against schema before use (`src/types/validate.ts`)

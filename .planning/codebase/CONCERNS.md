@@ -1,64 +1,105 @@
-# Concerns
+# Technical Concerns
 
-## TODO Items (Actionable)
+## File Size & Complexity
 
-| # | Priority | File | Item | Detail |
-|---|----------|------|------|--------|
-| ~~1~~ | ~~Medium~~ | ~~`src/types/package.ts:45`~~ | ~~Package cache TTL~~ | ✅ **Resolved.** Registry cache now expires after 5 minutes (`CACHE_TTL_MS`). `cachedAt` timestamp tracked alongside `cachedRegistry`. |
-| ~~2~~ | ~~Medium~~ | ~~`src-tauri/src/lib.rs:89`~~ | ~~Byte-level download progress~~ | ✅ **Resolved.** `InstallProgressEvent` now carries `currentBytes`/`totalBytes` fields. `download_progress` callback in `start_install` emits `install-progress` events with byte-level data. Frontend `InstallProgress.tsx` already had the `<progress>` bar waiting for these fields. |
-| ~~3~~ | ~~Low~~ | ~~`src-tauri/src/wifi.rs:74`~~ | ~~Linux WiFi~~ | ✅ **Resolved.** `get_current_wifi_ssid_linux()` added — tries `nmcli` first, falls back to `iwgetid -r`. `get_current_wifi_ssid()` dispatches to it on `cfg(target_os = "linux")`. |
-| ~~4~~ | ~~Low~~ | ~~`src-tauri/src/drives.rs:373`~~ | ~~Linux udev detection~~ | ✅ **Resolved.** `lsblk` now includes the `RM` (removable) column. Only devices with `RM=1` are included. Internal SSDs/HDDs (RM=0) are filtered out. Also handles `children` in lsblk JSON output. |
-
-## Platform Limitations
-
-### No Linux Support (Phase 2)
-
-- `AGENTS.md` specifies MVP is Windows + macOS only
-- `drives.rs` now has `lsblk` with removable filtering (`RM` column)
-- `wifi.rs` now has `get_current_wifi_ssid_linux()` via `nmcli` / `iwgetid`
-- Phase 2 remaining: `mkfs` formatting, full CI + testing
-
-### macOS WiFi Deprecation (14.4+)
-
-- **Risk**: Apple removed `airport` from macOS 14.4+. `networksetup -getairportnetwork` is also broken.
-- **Mitigation**: Tiered fallback in `wifi.rs` — tries `airport -s` first, falls back to `system_profiler SPAirPortDataType`
-- **Status**: ✅ Mitigated for macOS 14.x. Monitor WWDC/release notes for `system_profiler` deprecation in macOS 15+.
-
-### No Formatting in MVP
-
-- `format_drive` exists as a Tauri command but is gated behind confirmation dialogs
-- Never format drives without explicit user confirmation (per `AGENTS.md` constraint)
-
-## Large Files
+The following files warrant attention for potential refactoring:
 
 | File | Lines | Concern |
 |------|-------|---------|
-| ~~`bios.rs`~~ | ~~668~~ | ~~Mixed production + inline tests~~ → ✅ **Resolved.** Tests split to `bios_tests.rs` (234 lines). `bios.rs` now 311 lines. |
-| `install_tests.rs` | 789 | Test file — acceptable but approaching 1k line soft limit |
-| `lib.rs` | 619 | 17 command handlers + contract tests — natural for a Tauri command registry |
+| `src-tauri/src/install_tests.rs` | 789 | Very large test file — could be split by concern (base/extras/ROMs) |
+| `src-tauri/src/lib.rs` | 647 | Mix of command handlers + `InstallRegistry` + extensive inline tests — multiple responsibilities |
+| `src-tauri/src/wifi.rs` | 535 | Platform-specific logic for macOS `airport`, Linux `iwgetid`/`nmcli` |
+| `src/types/package.ts` | 455 | Registry validation, conversion, caching, and fetch logic in one file |
+| `src-tauri/src/install.rs` | 429 | Install orchestration + copy helpers + ROM dirs + version metadata |
 
-## Performance Considerations
+### Recent mitigations
 
-- **Package registry**: Fetched once per session with 5-minute TTL. Long-running sessions will re-fetch when cache expires.
-- **Archive streaming**: Downloads stream to temp files with progress callbacks. Byte-level progress now surfaces `currentBytes`/`totalBytes` to the frontend.
-- **Clone usage**: Some `Arc::clone()` calls in progress callbacks and `CancellationToken` propagation — idiomatic for Rust async, not a concern.
-- **`unwrap()` in tests**: 209 occurrences across test files — standard Rust test pattern, not a concern in production code.
+- `drives.rs` was recently reduced from 503→390 lines by extracting `macos.rs` submodule
+- `install_tests.rs` was split from inline tests in `install.rs`
+- `install_minui_with_cancel` complexity was reduced by extracting `install_base()` and `write_version_metadata()` helpers
 
-## Security
+## Panic Risks (Rust)
 
-All findings from previous audits are resolved or mitigated:
-- ✅ CI workflow added (Rust fmt + clippy + test)
-- ✅ Test files split from production modules (`install_tests.rs`, `drives_tests.rs`, `bios_tests.rs`)
-- ✅ Deprecated `install_minui` command removed
-- ✅ `#[allow(dead_code)]` replaced with `#[cfg(test)]`
-- ✅ `#[allow(unused_variables)]` added for platform-gated parameters
-- ✅ Linux `lsblk` fallback replacing hard error + removable filtering
-- ✅ TODO comments addressed or resolved
-- ✅ WiFi deprecation mitigated (system_profiler fallback) + Linux WiFi implemented
-- ✅ Package cache TTL added
-- ✅ Byte-level download progress wired up
+Several `.unwrap()` calls exist in production code (not just tests):
 
-## Pending (No Action Needed)
+| File | Pattern | Risk |
+|------|---------|------|
+| `lib.rs` | `registry.token.lock().unwrap()` | Mutex poisoning on `cancel_install` |
+| `lib.rs` | `app.get_webview_window("main").unwrap()` | Window not found in `setup` |
+| `download.rs` | `tempfile::tempdir().unwrap()` | Disk full / permissions |
+| `health.rs` | Various unwraps | IO errors during health checks |
 
-- **E2E tests**: No infrastructure for end-to-end testing (requires real SD cards + devices). Not planned for MVP.
-- **React Doctor**: CI check exits with scan status on PR events — pre-existing project-wide issue, not branch-related.
+**Note:** The `install_minui_with_cancel` callbacks use `if let Err(e) = ...` for event emission (non-panicking), which is the correct pattern.
+
+## Mutex Patterns
+
+`lib.rs` uses two different patterns:
+
+```rust
+// Pattern 1: unwrap (panic on poison)
+let mut slot = registry.token.lock().unwrap();
+
+// Pattern 2: if let Ok (silent on poison)
+if let Ok(mut slot) = registry_for_task.token.lock() {
+    *slot = None;
+}
+```
+
+The second pattern is used in the `tokio::spawn` cleanup path — it's safer because a Mutex poison in a spawned task shouldn't crash the app. The first pattern is fine for the main thread (poison here means the app is in an unrecoverable state).
+
+## `unsafe` Usage
+
+One `unsafe` block in `src-tauri/src/fs_utils.rs` (line 17-18):
+
+```rust
+unsafe { libc::statvfs(path.as_ptr() as *const i8, &mut stat) }
+```
+
+This is for calling `libc::statvfs` to get disk space on Unix. It's a well-audited pattern, but any change here should be carefully reviewed.
+
+## Debug Logging in Production
+
+| File | Statement | When |
+|------|-----------|------|
+| `lib.rs` | `eprintln!("Warning: failed to emit install progress event: {}", e)` | Event emit failure |
+| `extract.rs` | `eprintln!("Warning: failed to remove temp archive: {}", e)` | Temp cleanup failure |
+| `install.rs` | `eprintln!("Warning: failed to write version metadata: {}", e)` | Metadata write failure |
+| `pipeline.rs` | `eprintln!("create_target_within: cleanup failed for escaped path {}: {}", ...)` | Security cleanup failure |
+
+These are all non-fatal warnings — they log to stderr but don't crash. Consider whether these should be surfaced to the UI or redirected to a log file in production builds.
+
+## Frontend `console` Usage
+
+- `src/hooks/useVersionCheck.ts` — `console.error` on version check failure
+
+No `console.log` or `console.warn` in production code (excluding tests).
+
+## TypeScript `any` Usage
+
+Minimal — only a well-documented instance in scripts (`scripts/discover-packages.ts`) for the GitHub API JSON response. No `@ts-ignore` or `@ts-expect-error` directives in the main `src/` codebase.
+
+## Known Gaps
+
+| Area | Gap | Priority |
+|------|-----|----------|
+| Linux support | Drive detection exists but not tested in CI | Low (not MVP) |
+| macOS 14.4+ | `airport` WiFi scanning may break (Apple deprecation) | Medium |
+| Windows formatting | `format_drive` returns error — not yet implemented | Low |
+| Package registry | Hardcoded versions in `store.json` — mitigated by daily cron auto-update | Low |
+| Install cancellation | Backend supports cancellation but frontend UI doesn't expose a cancel button | Medium |
+
+## TODOs & FIXMEs
+
+No `TODO`, `FIXME`, `HACK`, `XXX`, `WORKAROUND`, or `BUG` annotations found in the codebase. This is a positive signal — tracked work is managed in GitHub Issues rather than inline comments.
+
+## Resolved Concerns
+
+These items from the previous architecture review have been addressed:
+
+| Concern | Resolution |
+|---------|------------|
+| `install_minui` gated behind `#[cfg(test)]` | Fixed — restored with compile-time guard test |
+| Shallow Tauri command layer (9 individual params) | Fixed — `InstallOptions` now accepted as single struct |
+| Module-level cache globals in `package.ts` | Fixed — `RegistryCache` class with encapsulated TTL |
+| `install_minui_with_cancel` inline orchestration | Improved — extracted `install_base()` + `write_version_metadata()` |
+| `drives.rs` platform sprawl (503 lines) | Fixed — extracted `macos.rs` submodule |

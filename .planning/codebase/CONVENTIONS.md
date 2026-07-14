@@ -1,99 +1,160 @@
-# Conventions
-
-## Rust
-
-### Module Organization
-
-- **One module per file**. `lib.rs` declares all modules with `mod`.
-- **Test splits**: Use `#[cfg(test)] #[path = "module_tests.rs"] mod tests;` for extracted test files. This follows the established `version/tests.rs` pattern. Test files start with `use super::*;` (no `mod tests {}` wrapper).
-
-### Security Patterns
-
-The codebase takes SD card safety seriously. These patterns must be preserved:
-
-1. **Canonicalize before write** (`create_target_within`): Resolve the parent path's canonical form, verify it's within the SD card root, **then** create directories, then re-verify. This catches symlink races.
-
-2. **Extract to temp, then copy**: Archives are never extracted directly to the SD card. All extraction happens in temp directories, then files are selectively copied.
-
-3. **Symlink-dereferencing copy**: `copy_dir_recursive` uses `fs::copy` which dereferences symlinks by default — preventing symlink escape attacks.
-
-4. **Input sanitization**: Platform names are sanitized to alphanumeric + hyphens. BIOS filenames are checked for traversal, NUL bytes, and path separators.
-
-### Platform Gating
-
-- Use `#[cfg(target_os = "macos")]` for macOS-specific code
-- Use `#[cfg(not(target_os = "macos"))]` for non-macOS fallbacks
-- Use `#[cfg_attr(not(target_os = "macos"), allow(unused_variables))]` for parameters unused on some platforms (prefer over `_param` prefix when the parameter is used on other platforms)
-- Gate test functions that call platform-gated production code with the same `#[cfg]` attribute
-
-### Async & Cancellation
-
-- All Tauri commands are `async fn`
-- Long-running operations use `tokio::spawn` and check `CancellationToken::is_cancelled()` at phase boundaries
-- `InstallRegistry` holds a single `Arc<Mutex<Option<CancellationToken>>>` — new installs cancel old ones
-- Progress callbacks use `Arc<dyn Fn(Event) + Send + Sync>` for thread-safe sharing
-
-### Error Handling
-
-- Tauri commands return `Result<T, String>` — errors propagate as user-facing strings
-- Internal errors use `Result<T, String>` or `Option<T>` with descriptive messages
-- `map_err(|e| format!("context: {}", e))` for adding context to errors
-- Contract tests in `lib.rs` verify error propagation shapes (not just success paths)
-
-### Testing
-
-- Unit tests use `tempfile::tempdir()` — no real SD card needed
-- `#[tokio::test]` for async test functions
-- Contract tests in `lib.rs` test the IPC boundary: error shapes, return types, edge cases
-- `#[cfg(test)]` gates on production functions kept only for test use (preferred over `#[allow(dead_code)]`)
+# Coding Conventions
 
 ## TypeScript
 
+### Linting & Formatting
+
+| Tool | Config | Command |
+|------|--------|---------|
+| ESLint | `.eslintrc.cjs` | `oxlint src` (Rust-based, fast) |
+| Oxfmt | `.oxfmtrc.json` | `oxfmt src` |
+| TypeScript | `tsconfig.json` (strict) | `tsc --noEmit` |
+
+### Error Handling
+
+Two patterns are used:
+
+**Either pattern** (preferred for UI-bound operations):
+```typescript
+type Result = { success: true; data: T } | { success: false; error: AppError };
+```
+
+**Try/catch** (for unexpected failures):
+```typescript
+try {
+  const result = await invoke("command", args);
+} catch (err) {
+  const message = err instanceof Error ? err.message : "Unknown error";
+}
+```
+
+Error classification uses `classifyError()` from `src/types/errors.ts`.
+
+### Imports
+
+- `@tauri-apps/api/core` → `invoke` for IPC calls
+- `@tauri-apps/api/event` → `listen` for event subscriptions
+- Dynamic imports for Tauri APIs (avoid bundling issues in non-Tauri contexts)
+
 ### Component Patterns
 
-- **State-based navigation**: `App.tsx` uses a `Screen` union type (`"home" | "store" | "wifi" | "bios" | "settings"`) — no router
-- **Custom hooks** for complex logic: `useForkInstall`, `useVersionCheck`, `useMountEffect`, `useScrollToBottom`
-- **Context** for cross-component state: `ForkContext` for fork selection
-- **No CSS framework**: All styles in `src/styles.css` (plain CSS)
-
-### Type Organization
-
-- Types live in `src/types/` — one file per domain (`device.ts`, `drive.ts`, `install.ts`, etc.)
-- Interfaces for data shapes (`DeviceProfile`, `RemovableDrive`, `InstallProgressEvent`)
-- Type-only imports: `import type { ... }` for compile-time safety
-- Union types for discriminated states (e.g., `Screen`, `InstallPhase`)
-
-### IPC Conventions
-
-- Frontend calls Rust via `invoke("command_name", { args })` from `@tauri-apps/api/core`
-- Events are listened via `listen("event-name", callback)` from `@tauri-apps/api/event`
-- IPC wrapper functions in `src/types/` (e.g., `installMinui`, `fetchPackageRegistry`)
-- Error types use `AppError` with `classifyError` for safe error handling
+- **No CSS framework** — plain `styles.css`
+- State-based navigation in `App.tsx`: `"home" | "store" | "wifi" | "bios" | "settings"`
+- Confirmation dialogs as overlay modals (`ConfirmDialog`, `FormatConfirmDialog`)
+- Props are typed inline or with explicit interfaces
 
 ### Testing
 
-- Vitest with `jsdom` environment
-- `@testing-library/react` for component rendering and queries
-- `@testing-library/user-event` for simulated interactions
-- Mock Tauri `invoke` with `vi.mock("@tauri-apps/api/core")`
-- Test files colocated: `Component.tsx` + `Component.test.tsx`
+- See `TESTING.md` for full testing conventions
+- `vi.mock()` for module mocking
+- `@testing-library/jest-dom` matchers via `vitest.setup.ts`
 
-## Shared Conventions
+## Rust
+
+### Linting & Formatting
+
+| Tool | Command |
+|------|---------|
+| `cargo fmt` | Format Rust code |
+| `cargo clippy` | Lint with `-- -D warnings` (deny all) |
+| `cargo check` | Fast compile check (no codegen) |
+
+### Error Handling
+
+**Return type:** `Result<T, String>` — errors are human-readable strings:
+
+```rust
+fn do_thing() -> Result<u32, String> {
+    let output = Command::new("df").output()
+        .map_err(|e| format!("Failed to run df: {}", e))?;
+    // ...
+}
+```
+
+**Expect:** Used sparingly in:
+- `generate_context!()` — build-time failure
+- `lock().unwrap()` — mutex poisoning is unrecoverable
+
+### Module Organization
+
+```rust
+// In lib.rs:
+mod bios;
+mod download;
+mod drives;
+// ...
+#[cfg(target_os = "macos")]
+mod macos;  // conditional compilation
+```
+
+Tests are either:
+- Inline: `#[cfg(test)] mod tests { ... }` inside the source file (e.g., `lib.rs`)
+- External: `#[cfg(test)] #[path = "drives_tests.rs"] mod tests;`
+
+### Naming
+
+| Item | Convention | Example |
+|------|-----------|---------|
+| Functions | `snake_case` | `copy_base_files` |
+| Structs | `PascalCase` | `InstallOptions` |
+| Enums | `PascalCase` | `VolumeKind` |
+| Constants | `SCREAMING_SNAKE_CASE` | `PRESERVED_FOLDERS` |
+| Modules | `snake_case` | `fs_utils` |
+
+### Platform Gating
+
+```rust
+#[cfg(target_os = "macos")]
+pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> { ... }
+
+#[cfg(target_os = "windows")]
+pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> { ... }
+```
+
+### Security Patterns
+
+- **Path sanitization:** All paths that touch the SD card are canonicalized and validated to stay within the mount root
+- **Input validation:** Platform names restricted to alphanumeric + hyphens
+- **No secret logging:** WiFi passwords and sensitive data are not logged
+- **Atomic temp cleanup:** `InstallSession` owns `TempDir` handles — dropped atomically
+
+### Clippy Suppressions
+
+Only used where justified:
+```rust
+#[allow(clippy::too_many_arguments)]
+```
+or on the `pub(crate) use` re-exports for tests.
+
+## Git
 
 ### Commits
 
-- [Conventional Commits](https://www.conventionalcommits.org/) format: `type(scope): subject`
-- Types: `feat`, `fix`, `refactor`, `docs`, `test`, `ci`, `chore`
-- Subject in imperative mood, max 72 chars
+Follow [conventional commits](https://www.conventionalcommits.org/):
 
-### Code Quality
+```
+type(scope): description
 
-- **No dead code**: `#[allow(dead_code)]` only when truly needed; prefer `#[cfg(test)]` for test-only functions
-- **No magic values**: Extract unexplained literals into named constants
-- **One concern per function**: Extract logical sections into well-named helpers
-- **Guard clauses**: Bail out early at the top rather than nesting
+Types: feat, fix, docs, refactor, test, chore, ci, build, perf
+```
 
-### Pre-commit (prek)
+### Pre-commit
 
-- `prek.toml` enforces: trailing whitespace removal, EOF newline, LF normalization, oxlint `--fix`
-- If a hook rewrites a file, re-stage with `git add -u` before retrying commit
+`prek.toml` runs on staged files:
+- Trailing whitespace removal
+- EOF newline fixer
+- LF normalization
+- Lint `--fix`
+
+If a hook rewrites a file, re-stage with `git add -u`.
+
+## Build Commands
+
+```bash
+bun run dev          # Frontend only (Vite on port 1420)
+cargo tauri dev      # Full Tauri dev (Rust + React)
+cargo tauri build    # Production build
+just check           # All checks: lint + typecheck + fmt + clippy
+bun test             # Frontend tests
+cargo test           # Rust tests
+```

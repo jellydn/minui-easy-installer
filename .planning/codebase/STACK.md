@@ -1,80 +1,84 @@
-# Stack
+# Technology Stack
 
-## Runtimes & Frameworks
+## Languages
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Desktop shell | [Tauri v2](https://v2.tauri.app/) | 2.x |
-| Frontend | [React](https://react.dev/) | 18.x |
-| Frontend language | [TypeScript](https://www.typescriptlang.org/) | 5.6 |
-| Backend | Rust | edition 2021 |
-| Async runtime (Rust) | [tokio](https://tokio.rs/) | 1.x |
+| Layer | Language | Version |
+|-------|----------|---------|
+| Backend | Rust | 2021 edition |
+| Frontend | TypeScript | `tsconfig.json` → `strict: true`, `JSX: react-jsx` |
+| Scripts | TypeScript (Bun) | `scripts/*.ts` |
+
+## Runtimes & Bundlers
+
+| Tool | Purpose |
+|------|---------|
+| [Tauri v2](https://v2.tauri.app/) | Desktop application shell — system tray, shell access, IPC bridge |
+| [Vite](https://vitejs.dev/) | Frontend dev server + build (port 1420) |
+| [Bun](https://bun.sh/) | JS runtime & package manager (`bun.lock`) |
 
 ## Frontend Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| `react`, `react-dom` | UI framework |
-| `@tauri-apps/api` | Tauri IPC bridge (`invoke`, `listen`, `emit`) |
-| `@vitejs/plugin-react` | Vite React plugin |
-| `@testing-library/react` | Component testing |
-| `@testing-library/user-event` | Simulated user interactions |
-| `vitest` | Test runner |
-| `jsdom` | DOM environment for tests |
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `react` | ^18 | Component framework |
+| `react-dom` | ^18 | DOM renderer |
+| `@tauri-apps/api` | ^2 | Invoke Rust commands, listen for events |
+| `@tauri-apps/plugin-shell` | ^2 | Shell command access (WiFi scanning) |
 
-## Backend (Rust) Dependencies
+## Backend Dependencies (Rust — `src-tauri/Cargo.toml`)
 
 | Crate | Purpose |
 |-------|---------|
-| `tauri` (v2) | Desktop framework |
-| `serde`, `serde_json` | Serialization/deserialization |
-| `reqwest` | HTTP client (GitHub API, package registry) |
-| `tokio` | Async runtime |
-| `tokio-util` | CancellationToken |
-| `zip` | Archive creation/extraction |
-| `tempfile` | Temporary directories |
+| `tauri` v2 | Desktop framework — commands, events, window management |
+| `tauri-plugin-shell` | Shell access for platform-specific commands |
+| `tokio` v1 | Async runtime (features: `rt-multi-thread`, `macros`, `sync`) |
+| `reqwest` v0.12 | HTTP client with streaming support (features: `stream`, `rustls-tls`) |
+| `serde` / `serde_json` | Serialization (derive `Serialize`/`Deserialize`) |
+| `zip` | Archive extraction (deflate support) |
+| `tempfile` | Temp directories for extraction isolation |
 | `sha2` | SHA-256 checksum verification |
-| `base64` | BIOS file encoding |
-| `semver` | Version parsing |
-| `libc` | Unix system calls (disk space) |
-| `windows-sys` | Windows API bindings |
+| `base64` | BIOS file payload decoding |
+| `tokio-util` | `CancellationToken` for install cancellation |
 
-## Tooling
+### Platform-specific
 
-| Tool | Purpose | Config |
-|------|---------|--------|
-| [Bun](https://bun.sh/) | JS runtime & package manager | `bun.lock` |
-| [oxlint](https://oxc-project.github.io/) | TypeScript linter | `.oxlintrc.json` |
-| [oxfmt](https://oxc-project.github.io/) | TypeScript formatter | `.oxfmtrc.json` |
-| `tsc` | TypeScript type checking | `tsconfig.json` |
-| `cargo fmt` | Rust formatter | — |
-| `cargo clippy` | Rust linter | `-D warnings` |
-| [prek](https://prek.j178.dev/) | Pre-commit hooks | `prek.toml` |
-| [Vitest](https://vitest.dev/) | Test runner + coverage | `vitest.config.ts` |
-| [Vite](https://vitejs.dev/) | Dev server & bundler | `vite.config.ts` |
+| Crate | Platform | Purpose |
+|-------|----------|---------|
+| `libc` | Unix | `statvfs` for disk space |
+| `windows-sys` | Windows | File system APIs |
 
-## Build Configuration
+## Configuration
 
 | File | Purpose |
 |------|---------|
-| `package.json` | Frontend scripts, dependencies |
-| `Cargo.toml` | Rust dependencies, binary target |
-| `tauri.conf.json` | App identity, CSP, bundle config |
-| `tsconfig.json` | TypeScript (ES2020, react-jsx) |
-| `vite.config.ts` | Vite + React plugin |
-| `vitest.config.ts` | Test runner + v8 coverage (50/40 thresholds) |
-| `.github/workflows/rust.yml` | CI: fmt, clippy, test on ubuntu-latest |
+| `tsconfig.json` | TypeScript strict mode, `baseUrl: "."`, `resolveJsonModule: true` |
+| `vite.config.ts` | Dev server on `localhost:1420`, `clearScreen: false` |
+| `tauri.conf.json` | CSP, bundle identifier `com.minui.installer`, app security |
+| `Cargo.toml` | Rust edition 2021, dependency versions |
+| `prek.toml` | Pre-commit hooks (trailing whitespace, EOF fixer, LF normalize, lint `--fix`) |
+| `.editorconfig` | UTF-8, LF line endings, 2-space indent for TS/JSON |
+| `justfile` | Build shortcuts: `just check` (lint+typecheck+fmt+clippy), `just fmt` |
 
-## Platform Support
+## CSP (Content Security Policy)
 
-| OS | Status | Min Version |
-|----|--------|-------------|
-| macOS | ✅ Supported | 10.15+ |
-| Windows | ✅ Supported | 10+ |
-| Linux | 🚧 Phase 2 | Not yet supported |
+From `tauri.conf.json`:
 
-## Security
+```
+default-src 'self';
+connect-src 'self'
+  https://packages.minui.dev
+  https://api.github.com
+  https://github.com
+  https://*.githubusercontent.com;
+img-src 'self' data:;
+style-src 'self' 'unsafe-inline';
+script-src 'self'
+```
 
-- **CSP** (in `tauri.conf.json`): `default-src 'self'`; allowlisted `connect-src` for `packages.minui.dev`, `api.github.com`, `github.com`, `*.githubusercontent.com`
-- No external scripts, styles, or images beyond data: URIs
-- Rust backend validates all registry data before use
+## OS Support
+
+| OS | Minimum Version | Notes |
+|----|-----------------|-------|
+| macOS | 10.15+ | 14.4+ has `airport` deprecation risk for WiFi scanning |
+| Windows | 10+ | Format not supported |
+| Linux | — | Not in MVP Phase 1 |

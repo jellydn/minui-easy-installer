@@ -1,54 +1,51 @@
-# Integrations
+# External Integrations
 
-## External APIs
+## GitHub API
 
-### GitHub REST API
+**Endpoint:** `https://api.github.com/repos/shauninman/MinUI/releases/latest`
 
-- **Endpoint**: `https://api.github.com/repos/{owner}/{repo}/releases/latest`
-- **Purpose**: Fetch the latest MinUI release (or community fork release) for version checking and download URLs
-- **Code**: `src/types/release.ts` (`fetchMinUIRelease`), `src/types/fork.ts` (`buildReleaseUrl`)
-- **Auth**: None (public repository, unauthenticated requests)
-- **Rate limit**: 60 req/hour unauthenticated; sufficient for the install flow (one fetch per session)
+Used by `src/types/release.ts` to fetch the latest MinUI release metadata:
+- Version number
+- Archive URLs (base + extras)
+- Checksums
+- Release notes
 
-### GitHub Releases (asset downloads)
+Also used by fork support (`src/types/fork.ts`) to query alternative MinUI forks.
 
-- **Endpoint**: `https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}`
-- **Purpose**: Download base and extras zip archives for MinUI installation
-- **Code**: `src-tauri/src/download.rs` (`download_archive_streaming`)
-- **Flow**: Fetch release metadata → parse asset URLs → stream download with progress
-- **Cancellation**: `CancellationToken` checked at phase boundaries
+**Rate limiting:** 60 req/hr unauthenticated, 5,000 req/hr with `GITHUB_TOKEN`.
 
-### Package Registry
+## GitHub Releases (Archive Downloads)
 
-- **Endpoint**: `https://packages.minui.dev/registry/index.json`
-- **Purpose**: Fetch the community package catalog with per-device platform paths
-- **Code**: `src/types/package.ts` (`fetchPackageRegistry`)
-- **Cache**: Session-scoped (fetched once per app launch)
-- **Validation**: Schema validated before use (see `src/types/validate.ts`)
+**Endpoint:** `https://github.com/*/releases/download/*`
 
-### GitHub Content (raw)
+Archive files (`.zip`) are downloaded from GitHub Releases. The CSP allows `https://github.com` and `https://*.githubusercontent.com`.
 
-- **Domain**: `*.githubusercontent.com`
-- **Purpose**: CSP allowlisted for potential raw file access
-- **Current use**: Not directly fetched; included in CSP for future package asset downloads
+## Package Registry
 
-## Package Downloads
+**Endpoint:** `https://packages.minui.dev/registry/index.json`
 
-Community packages reference GitHub release assets:
+Fetched by `src/types/package.ts` → `fetchPackageRegistry()`.
 
-- **Pattern**: `https://github.com/{repo}/releases/download/{version}/{fileName}`
-- **Code**: `src/types/package.ts` (`buildDownloadUrlForVersion`)
-- **Validation**: Only `https://github.com/` repositories are accepted
+**Format:** Static JSON with `emu_paks` and `tool_paks` arrays. Each entry has:
+- `name`, `version`, `repository`, `pak_name`
+- Optional: `description`, `checksum`, `device[]`, `download_url`
+- Emu paks require `rom_folder`
 
-## No Integrations For
+**Caching:** 5-minute TTL via `RegistryCache` class in `package.ts`. Falls back to bundled `src/types/store.json` when the remote fetch fails.
+
+## No External Services
+
+This application does not integrate with:
 
 | Category | Status |
 |----------|--------|
-| Database | ❌ None (stateless app) |
-| Authentication | ❌ None (local-only desktop app) |
-| Payment processing | ❌ None |
-| Analytics/telemetry | ❌ None |
-| Error tracking | ❌ None |
-| Email | ❌ None |
-| CDN | ❌ None |
-| Cloud storage | ❌ None |
+| Authentication providers | None |
+| Databases | None |
+| Payment processors | None |
+| Email services | None |
+| Analytics / Telemetry | None |
+| Error tracking (Sentry, etc.) | None |
+| CDN | None |
+| Cloud storage | None |
+
+The application operates entirely locally — all data lives on the user's SD card.
