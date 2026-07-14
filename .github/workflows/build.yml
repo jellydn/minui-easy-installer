@@ -16,12 +16,12 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: build-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os }}
-  cancel-in-progress: true
-
 jobs:
   build:
+    concurrency:
+      group: build-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os }}
+      cancel-in-progress: true
+
     strategy:
       fail-fast: false
       matrix:
