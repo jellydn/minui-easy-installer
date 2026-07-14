@@ -260,39 +260,6 @@ pub struct InstallOptions {
     pub fork_name: Option<String>,
 }
 
-/// Runs extras download → extract → copy, returning the number of files copied.
-/// Errors are propagated via `Result` — the caller decides how to handle failures.
-async fn try_install_extras(
-    options: &InstallOptions,
-    progress: ProgressCallback,
-    download_progress: DownloadProgressCallback,
-    cancel: CancellationToken,
-    session: &mut InstallSession,
-) -> Result<u32, String> {
-    let extras_url = options
-        .extras_url
-        .as_deref()
-        .ok_or("No extras URL provided")?;
-
-    Pipeline::run(
-        "extras",
-        extras_url,
-        options.extras_checksum.as_deref(),
-        |p| {
-            copy_extras_files(
-                p.to_str().unwrap(),
-                &options.sd_mount,
-                &options.extras_platform,
-            )
-        },
-        progress,
-        download_progress,
-        cancel,
-        session,
-    )
-    .await
-}
-
 /// Convenience wrapper that delegates to `install_minui_with_cancel`
 /// without cancellation support. Used by the synchronous `install_minui`
 /// Tauri command for simple installs that don't need progress streaming.
@@ -308,33 +275,6 @@ pub async fn install_minui(
         progress,
         Arc::new(|_, _| {}),
         CancellationToken::new(),
-    )
-    .await
-}
-
-/// Download, extract, and copy the base archive to the SD card.
-/// Returns the number of files copied.
-async fn install_base(
-    options: &InstallOptions,
-    progress: ProgressCallback,
-    download_progress: DownloadProgressCallback,
-    cancel: CancellationToken,
-    session: &mut InstallSession,
-) -> Result<u32, String> {
-    let file_name = options.base_url.rsplit('/').next().unwrap_or("MinUI.zip");
-    progress(InstallProgressEvent::phase(
-        "download",
-        &format!("Downloading {}", file_name),
-    ));
-    Pipeline::run(
-        "base",
-        &options.base_url,
-        options.base_checksum.as_deref(),
-        |p| copy_base_files(p.to_str().unwrap(), &options.sd_mount, &options.platform),
-        progress,
-        download_progress,
-        cancel,
-        session,
     )
     .await
 }
@@ -356,10 +296,21 @@ fn write_version_metadata(options: &InstallOptions) -> Option<String> {
     }
 }
 
-/// Ordered install phases. The plan is a data structure that describes
-/// *what* the install does; the orchestrator (`install_minui_with_cancel`)
-/// handles *when* each phase runs, emitting progress at phase boundaries
-/// and checking cancellation between phases.
+/// Bundles all the state a phase needs during execution so the
+/// `execute` method receives a single context argument instead of
+/// 5+ separate parameters.
+struct InstallContext<'a> {
+    options: &'a InstallOptions,
+    progress: ProgressCallback,
+    download_progress: DownloadProgressCallback,
+    cancel: CancellationToken,
+    session: &'a mut InstallSession,
+}
+
+/// Ordered install phases. Each phase knows how to execute itself —
+/// the orchestrator (`install_minui_with_cancel`) builds a plan and
+/// iterates through it, emitting progress at phase boundaries and
+/// checking cancellation between phases.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InstallPhase {
     Base,
@@ -368,13 +319,116 @@ enum InstallPhase {
     VersionMetadata,
 }
 
+/// Outcome returned by `InstallPhase::execute()`. Each variant carries
+/// the data produced by that phase so the orchestrator can accumulate
+/// the final `InstallResult`.
+enum PhaseOutcome {
+    BaseFilesCopied(u32),
+    ExtrasFilesCopied(u32),
+    RomDirsCreated(u32),
+    MetaWarning(Option<String>),
+}
+
 impl InstallPhase {
-    fn step_label(&self) -> &'static str {
+    fn label(&self) -> &'static str {
         match self {
             Self::Base => "download",
             Self::Extras => "extract",
             Self::RomDirs => "copy",
             Self::VersionMetadata => "finish",
+        }
+    }
+
+    /// Execute this phase and return its outcome.
+    ///
+    /// Each variant dispatches to the appropriate install function.
+    /// On error the orchestrator decides whether the failure is fatal
+    /// or should be captured as a warning.
+    async fn execute(&self, ctx: &mut InstallContext<'_>) -> Result<PhaseOutcome, String> {
+        match self {
+            Self::Base => {
+                let file_name = ctx
+                    .options
+                    .base_url
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("MinUI.zip");
+                (ctx.progress)(InstallProgressEvent::phase(
+                    self.label(),
+                    &format!("Downloading {}", file_name),
+                ));
+                let copied = Pipeline::run(
+                    "base",
+                    &ctx.options.base_url,
+                    ctx.options.base_checksum.as_deref(),
+                    |p| {
+                        copy_base_files(
+                            p.to_str().unwrap(),
+                            &ctx.options.sd_mount,
+                            &ctx.options.platform,
+                        )
+                    },
+                    ctx.progress.clone(),
+                    ctx.download_progress.clone(),
+                    ctx.cancel.clone(),
+                    ctx.session,
+                )
+                .await?;
+                Ok(PhaseOutcome::BaseFilesCopied(copied))
+            }
+            Self::Extras => {
+                let extras_url = ctx
+                    .options
+                    .extras_url
+                    .as_deref()
+                    .ok_or("No extras URL provided")?;
+                (ctx.progress)(InstallProgressEvent::phase(
+                    self.label(),
+                    "Downloading Extras...",
+                ));
+                let copied = Pipeline::run(
+                    "extras",
+                    extras_url,
+                    ctx.options.extras_checksum.as_deref(),
+                    |p| {
+                        copy_extras_files(
+                            p.to_str().unwrap(),
+                            &ctx.options.sd_mount,
+                            &ctx.options.extras_platform,
+                        )
+                    },
+                    ctx.progress.clone(),
+                    ctx.download_progress.clone(),
+                    ctx.cancel.clone(),
+                    ctx.session,
+                )
+                .await?;
+                Ok(PhaseOutcome::ExtrasFilesCopied(copied))
+            }
+            Self::RomDirs => {
+                (ctx.progress)(InstallProgressEvent::phase(
+                    self.label(),
+                    "Creating standard ROM directories...",
+                ));
+                let created = create_rom_dirs(&ctx.options.sd_mount).unwrap_or(0);
+                Ok(PhaseOutcome::RomDirsCreated(created))
+            }
+            Self::VersionMetadata => {
+                let fork_label = ctx
+                    .options
+                    .fork_name
+                    .as_deref()
+                    .unwrap_or("MinUI");
+                (ctx.progress)(InstallProgressEvent::phase(
+                    self.label(),
+                    &format!(
+                        "Writing version metadata ({} {})",
+                        fork_label, ctx.options.version
+                    ),
+                ));
+                let warning = write_version_metadata(ctx.options);
+                Ok(PhaseOutcome::MetaWarning(warning))
+            }
         }
     }
 }
@@ -394,9 +448,10 @@ fn build_install_plan(options: &InstallOptions) -> Vec<InstallPhase> {
 
 /// Full installation flow with cancellation support.
 ///
-/// Identical to `install_minui` but accepts a `CancellationToken` so the
-/// caller (typically a Tauri command) can abort mid-pipeline. Also accepts
-/// a byte-level download progress callback.
+/// Builds a plan of ordered phases and executes each one in sequence.
+/// Each phase reports its own progress; the orchestrator accumulates
+/// the results and handles phase-specific error semantics (e.g. extras
+/// failures are non-fatal warnings).
 pub async fn install_minui_with_cancel(
     options: &InstallOptions,
     progress: ProgressCallback,
@@ -406,64 +461,46 @@ pub async fn install_minui_with_cancel(
     let mut session = InstallSession::new();
     let plan = build_install_plan(options);
 
-    let base_files_copied = install_base(
-        options,
-        progress.clone(),
-        download_progress.clone(),
-        cancel.clone(),
-        &mut session,
-    )
-    .await?;
+    let mut result = InstallResult {
+        success: true,
+        error: None,
+        base_files_copied: 0,
+        extras_files_copied: 0,
+        extras_warning: None,
+        rom_dirs_created: 0,
+    };
 
-    // Extras: download, extract, and copy (if available) — non-fatal
-    let mut extras_files_copied = 0u32;
-    let mut extras_warning: Option<String> = None;
-
-    if plan.contains(&InstallPhase::Extras) {
-        match try_install_extras(
+    for phase in &plan {
+        let mut ctx = InstallContext {
             options,
-            progress.clone(),
-            download_progress,
-            cancel.clone(),
-            &mut session,
-        )
-        .await
-        {
-            Ok(copied) => extras_files_copied = copied,
-            Err(e) => extras_warning = Some(e),
+            progress: progress.clone(),
+            download_progress: download_progress.clone(),
+            cancel: cancel.clone(),
+            session: &mut session,
+        };
+
+        match phase.execute(&mut ctx).await {
+            Ok(PhaseOutcome::BaseFilesCopied(n)) => result.base_files_copied = n,
+            Ok(PhaseOutcome::ExtrasFilesCopied(n)) => result.extras_files_copied = n,
+            Ok(PhaseOutcome::RomDirsCreated(n)) => result.rom_dirs_created = n,
+            Ok(PhaseOutcome::MetaWarning(w)) => {
+                if w.is_some() {
+                    result.extras_warning = w;
+                }
+            }
+            Err(e) => {
+                // Extras failure is non-fatal — capture as warning
+                if *phase == InstallPhase::Extras {
+                    result.extras_warning = Some(e);
+                } else {
+                    return Err(e);
+                }
+            }
         }
     }
 
-    if plan.contains(&InstallPhase::RomDirs) {
-        progress(InstallProgressEvent::phase(
-            InstallPhase::RomDirs.step_label(),
-            "Creating standard ROM directories...",
-        ));
-    }
-    let rom_dirs_created = create_rom_dirs(&options.sd_mount).unwrap_or(0);
-
-    progress(InstallProgressEvent::phase(
-        InstallPhase::VersionMetadata.step_label(),
-        &format!(
-            "Writing version metadata ({} {})",
-            options.fork_name.as_deref().unwrap_or("MinUI"),
-            options.version
-        ),
-    ));
-    let meta_warning = write_version_metadata(options);
-    if meta_warning.is_some() {
-        extras_warning = meta_warning;
-    }
-
     // session drops here — temp dirs cleaned up after all operations complete
-    Ok(InstallResult {
-        success: true,
-        error: None,
-        base_files_copied,
-        extras_files_copied,
-        extras_warning,
-        rom_dirs_created,
-    })
+    Ok(result)
 }
 
 #[cfg(test)]
