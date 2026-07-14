@@ -141,12 +141,9 @@ fn cancel_install(registry: tauri::State<'_, Arc<InstallRegistry>>) -> Result<()
 
 #[tauri::command]
 async fn validate_installation(
-    sd_mount: String,
-    platform: String,
-    has_extras: bool,
-    extras_dir: String,
+    opts: validate::ValidateOptions,
 ) -> Result<validate::ValidationResult, String> {
-    validate::validate_installation(&sd_mount, &platform, has_extras, &extras_dir)
+    validate::validate_installation(&opts.sd_mount, &opts.platform, opts.has_extras, &opts.extras_dir)
 }
 
 #[tauri::command]
@@ -156,45 +153,37 @@ fn format_validation_report(result: validate::ValidationResult) -> String {
 
 #[tauri::command]
 async fn check_minui_version(
-    sd_mount: String,
-    latest_version: Option<String>,
-    expected_prefix: Option<String>,
+    opts: version::VersionCheckOptions,
 ) -> version::VersionCheckResult {
     version::check_for_updates_with_prefix(
-        &sd_mount,
-        latest_version.as_deref(),
-        expected_prefix.as_deref(),
+        &opts.sd_mount,
+        opts.latest_version.as_deref(),
+        opts.expected_prefix.as_deref(),
     )
 }
 
 #[tauri::command]
 async fn install_package(
-    artifact_url: String,
-    checksum: Option<String>,
-    sd_mount: String,
-    target_dir: String,
-    extract_to_root: bool,
-    pak_name: String,
-    platform: String,
+    opts: package::PackageInstallOptions,
 ) -> Result<package::PackageInstallResult, String> {
     let rules = package::PackageInstallPathRules {
-        target_dir,
-        extract_to_root,
-        pak_name,
+        target_dir: opts.target_dir,
+        extract_to_root: opts.extract_to_root,
+        pak_name: opts.pak_name,
     };
     package::install_package(
-        &artifact_url,
-        checksum.as_deref(),
-        &sd_mount,
+        &opts.artifact_url,
+        opts.checksum.as_deref(),
+        &opts.sd_mount,
         &rules,
-        &platform,
+        &opts.platform,
     )
     .await
 }
 
 #[tauri::command]
-async fn write_wifi_config(sd_mount: String, ssid: String, password: String) -> Result<(), String> {
-    wifi::write_wifi_config(&sd_mount, &ssid, &password)
+async fn write_wifi_config(opts: wifi::WifiConfig) -> Result<(), String> {
+    wifi::write_wifi_config(&opts.sd_mount, &opts.ssid, &opts.password)
 }
 
 #[tauri::command]
@@ -241,10 +230,9 @@ async fn check_package_updates(
 
 #[tauri::command]
 async fn check_sd_card_health(
-    sd_mount: String,
-    device_platform: Option<String>,
+    opts: health::HealthCheckOptions,
 ) -> Result<health::HealthCheckResult, String> {
-    health::check_sd_card_health(&sd_mount, device_platform.as_deref())
+    health::check_sd_card_health(&opts.sd_mount, opts.device_platform.as_deref())
 }
 
 #[tauri::command]

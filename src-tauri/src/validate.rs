@@ -144,6 +144,16 @@ pub fn format_bytes(bytes: u64) -> String {
     }
 }
 
+/// Options for validating an installation, received from the frontend via Tauri IPC.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidateOptions {
+    pub sd_mount: String,
+    pub platform: String,
+    pub has_extras: bool,
+    pub extras_dir: String,
+}
+
 pub fn validate_installation(
     sd_mount: &str,
     platform: &str,

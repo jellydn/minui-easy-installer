@@ -2,6 +2,15 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+/// WiFi configuration options, received from the frontend via Tauri IPC.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WifiConfig {
+    pub sd_mount: String,
+    pub ssid: String,
+    pub password: String,
+}
+
 /// Write WiFi configuration to SD card.
 ///
 /// Creates or appends to wifi.txt in the root of the SD card with MinUI's
