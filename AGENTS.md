@@ -81,13 +81,13 @@ Config in `prek.toml`. Auto-rewrites staged files (trailing whitespace, EOF fixe
 - Frontend entry: `src/main.tsx` → `src/App.tsx` (state-based navigation: "home" | "store" | "wifi" | "bios" | "settings")
 - Rust entry: `src-tauri/src/main.rs` → `src-tauri/src/lib.rs` (all Tauri commands registered here)
 - Device profiles: `src/types/device.ts` + `src/types/device-install-map.json`
-- Drive detection: `src-tauri/src/drives.rs` (platform-specific macOS/Windows)
+- Drive detection: `src-tauri/src/drives.rs` + `drives/{macos,linux,windows}.rs` (platform-specific via `DriveDetector` trait)
 - Install flow: `src-tauri/src/install.rs` + `src-tauri/src/pipeline.rs`
 - Archive download/extraction: `src-tauri/src/download.rs` + `src-tauri/src/extract.rs`
 - Package store: `src/PackageStore.tsx` + `src/types/package.ts` + `src/types/store.json`
 - SD health check: `src-tauri/src/health.rs`
 - Validation: `src-tauri/src/validate.rs` (post-install checks; reports `device_path` and warns when multiple device folders are present on the SD card)
-- WiFi: `src-tauri/src/wifi.rs` (scan via `airport` on macOS, write config)
+- WiFi: `src-tauri/src/wifi.rs` + `wifi/{macos,linux,windows}.rs` (platform-specific scan + SSID detection)
 - BIOS: `src-tauri/src/bios.rs` (catalog + status + install_bios_from_bytes) and `src/BiosInstaller.tsx` (UI). The user supplies copyrighted BIOS files; the installer copies them to the right `Bios/<subdir>/` path.
 - Confirmation dialogs: `src/ConfirmDialog.tsx` (overlay modal for write ops)
 - Install progress UI: `src/InstallProgress.tsx`

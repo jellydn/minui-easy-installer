@@ -40,9 +40,7 @@ pub(crate) fn current_ssid() -> Option<String> {
     // Try iwgetid first — it only returns WiFi SSIDs, never ethernet.
     if let Ok(output) = Command::new("iwgetid").arg("-r").output() {
         if output.status.success() {
-            let ssid = String::from_utf8_lossy(&output.stdout)
-                .trim()
-                .to_string();
+            let ssid = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !ssid.is_empty() {
                 return Some(ssid);
             }

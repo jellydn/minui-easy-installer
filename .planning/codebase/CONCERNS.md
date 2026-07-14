@@ -2,21 +2,17 @@
 
 ## File Size & Complexity
 
-The following files warrant attention for potential refactoring:
+All previously flagged files have been addressed:
 
-| File | Lines | Concern |
-|------|-------|---------|
-| `src-tauri/src/install_tests.rs` | 789 | Very large test file — could be split by concern (base/extras/ROMs) |
-| `src-tauri/src/lib.rs` | 647 | Mix of command handlers + `InstallRegistry` + extensive inline tests — multiple responsibilities |
-| `src-tauri/src/wifi.rs` | 535 | Platform-specific logic for macOS `airport`, Linux `iwgetid`/`nmcli` |
-| `src/types/package.ts` | 455 | Registry validation, conversion, caching, and fetch logic in one file |
-| `src-tauri/src/install.rs` | 429 | Install orchestration + copy helpers + ROM dirs + version metadata |
+| File | Before | After | Resolution |
+|------|--------|-------|------------|
+| `install_tests.rs` | 789 | Split into 3 files (137 + 478 + 186) | Split by concern: pipeline / copy / extras |
+| `lib.rs` | 647 | 335 | Contract tests extracted to `lib_tests.rs` |
+| `wifi.rs` | 535 | Split into 4 files (133 + 165 + 87 + 63) | Platform modules: `wifi/{macos,linux,windows}.rs` |
+| `package.ts` | 455 | 236 | Registry conversion extracted to `registry-convert.ts` |
+| `install.rs` | 429 | 504 | InstallPlan inlined phase logic (acceptable growth) |
 
-### Recent mitigations
-
-- `drives.rs` was recently reduced from 503→390 lines by extracting `macos.rs` submodule
-- `install_tests.rs` was split from inline tests in `install.rs`
-- `install_minui_with_cancel` complexity was reduced by extracting `install_base()` and `write_version_metadata()` helpers
+No files currently exceed 300 lines in the main source (excluding test-only files and platform modules with inline tests).
 
 ## Panic Risks (Rust)
 
@@ -86,7 +82,7 @@ Minimal — only a well-documented instance in scripts (`scripts/discover-packag
 | macOS 14.4+ | `airport` WiFi scanning may break (Apple deprecation) | Medium |
 | Windows formatting | `format_drive` returns error — not yet implemented | Low |
 | Package registry | Hardcoded versions in `store.json` — mitigated by daily cron auto-update | Low |
-| Install cancellation | Backend supports cancellation but frontend UI doesn't expose a cancel button | Medium |
+| Install cancellation | Frontend cancel button wired up via `useForkInstall` → `cancel_install` IPC | ✅ Resolved |
 
 ## TODOs & FIXMEs
 

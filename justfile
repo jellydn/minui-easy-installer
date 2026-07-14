@@ -44,6 +44,11 @@ check:
 fmt: fmt-ts
     cd src-tauri && cargo fmt
 
+# Test all (Rust + TypeScript)
+test:
+    cd src-tauri && cargo test
+    bun test
+
 # Ad-hoc sign the macOS app bundle (fixes Gatekeeper "damaged" error)
 sign:
     @APP=$$(ls -d src-tauri/target/release/bundle/macos/*.app 2>/dev/null | head -1); \
