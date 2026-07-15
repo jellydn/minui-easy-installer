@@ -1,6 +1,6 @@
-# Build CI - compiles the full Tauri app on macOS and Windows to catch
-# platform-specific compilation errors that the Linux-only rust.yml can miss
-# (e.g. macOS-only APIs behind #[cfg(target_os = "macos")], Windows FFI).
+# Build CI — compiles the full Tauri app on macOS, Windows, and Linux to
+# catch platform-specific compilation errors (e.g. macOS-only APIs behind
+# #[cfg(target_os = "macos")], Windows FFI, Linux linking issues).
 #
 # Runs on PRs (opened, sync, reopen) and pushes to main. Does NOT bundle;
 # just verifies `cargo build --release` passes with the frontend built.
@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -52,6 +52,12 @@ jobs:
             src-tauri/target
           key: cargo-build-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: cargo-build-${{ runner.os }}-
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'

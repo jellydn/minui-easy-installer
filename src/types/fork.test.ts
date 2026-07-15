@@ -19,6 +19,12 @@ describe("buildReleaseUrl", () => {
       "https://api.github.com/repos/danklammer/MinUI-Zero/releases/latest",
     );
   });
+
+  it("builds URL for MinUITSP", () => {
+    expect(buildReleaseUrl(FORK_PRESETS.minuitsp)).toBe(
+      "https://api.github.com/repos/jellydn/MinUITSP/releases/latest",
+    );
+  });
 });
 
 describe("getForkCacheKey", () => {
@@ -27,6 +33,7 @@ describe("getForkCacheKey", () => {
     expect(getForkCacheKey(FORK_PRESETS["minui-zero"])).toBe(
       "danklammer/MinUI-Zero",
     );
+    expect(getForkCacheKey(FORK_PRESETS.minuitsp)).toBe("jellydn/MinUITSP");
   });
 });
 
@@ -78,6 +85,11 @@ describe("rehydrateFork", () => {
   it("returns preset when owner/repo match MinUI-Zero", () => {
     const result = rehydrateFork({ owner: "danklammer", repo: "MinUI-Zero" });
     expect(result).toBe(FORK_PRESETS["minui-zero"]);
+  });
+
+  it("returns preset when owner/repo match MinUITSP", () => {
+    const result = rehydrateFork({ owner: "jellydn", repo: "MinUITSP" });
+    expect(result).toBe(FORK_PRESETS.minuitsp);
   });
 
   it("returns custom fork for unknown owner/repo", () => {

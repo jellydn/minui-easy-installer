@@ -145,36 +145,34 @@ export async function startInstallAndWait(options: {
 }): Promise<InstallResult> {
   const { listen } = await import("@tauri-apps/api/event");
 
-  return new Promise<InstallResult>(async (resolve, reject) => {
+  return new Promise<InstallResult>((resolve, reject) => {
     const unlistens: (() => void)[] = [];
 
     const cleanup = () => {
       for (const u of unlistens) u();
     };
 
-    try {
-      // Attach listeners BEFORE starting the install to avoid
-      // a race where the event fires before we subscribe.
-      const completeUnlisten = await listen<InstallResult>(
-        "install-complete",
-        (event) => {
-          cleanup();
-          resolve(event.payload);
-        },
-      );
-      unlistens.push(completeUnlisten);
-
-      const errorUnlisten = await listen<string>("install-error", (event) => {
-        cleanup();
-        reject(new Error(event.payload));
-      });
-      unlistens.push(errorUnlisten);
-
-      await startInstall(options);
-    } catch (err) {
+    // Attach listeners BEFORE starting the install to avoid
+    // a race where the event fires before we subscribe.
+    listen<InstallResult>("install-complete", (event) => {
       cleanup();
-      reject(err);
-    }
+      resolve(event.payload);
+    })
+      .then((completeUnlisten) => {
+        unlistens.push(completeUnlisten);
+        return listen<string>("install-error", (event) => {
+          cleanup();
+          reject(new Error(event.payload));
+        });
+      })
+      .then((errorUnlisten) => {
+        unlistens.push(errorUnlisten);
+        return startInstall(options);
+      })
+      .catch((err) => {
+        cleanup();
+        reject(err);
+      });
   });
 }
 
