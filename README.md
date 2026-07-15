@@ -7,9 +7,6 @@
 
 > The easiest way to install and manage MinUI on retro handheld devices.
 
-> **macOS users:** After dragging to Applications, [right-click the app and select Open](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac) to approve it on first launch.
-> If you see "is damaged and can't be opened", run `xattr -cr /Applications/MinUI\ Easy\ Installer.app` in Terminal — this clears the quarantine flag that macOS adds to downloaded apps.
-
 ## ✨ Features
 
 - ⚡️ One-click MinUI installation and updates with real-time progress log
@@ -18,6 +15,20 @@
 - 📶 WiFi configuration wizard
 - 🧬 BIOS file installer for emulators that need copyrighted BIOS files (you supply the BIOS files)
 - 🎮 Supports TrimUI Brick/Smart Pro, Miyoo Mini+/A30/Flip, RG35XX Plus/H/SP, and more
+
+## Download
+
+The latest release is **[v0.1.2](https://github.com/jellydn/minui-easy-installer/releases/tag/v0.1.2)**.
+
+| Platform | Download |
+|----------|----------|
+| **macOS** (Apple Silicon) | [MinUI.Easy.Installer_0.1.2_aarch64.dmg](https://github.com/jellydn/minui-easy-installer/releases/download/v0.1.2/MinUI.Easy.Installer_0.1.2_aarch64.dmg) |
+| **Windows** (x64) | [MinUI.Easy.Installer_0.1.2_x64-setup.exe](https://github.com/jellydn/minui-easy-installer/releases/download/v0.1.2/MinUI.Easy.Installer_0.1.2_x64-setup.exe) |
+| **Windows** (x64 MSI) | [MinUI.Easy.Installer_0.1.2_x64_en-US.msi](https://github.com/jellydn/minui-easy-installer/releases/download/v0.1.2/MinUI.Easy.Installer_0.1.2_x64_en-US.msi) |
+
+📦 [All releases](https://github.com/jellydn/minui-easy-installer/releases)
+
+> **macOS users:** After downloading the DMG and dragging the app to Applications, [right-click the app and select Open](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac) on first launch. If you see "is damaged and can't be opened", run `xattr -cr /Applications/MinUI\ Easy\ Installer.app` in Terminal.
 
 ## Status
 
