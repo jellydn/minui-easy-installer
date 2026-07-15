@@ -74,11 +74,8 @@ pub fn create_rom_dirs(sd_mount: &str) -> Result<u32, String> {
 
     for dir in ROM_DIRS {
         let path = roms_root.join(dir);
-        if !path.exists() {
-            fs::create_dir_all(&path)
-                .map_err(|e| format!("Failed to create Roms/{}: {}", dir, e))?;
-            created += 1;
-        }
+        fs::create_dir_all(&path).map_err(|e| format!("Failed to create Roms/{}: {}", dir, e))?;
+        created += 1;
     }
 
     // Create placeholder for Portmaster in the Ports directory

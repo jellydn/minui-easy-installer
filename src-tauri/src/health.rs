@@ -135,7 +135,7 @@ fn benchmark_read_speed(sd_mount: &str, checks: &mut Vec<ValidationCheck>) -> Op
 
     // Write the test file
     let buf = vec![0u8; 1024 * 1024]; // 1 MB zero-filled
-    let f = match fs::File::create(&test_path) {
+    let mut f = match fs::File::create(&test_path) {
         Ok(f) => f,
         Err(e) => {
             checks.push(ValidationCheck {
@@ -147,14 +147,14 @@ fn benchmark_read_speed(sd_mount: &str, checks: &mut Vec<ValidationCheck>) -> Op
         }
     };
 
-    // Use a BufWriter for efficient writes; drop it before reading.
+    // Write the test file in 1 MB chunks. No BufWriter needed —
+    // chunks are already large enough for efficient syscalls.
     {
-        use std::io::{BufWriter, Write};
-        let mut writer = BufWriter::new(&f);
+        use std::io::Write;
         let mut remaining = BENCH_SIZE;
         while remaining > 0 {
             let chunk = buf.len().min(remaining as usize);
-            if writer.write_all(&buf[..chunk]).is_err() {
+            if f.write_all(&buf[..chunk]).is_err() {
                 checks.push(ValidationCheck {
                     name: "read_speed".to_string(),
                     passed: false,
@@ -165,7 +165,6 @@ fn benchmark_read_speed(sd_mount: &str, checks: &mut Vec<ValidationCheck>) -> Op
             }
             remaining -= chunk as u64;
         }
-        // BufWriter flushes on drop.
     }
 
     // Read the file back, measuring wall time.

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Emitter, Manager};
 
 mod bios;
@@ -212,18 +212,25 @@ async fn check_sd_card_health(
 /// fetches to known endpoints. Add new endpoints here as needed.
 const ALLOWED_URLS: &[&str] = &["https://packages.minui.dev/registry/index.json"];
 
+/// Lazily-initialised HTTP client with connection pooling.
+/// Built once and reused across all `fetch_url` calls.
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("Failed to create HTTP client")
+    })
+}
+
 #[tauri::command]
 async fn fetch_url(url: String) -> Result<String, String> {
     if !ALLOWED_URLS.iter().any(|allowed| url == *allowed) {
         return Err(format!("URL not allowed: {}", url));
     }
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
-    let response = client
+    let response = http_client()
         .get(&url)
         .send()
         .await
