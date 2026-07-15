@@ -6,6 +6,10 @@
 /// Information" and "Other Local Wireless Networks" sections.
 use std::process::Command;
 
+/// Base indentation used by `system_profiler` for property sections.
+/// Section headings and their data lines all start at 10-space indent.
+const SYSTEM_PROFILER_INDENT: &str = "          ";
+
 /// Scan for available WiFi networks on macOS.
 ///
 /// Three-tier fallback:
@@ -22,7 +26,7 @@ pub(crate) fn scan() -> Vec<String> {
     }
 
     // Tier 2: parse system_profiler for all visible networks
-    if let Some(networks) = scan_system_profiler() {
+    if let Some(networks) = try_scan_system_profiler() {
         if !networks.is_empty() {
             return networks;
         }
@@ -56,7 +60,7 @@ fn try_airport_scan() -> Option<Vec<String>> {
 /// Run `system_profiler SPAirPortDataType` and parse all visible networks
 /// from both "Current Network Information" and "Other Local Wireless Networks"
 /// sections. Results are sorted and deduplicated.
-fn scan_system_profiler() -> Option<Vec<String>> {
+fn try_scan_system_profiler() -> Option<Vec<String>> {
     let output = Command::new("system_profiler")
         .args(["SPAirPortDataType"])
         .output()
@@ -101,7 +105,7 @@ pub(crate) fn parse_system_profiler_networks(output: &str) -> Vec<String> {
 
         // Exit the section on a de-indented line (back to section heading level
         // or higher — system_profiler uses 10-space base indent for properties)
-        if !line.starts_with("          ") {
+        if !line.starts_with(SYSTEM_PROFILER_INDENT) {
             in_section = false;
             continue;
         }
@@ -323,7 +327,7 @@ mod tests {
     #[test]
     fn test_parse_system_profiler_deduplicates() {
         // The same network in both sections appears twice in document order.
-        // Dedup is the caller's responsibility (scan_system_profiler).
+        // Dedup is the caller's responsibility (try_scan_system_profiler).
         let output = r"
       Interfaces:
         en0:
