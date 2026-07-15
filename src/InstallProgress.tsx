@@ -47,7 +47,12 @@ function InstallProgressUI({
   const latestDownload = [...log]
     .reverse()
     .find(
-      (entry): entry is InstallProgressEvent & { currentBytes: number; totalBytes: number } =>
+      (
+        entry,
+      ): entry is InstallProgressEvent & {
+        currentBytes: number;
+        totalBytes: number;
+      } =>
         entry.step === "download" &&
         typeof entry.currentBytes === "number" &&
         typeof entry.totalBytes === "number",
@@ -71,7 +76,8 @@ function InstallProgressUI({
             aria-label="Download progress"
           />
           <span className="install-download-progress-text">
-            {formatBytes(latestDownload.currentBytes)} / {formatBytes(latestDownload.totalBytes)}
+            {formatBytes(latestDownload.currentBytes)} /{" "}
+            {formatBytes(latestDownload.totalBytes)}
           </span>
         </div>
       )}
@@ -93,10 +99,7 @@ function InstallProgressUI({
           {log.map((entry, i) => (
             // New log entries receive a stable id from the listener; the index
             // fallback only exists for entries created before that change.
-            <div
-              key={entry.id ?? i}
-              className={`log-line log-${entry.step}`}
-            >
+            <div key={entry.id ?? i} className={`log-line log-${entry.step}`}>
               <span className="log-step">{STEP_ICON[entry.step] ?? "•"}</span>
               <span className="log-details">{entry.details}</span>
             </div>
