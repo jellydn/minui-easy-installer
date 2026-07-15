@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useFork } from "../contexts/ForkContext";
 import {
   INITIAL_INSTALL_STATE,
@@ -60,11 +60,7 @@ export function useForkInstall(
     updateAll: { isUpdatingAll: false, message: "", error: null },
   });
 
-  const orchestratorRef = useRef<InstallOrchestrator | null>(null);
-  if (!orchestratorRef.current) {
-    orchestratorRef.current = new InstallOrchestrator();
-  }
-  const orch = orchestratorRef.current;
+  const [orch] = useState(() => new InstallOrchestrator());
 
   // Subscribe to orchestrator state changes.
   useEffect(() => {

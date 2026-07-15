@@ -66,9 +66,7 @@ describe("useForkInstall", () => {
     });
 
     expect(result.current.install.phase).toBe("error");
-    expect(result.current.install.error).toBe(
-      "MinUI (Official) install failed: SD card full",
-    );
+    expect(result.current.install.error).toBe("SD card full");
   });
 
   it("installMinUI extracts the message when startInstallAndWait rejects with a plain string (Tauri v2 invoke)", async () => {
