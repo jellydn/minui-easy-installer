@@ -296,158 +296,15 @@ fn write_version_metadata(options: &InstallOptions) -> Option<String> {
     }
 }
 
-/// Bundles all the state a phase needs during execution so the
-/// `execute` method receives a single context argument instead of
-/// 5+ separate parameters.
-struct InstallContext<'a> {
-    options: &'a InstallOptions,
-    progress: ProgressCallback,
-    download_progress: DownloadProgressCallback,
-    cancel: CancellationToken,
-    session: &'a mut InstallSession,
-}
-
-/// Ordered install phases. Each phase knows how to execute itself —
-/// the orchestrator (`install_minui_with_cancel`) builds a plan and
-/// iterates through it, emitting progress at phase boundaries and
-/// checking cancellation between phases.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum InstallPhase {
-    Base,
-    Extras,
-    RomDirs,
-    VersionMetadata,
-}
-
-/// Outcome returned by `InstallPhase::execute()`. Each variant carries
-/// the data produced by that phase so the orchestrator can accumulate
-/// the final `InstallResult`.
-enum PhaseOutcome {
-    BaseFilesCopied(u32),
-    ExtrasFilesCopied(u32),
-    RomDirsCreated(u32),
-    MetaWarning(Option<String>),
-}
-
-impl InstallPhase {
-    fn label(&self) -> &'static str {
-        match self {
-            Self::Base => "download",
-            Self::Extras => "extract",
-            Self::RomDirs => "copy",
-            Self::VersionMetadata => "finish",
-        }
-    }
-
-    /// Execute this phase and return its outcome.
-    ///
-    /// Each variant dispatches to the appropriate install function.
-    /// On error the orchestrator decides whether the failure is fatal
-    /// or should be captured as a warning.
-    async fn execute(&self, ctx: &mut InstallContext<'_>) -> Result<PhaseOutcome, String> {
-        match self {
-            Self::Base => {
-                let file_name = ctx
-                    .options
-                    .base_url
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or("MinUI.zip");
-                (ctx.progress)(InstallProgressEvent::phase(
-                    self.label(),
-                    &format!("Downloading {}", file_name),
-                ));
-                let copied = Pipeline::run(
-                    "base",
-                    &ctx.options.base_url,
-                    ctx.options.base_checksum.as_deref(),
-                    |p| {
-                        copy_base_files(
-                            p.to_str().unwrap(),
-                            &ctx.options.sd_mount,
-                            &ctx.options.platform,
-                        )
-                    },
-                    ctx.progress.clone(),
-                    ctx.download_progress.clone(),
-                    ctx.cancel.clone(),
-                    ctx.session,
-                )
-                .await?;
-                Ok(PhaseOutcome::BaseFilesCopied(copied))
-            }
-            Self::Extras => {
-                let extras_url = ctx
-                    .options
-                    .extras_url
-                    .as_deref()
-                    .ok_or("No extras URL provided")?;
-                (ctx.progress)(InstallProgressEvent::phase(
-                    self.label(),
-                    "Downloading Extras...",
-                ));
-                let copied = Pipeline::run(
-                    "extras",
-                    extras_url,
-                    ctx.options.extras_checksum.as_deref(),
-                    |p| {
-                        copy_extras_files(
-                            p.to_str().unwrap(),
-                            &ctx.options.sd_mount,
-                            &ctx.options.extras_platform,
-                        )
-                    },
-                    ctx.progress.clone(),
-                    ctx.download_progress.clone(),
-                    ctx.cancel.clone(),
-                    ctx.session,
-                )
-                .await?;
-                Ok(PhaseOutcome::ExtrasFilesCopied(copied))
-            }
-            Self::RomDirs => {
-                (ctx.progress)(InstallProgressEvent::phase(
-                    self.label(),
-                    "Creating standard ROM directories...",
-                ));
-                let created = create_rom_dirs(&ctx.options.sd_mount).unwrap_or(0);
-                Ok(PhaseOutcome::RomDirsCreated(created))
-            }
-            Self::VersionMetadata => {
-                let fork_label = ctx.options.fork_name.as_deref().unwrap_or("MinUI");
-                (ctx.progress)(InstallProgressEvent::phase(
-                    self.label(),
-                    &format!(
-                        "Writing version metadata ({} {})",
-                        fork_label, ctx.options.version
-                    ),
-                ));
-                let warning = write_version_metadata(ctx.options);
-                Ok(PhaseOutcome::MetaWarning(warning))
-            }
-        }
-    }
-}
-
-/// Build the ordered list of phases for this install.
-/// The extras phase is conditionally included based on whether an
-/// extras URL was provided.
-fn build_install_plan(options: &InstallOptions) -> Vec<InstallPhase> {
-    let mut phases = vec![InstallPhase::Base];
-    if options.extras_url.is_some() {
-        phases.push(InstallPhase::Extras);
-    }
-    phases.push(InstallPhase::RomDirs);
-    phases.push(InstallPhase::VersionMetadata);
-    phases
-}
-
 /// Full installation flow with cancellation support.
 ///
-/// Builds a plan of ordered phases and executes each one in sequence.
-/// Each phase reports its own progress; the orchestrator accumulates
-/// the results and handles phase-specific error semantics (e.g. extras
-/// failures are non-fatal warnings).
+/// Runs four steps in sequence:
+/// 1. Base archive — download, extract, copy to SD (fatal on error)
+/// 2. Extras archive — download, extract, copy (non-fatal on error)
+/// 3. ROM directories — create standard folders on SD
+/// 4. Version metadata — write minui.txt to SD root
+///
+/// The `InstallSession` owns temp dirs and cleans them up on drop.
 pub async fn install_minui_with_cancel(
     options: &InstallOptions,
     progress: ProgressCallback,
@@ -455,48 +312,85 @@ pub async fn install_minui_with_cancel(
     cancel: CancellationToken,
 ) -> Result<InstallResult, String> {
     let mut session = InstallSession::new();
-    let plan = build_install_plan(options);
+    let mut extras_files_copied = 0u32;
+    let mut extras_warning: Option<String> = None;
 
-    let mut result = InstallResult {
-        success: true,
-        error: None,
-        base_files_copied: 0,
-        extras_files_copied: 0,
-        extras_warning: None,
-        rom_dirs_created: 0,
-    };
+    // ── Step 1: Base archive (fatal on error) ──────────────
+    let file_name = options.base_url.rsplit('/').next().unwrap_or("MinUI.zip");
+    (progress)(InstallProgressEvent::phase(
+        "download",
+        &format!("Downloading {}", file_name),
+    ));
+    let base_files_copied = Pipeline::run(
+        "base",
+        &options.base_url,
+        options.base_checksum.as_deref(),
+        |p| copy_base_files(p.to_str().unwrap(), &options.sd_mount, &options.platform),
+        progress.clone(),
+        download_progress.clone(),
+        cancel.clone(),
+        &mut session,
+    )
+    .await?;
 
-    for phase in &plan {
-        let mut ctx = InstallContext {
-            options,
-            progress: progress.clone(),
-            download_progress: download_progress.clone(),
-            cancel: cancel.clone(),
-            session: &mut session,
-        };
-
-        match phase.execute(&mut ctx).await {
-            Ok(PhaseOutcome::BaseFilesCopied(n)) => result.base_files_copied = n,
-            Ok(PhaseOutcome::ExtrasFilesCopied(n)) => result.extras_files_copied = n,
-            Ok(PhaseOutcome::RomDirsCreated(n)) => result.rom_dirs_created = n,
-            Ok(PhaseOutcome::MetaWarning(w)) => {
-                if w.is_some() {
-                    result.extras_warning = w;
-                }
-            }
-            Err(e) => {
-                // Extras failure is non-fatal — capture as warning
-                if *phase == InstallPhase::Extras {
-                    result.extras_warning = Some(e);
-                } else {
-                    return Err(e);
-                }
-            }
+    // ── Step 2: Extras archive (non-fatal on error) ─────────
+    if let Some(extras_url) = &options.extras_url {
+        (progress)(InstallProgressEvent::phase(
+            "extract",
+            "Downloading Extras...",
+        ));
+        match Pipeline::run(
+            "extras",
+            extras_url,
+            options.extras_checksum.as_deref(),
+            |p| {
+                copy_extras_files(
+                    p.to_str().unwrap(),
+                    &options.sd_mount,
+                    &options.extras_platform,
+                )
+            },
+            progress.clone(),
+            download_progress.clone(),
+            cancel.clone(),
+            &mut session,
+        )
+        .await
+        {
+            Ok(n) => extras_files_copied = n,
+            Err(e) => extras_warning = Some(e),
         }
     }
 
+    // ── Step 3: ROM directories ────────────────────────────
+    (progress)(InstallProgressEvent::phase(
+        "copy",
+        "Creating standard ROM directories...",
+    ));
+    let rom_dirs_created = create_rom_dirs(&options.sd_mount).unwrap_or(0);
+
+    // ── Step 4: Version metadata ───────────────────────────
+    let fork_label = options.fork_name.as_deref().unwrap_or("MinUI");
+    (progress)(InstallProgressEvent::phase(
+        "finish",
+        &format!(
+            "Writing version metadata ({} {})",
+            fork_label, options.version
+        ),
+    ));
+    if let Some(w) = write_version_metadata(options) {
+        extras_warning = Some(w);
+    }
+
     // session drops here — temp dirs cleaned up after all operations complete
-    Ok(result)
+    Ok(InstallResult {
+        success: true,
+        error: None,
+        base_files_copied,
+        extras_files_copied,
+        extras_warning,
+        rom_dirs_created,
+    })
 }
 
 #[cfg(test)]
