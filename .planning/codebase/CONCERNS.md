@@ -78,7 +78,7 @@ Minimal — only a well-documented instance in scripts (`scripts/discover-packag
 
 | Area | Gap | Priority |
 |------|-----|----------|
-| Linux support | Drive detection exists but not tested in CI | Low (not MVP) |
+| Linux support | `ubuntu-latest` added to build matrix — compile/test regressions caught in CI | ✅ Resolved |
 | macOS 14.4+ | `airport` WiFi scanning restored via `system_profiler` fallback — `parse_system_profiler_networks()` extracts all visible networks from "Other Local Wireless Networks" section | ✅ Resolved |
 | Windows formatting | `format_drive` returns error — not yet implemented | Low |
 | Package registry | Hardcoded versions in `store.json` — mitigated by daily cron auto-update | Low |
