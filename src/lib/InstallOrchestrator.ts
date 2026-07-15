@@ -87,42 +87,32 @@ function stepToInstallPhase(step: string, current: InstallPhase): InstallPhase {
 /**
  * Fetch the release for a fork and run the install IPC.
  * Stateless — takes ForkConfig directly, no ref needed.
+ * Throws on failure; callers handle with try/catch.
  */
 async function fetchAndInstallRelease(
   sdMount: string,
   profile: DeviceProfile,
   fork: ForkConfig,
-): Promise<
-  | { kind: "ok"; release: MinUIRelease; data: InstallResult }
-  | { kind: "err"; message: string }
-> {
+): Promise<{ release: MinUIRelease; data: InstallResult }> {
   const releaseResult = await fetchMinUIRelease(fork);
   if (!releaseResult.success) {
-    return {
-      kind: "err",
-      message: `Failed to fetch ${fork.label} release: ${releaseResult.error.message}`,
-    };
+    throw new Error(
+      `Failed to fetch ${fork.label} release: ${releaseResult.error.message}`,
+    );
   }
   const release = releaseResult.data;
-  try {
-    const data = await startInstallAndWait({
-      baseUrl: release.baseArchiveUrl,
-      extrasUrl: release.extrasArchiveUrl || undefined,
-      baseChecksum: release.checksums?.base || undefined,
-      extrasChecksum: release.checksums?.extras || undefined,
-      sdMount,
-      platform: profile.platform,
-      extrasPlatform: profile.extrasPlatform,
-      version: release.version,
-      forkName: fork.minuiTxtPrefix,
-    });
-    return { kind: "ok", release, data };
-  } catch (err) {
-    return {
-      kind: "err",
-      message: `${fork.label} install failed: ${errorMessage(err)}`,
-    };
-  }
+  const data = await startInstallAndWait({
+    baseUrl: release.baseArchiveUrl,
+    extrasUrl: release.extrasArchiveUrl || undefined,
+    baseChecksum: release.checksums?.base || undefined,
+    extrasChecksum: release.checksums?.extras || undefined,
+    sdMount,
+    platform: profile.platform,
+    extrasPlatform: profile.extrasPlatform,
+    version: release.version,
+    forkName: fork.minuiTxtPrefix,
+  });
+  return { release, data };
 }
 
 // ── Orchestrator ──────────────────────────────────────────────
@@ -204,13 +194,11 @@ export class InstallOrchestrator {
     }
 
     try {
-      const fetched = await fetchAndInstallRelease(sdMount, profile, fork);
-      if (fetched.kind === "err") {
-        this.setInstall({ error: fetched.message, phase: "error" });
-        return;
-      }
-
-      const { release, data } = fetched;
+      const { release, data } = await fetchAndInstallRelease(
+        sdMount,
+        profile,
+        fork,
+      );
       const fileName = release.baseArchiveUrl.split("/").pop();
 
       this.setInstall({
@@ -312,9 +300,10 @@ export class InstallOrchestrator {
           message: `Updating ${fork.label}...`,
         });
 
-        const fetched = await fetchAndInstallRelease(sdMount, profile, fork);
-        if (fetched.kind === "err") {
-          finish(fetched.message, "");
+        try {
+          await fetchAndInstallRelease(sdMount, profile, fork);
+        } catch (err) {
+          finish(errorMessage(err), "");
           return;
         }
       }
@@ -337,27 +326,28 @@ export class InstallOrchestrator {
           registryResult.data.packages.map((p) => [p.name, p]),
         );
 
-        const installResults = await Promise.all(
-          packageUpdates.map(async (update) => {
-            const entry = packageByName.get(update.name);
-            if (!entry) return `${update.name}: not found in registry`;
-            const result = await installPackage({
-              artifactUrl: entry.artifactUrl,
-              checksum: entry.checksum || undefined,
-              sdMount,
-              targetDir: entry.installPathRules.targetDir,
-              extractToRoot: entry.installPathRules.extractToRoot,
-              pakName: entry.installPathRules.pakName || update.name,
-              platform: profile.platform,
-            });
-            if (!result.success) {
-              return `${update.name}: ${result.error?.message || "install failed"}`;
-            }
-            return null;
-          }),
-        );
-
-        const errors = installResults.filter((e): e is string => e !== null);
+        // Install packages sequentially — concurrent extraction to
+        // the same SD card causes severe I/O contention.
+        const errors: string[] = [];
+        for (const update of packageUpdates) {
+          const entry = packageByName.get(update.name);
+          if (!entry) {
+            errors.push(`${update.name}: not found in registry`);
+            continue;
+          }
+          const result = await installPackage({
+            artifactUrl: entry.artifactUrl,
+            checksum: entry.checksum || undefined,
+            sdMount,
+            targetDir: entry.installPathRules.targetDir,
+            extractToRoot: entry.installPathRules.extractToRoot,
+            pakName: entry.installPathRules.pakName || update.name,
+            platform: profile.platform,
+          });
+          if (!result.success) {
+            errors.push(`${update.name}: ${result.error?.message || "install failed"}`);
+          }
+        }
         if (errors.length > 0) {
           finish(`Package update errors:\n${errors.join("\n")}`, "");
           return;
