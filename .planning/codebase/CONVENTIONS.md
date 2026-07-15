@@ -1,160 +1,83 @@
 # Coding Conventions
 
-## TypeScript
+## Rust (`src-tauri/`)
 
-### Linting & Formatting
-
-| Tool | Config | Command |
-|------|--------|---------|
-| ESLint | `.eslintrc.cjs` | `oxlint src` (Rust-based, fast) |
-| Oxfmt | `.oxfmtrc.json` | `oxfmt src` |
-| TypeScript | `tsconfig.json` (strict) | `tsc --noEmit` |
-
-### Error Handling
-
-Two patterns are used:
-
-**Either pattern** (preferred for UI-bound operations):
-```typescript
-type Result = { success: true; data: T } | { success: false; error: AppError };
-```
-
-**Try/catch** (for unexpected failures):
-```typescript
-try {
-  const result = await invoke("command", args);
-} catch (err) {
-  const message = err instanceof Error ? err.message : "Unknown error";
-}
-```
-
-Error classification uses `classifyError()` from `src/types/errors.ts`.
-
-### Imports
-
-- `@tauri-apps/api/core` → `invoke` for IPC calls
-- `@tauri-apps/api/event` → `listen` for event subscriptions
-- Dynamic imports for Tauri APIs (avoid bundling issues in non-Tauri contexts)
-
-### Component Patterns
-
-- **No CSS framework** — plain `styles.css`
-- State-based navigation in `App.tsx`: `"home" | "store" | "wifi" | "bios" | "settings"`
-- Confirmation dialogs as overlay modals (`ConfirmDialog`, `FormatConfirmDialog`)
-- Props are typed inline or with explicit interfaces
-
-### Testing
-
-- See `TESTING.md` for full testing conventions
-- `vi.mock()` for module mocking
-- `@testing-library/jest-dom` matchers via `vitest.setup.ts`
-
-## Rust
-
-### Linting & Formatting
-
-| Tool | Command |
-|------|---------|
-| `cargo fmt` | Format Rust code |
-| `cargo clippy` | Lint with `-- -D warnings` (deny all) |
-| `cargo check` | Fast compile check (no codegen) |
-
-### Error Handling
-
-**Return type:** `Result<T, String>` — errors are human-readable strings:
-
-```rust
-fn do_thing() -> Result<u32, String> {
-    let output = Command::new("df").output()
-        .map_err(|e| format!("Failed to run df: {}", e))?;
-    // ...
-}
-```
-
-**Expect:** Used sparingly in:
-- `generate_context!()` — build-time failure
-- `lock().unwrap()` — mutex poisoning is unrecoverable
-
-### Module Organization
-
-```rust
-// In lib.rs:
-mod bios;
-mod download;
-mod drives;
-// ...
-#[cfg(target_os = "macos")]
-mod macos;  // conditional compilation
-```
-
-Tests are either:
-- Inline: `#[cfg(test)] mod tests { ... }` inside the source file (e.g., `lib.rs`)
-- External: `#[cfg(test)] #[path = "drives_tests.rs"] mod tests;`
+### Formatting & Linting
+- `cargo fmt` — enforced in CI (`cargo fmt --check`)
+- `cargo clippy -- -D warnings` — zero warnings allowed
 
 ### Naming
+- `snake_case` for functions, variables, modules
+- `CamelCase` for types, structs, enums
+- `SCREAMING_SNAKE_CASE` for constants
 
-| Item | Convention | Example |
-|------|-----------|---------|
-| Functions | `snake_case` | `copy_base_files` |
-| Structs | `PascalCase` | `InstallOptions` |
-| Enums | `PascalCase` | `VolumeKind` |
-| Constants | `SCREAMING_SNAKE_CASE` | `PRESERVED_FOLDERS` |
-| Modules | `snake_case` | `fs_utils` |
+### Documentation
+- `///` doc comments on all `pub` and `pub(crate)` functions
+- `//` inline comments for non-obvious logic (explain *why*, not *what*)
 
-### Platform Gating
+### Module Organization
+- Platform-specific code in `drives/{macos,linux,windows}.rs` and `wifi/{macos,linux,windows}.rs`
+- `#[cfg(target_os = "...")]` module declarations in the dispatcher file
+- Tests in `#[cfg(test)] mod tests` within platform files, or in `*_tests.rs` for cross-platform tests
 
-```rust
-#[cfg(target_os = "macos")]
-pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> { ... }
+### Error Handling
+- IPC commands return `Result<T, String>` — errors are serialized as strings
+- `eprintln!` used for non-fatal warnings (event emit failure, temp cleanup failure)
+- Panic allowed only for unrecoverable state (e.g., mutex poison on main thread)
 
-#[cfg(target_os = "windows")]
-pub fn list_removable_drives() -> Result<Vec<RemovableDrive>, String> { ... }
-```
+### Patterns
+- Tauri commands accept single `#[derive(Deserialize)]` structs, not individual params
+- `if let Ok(...)` for graceful failure handling in spawned tasks
+- `.unwrap()` only in main-thread code where failure means app crash
 
-### Security Patterns
+### Security
+- Path canonicalization + re-validation for symlink race guards (`create_target_within`, `install_bios_from_bytes`)
+- Platform name sanitization (alphanumeric + hyphens only)
+- `fs::copy` dereferences symlinks (no symlink escape via `copy_dir_recursive`)
 
-- **Path sanitization:** All paths that touch the SD card are canonicalized and validated to stay within the mount root
-- **Input validation:** Platform names restricted to alphanumeric + hyphens
-- **No secret logging:** WiFi passwords and sensitive data are not logged
-- **Atomic temp cleanup:** `InstallSession` owns `TempDir` handles — dropped atomically
+## TypeScript (`src/`)
 
-### Clippy Suppressions
+### Formatting & Linting
+- `oxfmt` — zero-config formatter
+- `oxlint` — Rust-based linter (0 warnings, 0 errors in CI)
+- ESLint for additional rules (`no-async-promise-executor`, React hooks)
 
-Only used where justified:
-```rust
-#[allow(clippy::too_many_arguments)]
-```
-or on the `pub(crate) use` re-exports for tests.
+### Naming
+- `camelCase` for variables, functions
+- `PascalCase` for components, types, interfaces
+- `kebab-case` for file names
 
-## Git
+### Patterns
+- No `any` or `@ts-ignore` in main `src/` codebase
+- `console.error` only for genuine errors; no `console.log` in production
+- React components use plain CSS classes from `styles.css` (no CSS-in-JS)
+- State management via React context (`ForkContext`) + `useState`/`useCallback`
+- No router — state-based navigation in `App.tsx`
 
-### Commits
+### Component Structure
+- Each component in its own file
+- Custom hooks in `hooks/` directory
+- Type definitions in `types/` directory
+- Tests co-located with source files as `*.test.ts` / `*.test.tsx`
 
-Follow [conventional commits](https://www.conventionalcommits.org/):
+### Fork System
+- `FORK_PRESETS` is the single source of truth for known forks
+- `buildCustomFork()` creates `ForkConfig` from `owner/repo` string
+- `rehydrateFork()` matches stored state to a preset or creates custom
+- Fork selection persisted to `localStorage` via `ForkProvider`
 
-```
-type(scope): description
+## General
 
-Types: feat, fix, docs, refactor, test, chore, ci, build, perf
-```
+### File Size
+- Source files target <500 lines
+- Test files may exceed (e.g., `install_copy_tests.rs` at 478 lines)
+- Largest source files: `install.rs` (512), `useForkInstall.ts` (425), `validate.rs` (420)
 
-### Pre-commit
+### Git
+- Conventional commits: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `test:`, `ci:`, `chore:`
+- Pre-commit hooks via `prek` (trailing whitespace, EOF, LF, lint --fix)
+- Squash-merge to main
 
-`prek.toml` runs on staged files:
-- Trailing whitespace removal
-- EOF newline fixer
-- LF normalization
-- Lint `--fix`
-
-If a hook rewrites a file, re-stage with `git add -u`.
-
-## Build Commands
-
-```bash
-bun run dev          # Frontend only (Vite on port 1420)
-cargo tauri dev      # Full Tauri dev (Rust + React)
-cargo tauri build    # Production build
-just check           # All checks: lint + typecheck + fmt + clippy
-bun test             # Frontend tests
-cargo test           # Rust tests
-```
+### No TODOs
+- Zero `TODO`, `FIXME`, `HACK`, `XXX`, `WORKAROUND`, or `BUG` annotations
+- Tracked work in GitHub Issues rather than inline comments

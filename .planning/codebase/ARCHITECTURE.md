@@ -1,148 +1,95 @@
 # Architecture
 
-## Overview
+## Pattern: Tauri IPC with Command Handlers
 
-MinUI Easy Installer is a **Tauri v2 desktop application** with a Rust backend and React 18 frontend. It installs/updates MinUI on retro handheld SD cards and provides a package store for community emulators and tools.
-
-```
-┌──────────────────────────────────────────────────┐
-│                    Tauri v2                       │
-│  ┌──────────────────┐   ┌──────────────────────┐ │
-│  │  Rust Backend    │◄──│  React Frontend       │ │
-│  │  (20 commands)   │IPC│  (AppShell → screens) │ │
-│  │                  │──►│                       │ │
-│  │  Shell out to:   │   │  Home, PackageStore,  │ │
-│  │  df, diskutil,    │   │  WifiWizard,         │ │
-│  │  powershell,      │   │  BiosInstaller,      │ │
-│  │  airport, nmcli   │   │  Settings             │ │
-│  └──────────────────┘   └──────────────────────┘ │
-└──────────────────────────────────────────────────┘
-```
-
-## IPC Layer
-
-The backend exposes **20 Tauri commands** registered in `src-tauri/src/lib.rs` via `generate_handler!`:
-
-| Category | Commands |
-|----------|----------|
-| **Drives** | `get_removable_drives`, `format_drive` |
-| **Install** | `install_minui`, `start_install`, `cancel_install` |
-| **Validation** | `validate_installation`, `format_validation_report` |
-| **Package store** | `install_package`, `detect_installed_packages`, `check_package_updates` |
-| **WiFi** | `write_wifi_config`, `scan_wifi_networks`, `get_current_wifi_ssid` |
-| **BIOS** | `list_bios_catalog`, `get_bios_status`, `install_bios_file` |
-| **Health** | `check_sd_card_health` |
-| **Version** | `check_minui_version` |
-| **Download** | `verify_archive_checksum` |
-| **Network** | `fetch_url` |
-
-## Install Pipeline
+The application follows a client-server pattern via Tauri's IPC bridge:
 
 ```
-startInstallAndWait() (frontend)
-  ├─ listen("install-complete") ───┐
-  ├─ listen("install-error") ──────┤─ promise
-  └─ startInstall(options) ────────┘
-
-start_install (Rust command)
-  ├─ Create CancellationToken
-  ├─ Register in InstallRegistry
-  └─ tokio::spawn:
-       └─ install_minui_with_cancel()
-            ├─ install_base()      → Pipeline::run("base")
-            ├─ try_install_extras() → Pipeline::run("extras")
-            ├─ create_rom_dirs()
-            └─ write_version_metadata()
-            └─ emit("install-complete") or emit("install-error")
+┌─────────────────────┐     IPC (invoke)     ┌──────────────────────┐
+│   React Frontend    │ ◄──────────────────► │    Rust Backend      │
+│   (src/)            │     events           │    (src-tauri/src/)  │
+└─────────────────────┘                      └──────────────────────┘
 ```
 
-### Pipeline phases
+All commands are registered in `src-tauri/src/lib.rs` (~335 lines). Each accepts a single `#[derive(Deserialize)]` struct parameter for clean IPC boundaries.
 
-Each archive (base/extras/package) goes through:
+## Core Domains
 
-```
-Download → Extract → Copy
-   │           │         │
-   ▼           ▼         ▼
-  TempDir    TempDir    SD card
-```
-
-`InstallSession` owns all `TempDir` handles — they're cleaned up atomically when the session drops.
-
-### Cancellation
-
-- `CancellationToken` from `tokio-util` is checked at the start of each pipeline phase
-- `cancel_install()` cancels the token
-- `InstallRegistry` ensures only one install runs at a time
-
-## Frontend Architecture
+### Install Pipeline
 
 ```
-App (src/App.tsx)
-  └─ ForkProvider (src/contexts/ForkContext.tsx)
-       └─ AppShell: state-based navigation
-            ├─ "home"   → Home (useForkInstall, useVersionCheck)
-            ├─ "store"  → PackageStore
-            ├─ "wifi"   → WifiWizard
-            ├─ "bios"   → BiosInstaller
-            └─ "settings" → Settings
+Download ──► Extract ──► Copy (base) ──► Copy (extras) ──► ROM dirs ──► Version metadata
 ```
 
-### State management
+Files: `install.rs` (512 lines), `download.rs`, `extract.rs`, `pipeline.rs`
 
-| Mechanism | Scope | Owned by |
-|-----------|-------|----------|
-| `ForkProvider` | Global | `useFork()` hook — active fork config |
-| `RegistryCache` | Module | `package.ts` — 5-min TTL cache |
-| `InstallRegistry` | Tauri state | `lib.rs` — in-flight install token |
-| `useState` | Component-local | Each screen |
+- **Cancellation**: `start_install` spawns in a background `tokio` task with `CancellationToken`. Emits `install-progress` / `install-complete` / `install-error` Tauri events.
+- **Base archive filtering**: `copy_base_files` copies only the selected device folder + shared items (`Bios`, `Roms`, `Saves`, `MinUI.zip`), leaving other platforms behind.
+- **Extras**: Always installed when available. Failure is non-fatal (logged as warning).
+- **User data preservation**: `roms`, `saves`, `save`, `bios`, `cheats` folders are case-insensitively preserved during updates.
 
-### Key hooks
+### Package Store
 
-| Hook | Purpose |
-|------|---------|
-| `useForkInstall` | Orchestrates MinUI install + update-all flow |
-| `useVersionCheck` | Compares installed vs latest MinUI version |
-| `useFork` | Reads current fork config from context |
-| `useMountEffect` | Runs effect only on mount (not re-renders) |
-| `useScrollToBottom` | Auto-scrolls install progress log |
+File: `src/types/package.ts` (236 lines), `src/PackageStore.tsx` (266 lines)
 
-## Rust Module Map
+- Registry fetched from `packages.minui.dev/registry/index.json`
+- `RegistryCache` class with injectable TTL
+- Per-device platform paths from `store.json` (e.g., `/Emus/tg5040/DC.pak/`)
+- Schema validation via `validate.ts` before trust
+
+### Drive Detection
+
+Platform-specific via `#[cfg]`-gated modules:
+- `drives/macos.rs` (265 lines) — `df` + `diskutil` parsing
+- `drives/windows.rs` — PowerShell `Get-Volume`
+- `drives/linux.rs` — `lsblk` JSON parsing
+
+Shared `DriveDetector` trait with `list()` method for testability.
+
+### WiFi
+
+Platform-specific modules:
+- `wifi/macos.rs` (345 lines) — 3-tier fallback: `airport` → `system_profiler` → `current_ssid()`
+- `wifi/windows.rs` — `netsh wlan show networks` parsing
+- `wifi/linux.rs` — `nmcli` parsing
+
+Configuration written to `<sd_root>/wifi.txt` (one `SSID:PASSWORD` per line, `#` comments).
+
+### BIOS Installation
+
+File: `bios.rs` (369 lines), `BiosInstaller.tsx`
+
+- Catalog of known BIOS files with target paths
+- Status check (present/missing) per BIOS entry
+- `install_bios_from_bytes`: sanitizes filenames, canonicalizes target paths (symlink-race guard)
+
+### Version Tracking
+
+- **Write side**: Installer writes `minui.txt` to SD root: `{fork_name} {version}`
+- **Read side**: `version/mod.rs` reads `minui.txt` back, parses with `semver`
+- **Packages**: Read `Tools/*/version.txt` (included in archives)
+
+### Health Check
+
+File: `health.rs` — filesystem integrity, free space, presence of MinUI directories.
+
+## Frontend Navigation
+
+`App.tsx` uses state-based navigation (no router):
 
 ```
-src-tauri/src/
-  main.rs          → Entry point
-  lib.rs           → All Tauri commands + generate_handler!
-  lib_tests.rs     → Contract tests for Tauri command handlers
-  install.rs       → Install flow (InstallPlan orchestrator, phases)
-  install_copy_tests.rs → copy_base_files + preserved_path tests
-  install_extras_tests.rs → extras + metadata tests
-  install_tests.rs → Full pipeline integration test
-  pipeline.rs      → Download → extract → copy pipeline
-  download.rs      → HTTP download with streaming + checksum
-  extract.rs       → ZIP extraction to temp dirs
-  drives.rs        → Platform-specific drive detection + DriveDetector trait
-  drives/macos.rs  → macOS diskutil parsing helpers
-  drives/linux.rs  → Linux lsblk parsing
-  drives/windows.rs→ Windows WMI parsing
-  package.rs       → Package install logic
-  wifi.rs          → WiFi config write + platform dispatchers
-  wifi/macos.rs    → macOS airport + system_profiler WiFi scanning
-  wifi/linux.rs    → Linux nmcli + iwgetid WiFi scanning
-  wifi/windows.rs  → Windows netsh WiFi scanning
-  bios.rs          → BIOS catalog + status + file install
-  health.rs        → SD card health checks
-  validate.rs      → Post-install validation
-  version.rs       → MinUI version check (minui.txt)
-  platform.rs      → Device ↔ platform mapping
-  fs_utils.rs      → Directory copy, disk space, canonicalize
+"home" ──► Home.tsx (drive selection, install)
+"store" ──► PackageStore.tsx
+"wifi" ──► WifiWizard.tsx
+"bios" ──► BiosInstaller.tsx
+"settings" ──► Settings.tsx (fork selection)
 ```
 
-## Security Patterns
+## Key Design Decisions
 
-- **Symlink escape prevention:** `create_target_within` and `install_bios_from_bytes` canonicalize ancestors before AND after directory creation
-- **Never write without confirmation:** All SD card writes require explicit user confirmation via `ConfirmDialog`
-- **Never format implicitly:** Formatting is opt-in only
-- **No secrets in logs:** WiFi passwords are never logged in plaintext
-- **Input sanitization:** `extras_platform` restricted to alphanumeric + hyphens; BIOS paths reject path separators and NUL bytes
-- **Registry data treated as untrusted:** Validated against schema before use (`src/types/validate.ts`)
+1. **Single-struct IPC**: All Tauri commands accept one `#[derive(Deserialize)]` struct, avoiding 4-9 individual params
+2. **Platform modules**: `drives/{macos,linux,windows}.rs` and `wifi/{macos,linux,windows}.rs` use `#[cfg]`-gated modules, not traits (except `DriveDetector` for testability)
+3. **No router**: State-based navigation (`"home" | "store" | "wifi" | "bios" | "settings"`), no React Router
+4. **Session cache**: Release data and registry both use module-level caches with TTL
+5. **CancellationToken**: Background installs use Tokio cancellation for clean abort
+6. **Fork system**: `ForkConfig` interface with presets + custom `owner/repo` input, persisted to `localStorage`

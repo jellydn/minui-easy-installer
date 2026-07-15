@@ -1,133 +1,86 @@
 # Testing
 
-## Test Frameworks
+## Test Runners
 
-| Layer | Framework | Runner | Environment |
-|-------|-----------|--------|-------------|
-| Frontend | Vitest | `bun test` / `npx vitest` | `jsdom` |
-| Backend | Rust built-in | `cargo test` | Native |
+| Layer | Runner | Config |
+|-------|--------|--------|
+| Rust | `cargo test` | `Cargo.toml` |
+| TypeScript | `vitest` | `vitest.config.ts` |
+| Full suite | `just check` + `cargo test` + `vitest run` | `justfile` |
 
-## Configuration
+## Test Counts
 
-### Frontend
+| Layer | Tests | Files |
+|-------|-------|-------|
+| Rust | 170 passed, 1 ignored | 7 test files + inline `#[cfg(test)]` modules |
+| TypeScript | 127 passed | 17 test files |
+| **Total** | **297** | **24** |
 
-| File | Purpose |
-|------|---------|
-| `vitest.config.ts` | Includes `src/**/*.test.{ts,tsx}`, jsdom env, coverage thresholds |
-| `vitest.setup.ts` | Imports `@testing-library/jest-dom/vitest` for DOM matchers |
+## Rust Testing
 
-### Backend
+### Test File Organization
 
-Rust tests use:
-- `#[test]` or `#[tokio::test]` annotations
-- `tempfile` crate for isolated temp directories
-- Tests are located either inline (`#[cfg(test)] mod tests`) or external (`#[path = "drives_tests.rs"]`)
-
-## Test File Inventory
-
-### Frontend (17 test files)
-
-| File | Tests |
-|------|-------|
-| `src/Home.test.tsx` | Home screen rendering + state transitions |
-| `src/PackageStore.test.tsx` | Package store browse + install |
-| `src/DriveSelector.test.tsx` | Drive picker interaction |
-| `src/WifiWizard.test.tsx` | WiFi config form |
-| `src/BiosInstaller.test.tsx` | BIOS catalog + install flow |
-| `src/Settings.test.tsx` | Settings screen |
-| `src/hooks/useForkInstall.test.ts` | Install orchestration hook (mocked IPC) |
-| `src/hooks/useVersionCheck.test.ts` | Version comparison hook |
-| `src/types/install.test.ts` | Install types + IPC contract |
-| `src/types/package.test.ts` | Package registry validation |
-| `src/types/release.test.ts` | GitHub release parsing |
-| `src/types/device.test.ts` | Device profile lookups |
-| `src/types/fork.test.ts` | Fork configuration |
-| `src/types/bios.test.ts` | BIOS catalog types |
-| `src/types/validate.test.ts` | Validation report types |
-| `src/types/version.test.ts` | Version parsing |
-| `src/types/drive.test.ts` | RemovableDrive type |
-
-### Backend (4 test files)
-
-| File | Lines | Tests |
+| File | Lines | Scope |
 |------|-------|-------|
-| `src-tauri/src/install_tests.rs` | 789 | Install flow unit tests (temp dirs) |
-| `src-tauri/src/drives_tests.rs` | ~230 | Drive detection + serialization (macOS-focused) |
-| `src-tauri/src/bios_tests.rs` | 310 | BIOS catalog + install round-trip |
-| `src-tauri/src/version/tests.rs` | — | Version parsing + comparison |
+| `lib_tests.rs` | 393 | Tauri command contract tests (IPC boundary) |
+| `install_tests.rs` | — | Full install pipeline tests |
+| `install_copy_tests.rs` | 478 | `copy_base_files` and copy-specific tests |
+| `install_extras_tests.rs` | — | Extras installation edge cases |
+| `bios_tests.rs` | 298 | BIOS catalog, status, file installation |
+| `drives_tests.rs` | 417 | Drive detection mocking |
+| `wifi_tests.rs` | — | WiFi config write + platform-specific scan tests |
+| `version/tests.rs` | 369 | Version parsing and comparison |
 
-### Inline tests
+### Patterns
+- `tempfile` crate for temporary directories (no real SD card needed)
+- Inline `#[cfg(test)] mod tests` for parser/utility functions
+- External `*_tests.rs` for integration and IPC contract tests
+- `#[cfg(target_os = "macos")]` gating for platform-specific test modules
 
-`lib.rs` contains extensive inline `#[cfg(test)] mod tests` with **contract tests** for every Tauri command handler:
-- `test_get_removable_drives_returns_result_shape`
-- `test_install_minui_command_errors_on_bad_url`
-- `test_validate_installation_on_empty_tempdir`
-- `test_check_minui_version_on_empty_tempdir`
-- `test_install_package_underlying_errors_on_bad_url`
-- `test_scan_wifi_networks_returns_vec`
-- `test_list_bios_catalog_returns_all_entries`
-- `test_install_bios_file_underlying_round_trip`
-- `test_detect_installed_packages_empty_tempdir`
-- `test_check_package_updates_empty_input`
-- `test_check_sd_card_health_errors_on_nonexistent`
-- `test_fetch_url_errors_on_unreachable`
-- `test_verify_archive_checksum_matches_correct_hash`
+### Mocking
+- `DriveDetector` trait with `&dyn DriveDetector` for mock drive detection
+- Test-specific functions use controlled inputs (no external shell/network calls)
+- Health check tests use `/nonexistent` paths (cross-platform)
 
-These contract tests verify that commands return proper error shapes, not Tauri transport errors — catching the `#[cfg(test)]` regression where a command was removed from the production handler but still called by the frontend.
+## TypeScript Testing
 
-## Mocking Patterns
+### Framework
+- **Vitest** with `jsdom` environment
+- **@testing-library/react** for component rendering
+- **@testing-library/user-event** for simulated user interaction
 
-### Frontend (Vitest)
+### Test File Organization
 
-```typescript
-// Mock Tauri invoke
-import { invoke } from "@tauri-apps/api/core";
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
-}));
-const mockInvoke = invoke as Mock;
-mockInvoke.mockResolvedValue({ success: true });
+| File | Type | Scope |
+|------|------|-------|
+| `types/fork.test.ts` | Unit | Fork presets, URL building, rehydration (20 tests) |
+| `types/install.test.ts` | Unit | Install IPC functions, error handling (260 lines) |
+| `types/release.test.ts` | Unit | GitHub release parsing, caching (315 lines) |
+| `types/package.test.ts` | Unit | Registry fetch, RegistryCache TTL (13 cache tests) |
+| `types/validate.test.ts` | Unit | Schema validation |
+| `types/version.test.ts` | Unit | Version parsing |
+| `types/device.test.ts` | Unit | Device profile lookup |
+| `types/drive.test.ts` | Unit | Drive size formatting |
+| `types/bios.test.ts` | Unit | BIOS catalog |
+| `hooks/useForkInstall.test.ts` | Hook | Install hook with ForkProvider (272 lines) |
+| `hooks/useVersionCheck.test.ts` | Hook | Version check hook |
+| `Home.test.tsx` | Component | Home screen rendering |
+| `PackageStore.test.tsx` | Component | Package store rendering |
+| `DriveSelector.test.tsx` | Component | Drive picker rendering |
+| `BiosInstaller.test.tsx` | Component | BIOS installer rendering |
+| `Settings.test.tsx` | Component | Settings/fork selection |
+| `WifiWizard.test.tsx` | Component | WiFi wizard rendering |
 
-// Mock Tauri event listener
-vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(),
-}));
-```
+### Patterns
+- `vi.mock("@tauri-apps/api/core")` for Tauri IPC mocking
+- `vi.useFakeTimers()` for `RegistryCache` TTL tests
+- `ForkProvider` wrapper for components that use `useFork()`
+- `makeRegistry()` factory function for test data fixtures
 
-### Backend (Rust)
+## CI Testing
 
-Rust tests use real implementations — no mocking framework:
-- `tempfile::tempdir()` for isolated filesystem state
-- Unreachable URLs (`http://127.0.0.1:1/never.zip`) to test error paths
-- Known-good binary data for round-trip tests (BIOS, checksums)
-
-## Test Isolation
-
-| Layer | Strategy |
-|-------|----------|
-| Rust | `tempfile::tempdir()` — each test gets a fresh temp directory, dropped on scope exit |
-| TS | `vi.mock()` resets with `vi.resetAllMocks()` (auto via vitest config) |
-
-## Running Tests
-
-```bash
-# Frontend
-bun test                    # All TS tests
-bun test -- --reporter=verbose
-
-# Backend
-cargo test                  # All Rust tests
-cargo test --lib install    # Specific module tests
-cargo test -- --ignored     # Include ignored tests (e.g., real SD card)
-
-# Full check
-just check                  # lint + typecheck + fmt + clippy + test
-```
-
-## CI Test Coverage
-
-| Workflow | Tests Run |
-|----------|-----------|
-| `rust.yml` | `cargo fmt --check` + `cargo clippy -- -D warnings` + `cargo test` |
-| `build.yml` | `cargo build` on macOS + Windows (catches platform-specific compile errors) |
-| `react-doctor.yml` | React best-practices linting |
+| Workflow | Runner | What |
+|----------|--------|------|
+| `rust.yml` | `ubuntu-latest` | `cargo fmt --check`, `cargo clippy`, `cargo test` |
+| `build.yml` | `macos-latest`, `windows-latest`, `ubuntu-latest` | `cargo build --release` |
+| `react-doctor.yml` | — | React code health check |

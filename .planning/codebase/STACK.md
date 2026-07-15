@@ -1,84 +1,68 @@
 # Technology Stack
 
-## Languages
+## Languages & Runtimes
 
-| Layer | Language | Version |
+| Layer | Language | Runtime |
 |-------|----------|---------|
-| Backend | Rust | 2021 edition |
-| Frontend | TypeScript | `tsconfig.json` → `strict: true`, `JSX: react-jsx` |
-| Scripts | TypeScript (Bun) | `scripts/*.ts` |
+| Backend | Rust (edition 2021) | Tauri v2 |
+| Frontend | TypeScript 5.6+ | React 18 + Vite 6 |
+| Package manager | — | Bun |
 
-## Runtimes & Bundlers
+## Backend Dependencies (`src-tauri/Cargo.toml`)
+
+| Crate | Version | Purpose |
+|-------|---------|---------|
+| `tauri` | 2 | Desktop app framework |
+| `serde` + `serde_json` | 1 | IPC serialization |
+| `reqwest` | 0.12 | HTTP client (streaming downloads) |
+| `semver` | 1 | Version parsing/comparison |
+| `sha2` + `hex` + `base64` | 0.10 / 0.4 / 0.22 | Checksum verification |
+| `tempfile` | 3 | Temporary directories for extraction |
+| `zip` | 0.6 | Archive extraction |
+| `tokio` + `tokio-util` + `futures-util` | 1 / 0.7 / 0.3 | Async runtime |
+| `libc` | 0.2 | Unix system calls (disk space, stat) |
+| `windows-sys` | 0.59 | Windows filesystem API |
+
+## Frontend Dependencies (`package.json`)
+
+### Runtime
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `react` + `react-dom` | ^18.3 | UI framework |
+| `@tauri-apps/api` | ^2.0 | Tauri IPC bridge |
+
+### Dev
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@tauri-apps/cli` | ^2.0 | Tauri build tooling |
+| `vite` | ^6.0 | Bundler & dev server |
+| `typescript` | ^5.6 | Static typing |
+| `oxlint` | ^1.69 | Fast Rust-based linter |
+| `vitest` | ^4.1 | Test runner |
+| `jsdom` | ^29.1 | DOM environment for tests |
+| `@testing-library/react` | ^16.3 | Component testing |
+| `@testing-library/user-event` | ^14.6 | User interaction simulation |
+| `@vitest/coverage-v8` | ^4.1 | Code coverage |
+
+## Toolchain
 
 | Tool | Purpose |
 |------|---------|
-| [Tauri v2](https://v2.tauri.app/) | Desktop application shell — system tray, shell access, IPC bridge |
-| [Vite](https://vitejs.dev/) | Frontend dev server + build (port 1420) |
-| [Bun](https://bun.sh/) | JS runtime & package manager (`bun.lock`) |
+| `just` | Task runner (`justfile`) |
+| `prek` | Pre-commit hooks (trailing whitespace, EOF, LF, lint) |
+| `oxfmt` | TypeScript formatter (oxc-based, zero-config) |
+| `cargo fmt` | Rust formatter |
+| `cargo clippy` | Rust linter (deny warnings in CI) |
+| `eslint` | JavaScript rules (no-async-promise-executor, etc.) |
 
-## Frontend Dependencies
+## No-CSS-Framework Policy
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `react` | ^18 | Component framework |
-| `react-dom` | ^18 | DOM renderer |
-| `@tauri-apps/api` | ^2 | Invoke Rust commands, listen for events |
-| `@tauri-apps/plugin-shell` | ^2 | Shell command access (WiFi scanning) |
+Plain `src/styles.css` — no Tailwind, no shadcn, no CSS-in-JS. All styling is hand-written CSS.
 
-## Backend Dependencies (Rust — `src-tauri/Cargo.toml`)
-
-| Crate | Purpose |
-|-------|---------|
-| `tauri` v2 | Desktop framework — commands, events, window management |
-| `tauri-plugin-shell` | Shell access for platform-specific commands |
-| `tokio` v1 | Async runtime (features: `rt-multi-thread`, `macros`, `sync`) |
-| `reqwest` v0.12 | HTTP client with streaming support (features: `stream`, `rustls-tls`) |
-| `serde` / `serde_json` | Serialization (derive `Serialize`/`Deserialize`) |
-| `zip` | Archive extraction (deflate support) |
-| `tempfile` | Temp directories for extraction isolation |
-| `sha2` | SHA-256 checksum verification |
-| `base64` | BIOS file payload decoding |
-| `tokio-util` | `CancellationToken` for install cancellation |
-
-### Platform-specific
-
-| Crate | Platform | Purpose |
-|-------|----------|---------|
-| `libc` | Unix | `statvfs` for disk space |
-| `windows-sys` | Windows | File system APIs |
-
-## Configuration
-
-| File | Purpose |
-|------|---------|
-| `tsconfig.json` | TypeScript strict mode, `baseUrl: "."`, `resolveJsonModule: true` |
-| `vite.config.ts` | Dev server on `localhost:1420`, `clearScreen: false` |
-| `tauri.conf.json` | CSP, bundle identifier `com.minui.installer`, app security |
-| `Cargo.toml` | Rust edition 2021, dependency versions |
-| `prek.toml` | Pre-commit hooks (trailing whitespace, EOF fixer, LF normalize, lint `--fix`) |
-| `.editorconfig` | UTF-8, LF line endings, 2-space indent for TS/JSON |
-| `justfile` | Build shortcuts: `just check` (lint+typecheck+fmt+clippy), `just fmt` |
-
-## CSP (Content Security Policy)
-
-From `tauri.conf.json`:
-
-```
-default-src 'self';
-connect-src 'self'
-  https://packages.minui.dev
-  https://api.github.com
-  https://github.com
-  https://*.githubusercontent.com;
-img-src 'self' data:;
-style-src 'self' 'unsafe-inline';
-script-src 'self'
-```
-
-## OS Support
+## Platform Targets
 
 | OS | Minimum Version | Notes |
 |----|-----------------|-------|
-| macOS | 10.15+ | 14.4+ has `airport` deprecation risk for WiFi scanning |
-| Windows | 10+ | Format not supported |
-| Linux | — | Not in MVP Phase 1 |
+| macOS | 10.15+ | Apple Silicon (aarch64) DMG |
+| Windows | 10+ | x64 MSI + EXE installer |
+| Linux | Ubuntu (CI only) | Not in MVP; `ubuntu-latest` in build matrix for regression catches |

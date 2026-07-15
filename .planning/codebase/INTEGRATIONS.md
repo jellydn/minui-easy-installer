@@ -2,50 +2,61 @@
 
 ## GitHub API
 
-**Endpoint:** `https://api.github.com/repos/shauninman/MinUI/releases/latest`
+**Endpoint**: `https://api.github.com/repos/{owner}/{repo}/releases/latest`
 
-Used by `src/types/release.ts` to fetch the latest MinUI release metadata:
-- Version number
-- Archive URLs (base + extras)
-- Checksums
-- Release notes
+Used by `src/types/release.ts` (`fetchMinUIRelease`) to fetch the latest MinUI release from any configured fork. Defaults to `shauninman/MinUI`.
 
-Also used by fork support (`src/types/fork.ts`) to query alternative MinUI forks.
+### Data Flow
 
-**Rate limiting:** 60 req/hr unauthenticated, 5,000 req/hr with `GITHUB_TOKEN`.
+1. Frontend calls `fetchMinUIRelease(fork)` with a `ForkConfig` (`src/types/fork.ts`)
+2. Release data is parsed by `parseGitHubRelease()` — extracts `tag_name`, finds assets with "base" and "extras" in filenames
+3. Results cached in a session-scoped `Map<string, MinUIRelease>` keyed by `owner/repo`
 
-## GitHub Releases (Archive Downloads)
+### CSP Allowlist
 
-**Endpoint:** `https://github.com/*/releases/download/*`
+`tauri.conf.json` CSP includes:
+- `api.github.com`
+- `github.com`
+- `*.githubusercontent.com`
 
-Archive files (`.zip`) are downloaded from GitHub Releases. The CSP allows `https://github.com` and `https://*.githubusercontent.com`.
+### Fork Support
+
+Three preset forks in `src/types/fork.ts`:
+- `shauninman/MinUI` (official)
+- `danklammer/MinUI-Zero`
+- `jellydn/MinUITSP` (TrimUI focus)
+
+Custom forks accepted via `owner/repo` input in Settings UI.
 
 ## Package Registry
 
-**Endpoint:** `https://packages.minui.dev/registry/index.json`
+**Endpoint**: `https://packages.minui.dev/registry/index.json`
 
-Fetched by `src/types/package.ts` → `fetchPackageRegistry()`.
+Fetched by `src/types/package.ts` (`fetchPackageRegistry`). Static JSON with package metadata, download URLs, and per-device platform paths.
 
-**Format:** Static JSON with `emu_paks` and `tool_paks` arrays. Each entry has:
-- `name`, `version`, `repository`, `pak_name`
-- Optional: `description`, `checksum`, `device[]`, `download_url`
-- Emu paks require `rom_folder`
+### Caching
 
-**Caching:** 5-minute TTL via `RegistryCache` class in `package.ts`. Falls back to bundled `src/types/store.json` when the remote fetch fails.
+- `RegistryCache` class with configurable TTL (default 5 minutes)
+- `clearRegistryCache()` exported for testing
+- Schema validated by `src/types/validate.ts` before use
 
-## No External Services
+### Store Schema
 
-This application does not integrate with:
+`src/types/store.json` defines the expected schema for the registry JSON, including `StoreEmuPak`, `StoreToolPak`, and `StoreRegistry` interfaces.
 
-| Category | Status |
-|----------|--------|
-| Authentication providers | None |
-| Databases | None |
-| Payment processors | None |
-| Email services | None |
-| Analytics / Telemetry | None |
-| Error tracking (Sentry, etc.) | None |
-| CDN | None |
-| Cloud storage | None |
+## CSP
 
-The application operates entirely locally — all data lives on the user's SD card.
+`tauri.conf.json` enforces a tightly scoped Content Security Policy:
+- `packages.minui.dev` — package registry
+- `api.github.com` — release API
+- `github.com` + `*.githubusercontent.com` — release downloads
+- `tauri://localhost` — IPC
+
+## No Other Integrations
+
+- No database — all state is filesystem-based (SD card, localStorage)
+- No auth providers — desktop app, no user accounts
+- No payment processing
+- No monitoring/analytics
+- No email/SMS
+- No webhooks

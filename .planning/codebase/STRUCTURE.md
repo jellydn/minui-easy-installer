@@ -1,146 +1,122 @@
 # Directory Structure
 
 ```
-minui-installer/
-├── src/                          # Frontend (TypeScript + React)
-│   ├── main.tsx                  # Entry point — mounts App
-│   ├── App.tsx                   # AppShell with state-based navigation
-│   ├── Home.tsx                  # Main install screen + update-all
-│   ├── Home.test.tsx             # Home component tests
-│   ├── PackageStore.tsx          # Package browser + per-pak install
-│   ├── PackageStore.test.tsx     # PackageStore tests
-│   ├── PackageCard.tsx           # Individual package card in store
-│   ├── InstallProgress.tsx       # Progress bar + event log
-│   ├── DriveSelector.tsx         # Removable drive picker
-│   ├── DriveSelector.test.tsx    # DriveSelector tests
-│   ├── DeviceSelector.tsx        # Handheld device picker
-│   ├── WifiWizard.tsx            # WiFi config UI
-│   ├── WifiWizard.test.tsx       # WifiWizard tests
-│   ├── BiosInstaller.tsx         # BIOS catalog + install UI
-│   ├── BiosInstaller.test.tsx    # BiosInstaller tests
-│   ├── Settings.tsx              # App settings
-│   ├── Settings.test.tsx         # Settings tests
-│   ├── ConfirmDialog.tsx         # Overlay confirmation modal
-│   ├── FormatConfirmDialog.tsx   # Format confirmation modal
-│   ├── ValidationReport.tsx      # Post-install validation UI
-│   ├── styles.css                # Global styles (no CSS framework)
-│   ├── contexts/
-│   │   └── ForkContext.tsx       # ForkProvider + useFork hook
-│   ├── hooks/
-│   │   ├── useForkInstall.ts     # Install orchestration hook
-│   │   ├── useForkInstall.test.ts
-│   │   ├── useVersionCheck.ts    # Version comparison hook
-│   │   ├── useVersionCheck.test.ts
-│   │   ├── useMountEffect.ts     # Mount-only useEffect
-│   │   └── useScrollToBottom.ts  # Auto-scroll log
-│   └── types/
-│       ├── install.ts            # Install IPC + startInstallAndWait
-│       ├── install.test.ts       # Install type tests
-│       ├── package.ts            # Package registry + install
-│       ├── package.test.ts       # Package type tests
-│       ├── release.ts            # GitHub release fetching
-│       ├── release.test.ts       # Release fetching tests
-│       ├── device.ts             # Device profiles
-│       ├── device.test.ts        # Device profile tests
-│       ├── fork.ts               # Fork configuration types
-│       ├── fork.test.ts          # Fork type tests
-│       ├── errors.ts             # Error type + classification
-│       ├── bios.ts               # BIOS catalog types
-│       ├── bios.test.ts          # BIOS type tests
-│       ├── validate.ts           # Validation types + IPC
-│       ├── validate.test.ts      # Validation type tests
-│       ├── version.ts            # Version check types
-│       ├── version.test.ts       # Version type tests
-│       ├── drive.ts              # RemovableDrive type
-│       ├── drive.test.ts         # Drive type tests
-│       └── store.json            # Bundled package registry fallback
-├── src-tauri/                    # Backend (Rust)
-│   ├── Cargo.toml                # Rust dependencies
-│   ├── Cargo.lock                # Dependency lockfile
-│   ├── tauri.conf.json           # Tauri config (CSP, bundle ID)
-│   ├── build.rs                  # Tauri build script
+.
+├── README.md                   # Project overview, download links
+├── AGENTS.md                   # AI coding agent instructions
+├── DESIGN.md                   # Design decisions and rationale
+├── LICENSE                     # MIT
+├── package.json                # Frontend dependencies & scripts
+├── bun.lock                    # Bun lockfile
+├── vite.config.ts              # Vite bundler config
+├── vitest.config.ts            # Vitest test runner config
+├── vitest.setup.ts             # Test setup (jsdom, testing-library)
+├── tsconfig.json               # TypeScript config
+├── .eslintrc.cjs               # ESLint rules
+├── .oxfmtrc.json               # oxfmt formatter config
+├── prek.toml                   # Pre-commit hook config
+├── justfile                    # Task runner commands
+├── skills-lock.json            # Skills version lock
+│
+├── .github/
+│   └── workflows/
+│       ├── rust.yml            # Rust CI: fmt, clippy, test (ubuntu)
+│       ├── build.yml           # Build CI: macOS, Windows, Linux compile
+│       ├── release.yml         # Release: tag-triggered DMG/MSI/EXE build
+│       ├── react-doctor.yml    # React Doctor health check
+│       └── update-registry.yml # Package registry auto-update cron
+│
+├── .planning/
+│   └── codebase/               # Codebase map (this directory)
+│       ├── STACK.md
+│       ├── INTEGRATIONS.md
+│       ├── ARCHITECTURE.md
+│       ├── STRUCTURE.md
+│       ├── CONVENTIONS.md
+│       ├── TESTING.md
+│       └── CONCERNS.md
+│
+├── src-tauri/                  # ── Rust Backend ──
+│   ├── Cargo.toml              # Rust dependencies
+│   ├── Cargo.lock
+│   ├── tauri.conf.json         # Tauri app config, CSP, window settings
+│   ├── build.rs                # Tauri build script
+│   ├── entitlements.plist      # macOS entitlements (JIT, USB, network, file access)
+│   ├── icons/                  # App icons (icns, ico, iconset)
 │   ├── capabilities/
-│   │   └── default.json          # Tauri v2 permissions
-│   ├── icons/                    # App icons
+│   │   └── default.json        # Tauri v2 capability permissions
 │   └── src/
-│       ├── main.rs               # Entry point
-│       ├── lib.rs                # Tauri commands + generate_handler!
-│       ├── install.rs            # Install flow (base/extras/ROMs)
-│       ├── install_tests.rs      # Install unit tests (790 lines)
-│       ├── pipeline.rs           # Download → extract → copy
-│       ├── download.rs           # HTTP download + streaming + checksum
-│       ├── extract.rs            # ZIP extraction
-│       ├── drives.rs             # Platform-specific drive detection
+│       ├── main.rs             # Binary entry point → calls lib::run()
+│       ├── lib.rs              # Library root: module declarations, all Tauri commands
+│       ├── install.rs          # Install orchestration (512 lines)
+│       ├── pipeline.rs         # InstallSession: temp dirs, file copy pipeline
+│       ├── download.rs         # Streaming HTTP downloads with checksums
+│       ├── extract.rs          # ZIP extraction with path traversal guards
+│       ├── package.rs          # Package detection, update check
+│       ├── bios.rs             # BIOS catalog, status, install (369 lines)
+│       ├── health.rs           # SD card health checks
+│       ├── validate.rs         # Post-install validation (420 lines)
+│       ├── fs_utils.rs         # Filesystem utilities (copy_dir_recursive, free space)
+│       ├── platform.rs         # Platform detection helpers
+│       ├── drives.rs           # Drive detection dispatcher
 │       ├── drives/
-│       │   └── macos.rs          # macOS diskutil parsing helpers
-│       ├── drives_tests.rs       # Drive unit tests
-│       ├── package.rs            # Package install logic
-│       ├── wifi.rs               # WiFi config + network scanning
-│       ├── bios.rs               # BIOS catalog + install
-│       ├── bios_tests.rs         # BIOS unit tests (310 lines)
-│       ├── health.rs             # SD card health checks
-│       ├── validate.rs           # Post-install validation
+│       │   ├── macos.rs        # macOS: df + diskutil (265 lines)
+│       │   ├── windows.rs      # Windows: PowerShell Get-Volume
+│       │   └── linux.rs        # Linux: lsblk JSON
+│       ├── wifi.rs             # WiFi config write + dispatcher
+│       ├── wifi/
+│       │   ├── macos.rs        # macOS: airport → system_profiler → current_ssid (345 lines)
+│       │   ├── windows.rs      # Windows: netsh wlan
+│       │   └── linux.rs        # Linux: nmcli
 │       ├── version/
-│       │   ├── mod.rs            # Version detection + comparison
-│       │   └── tests.rs          # Version unit tests
-│       ├── platform.rs           # Device → platform mapping
-│       └── fs_utils.rs           # Dir copy, disk space, canonicalize
-├── scripts/                      # Automation scripts (Bun)
-│   ├── update-registry.ts        # Auto-update package versions from GitHub
-│   ├── discover-packages.ts      # Discover new MinUI paks from contributors
-│   └── shared.ts                 # Shared utilities (repoSlug, fetchApi)
-├── .github/workflows/            # CI/CD
-│   ├── build.yml                 # Tauri compile check (macOS + Windows)
-│   ├── release.yml               # DMG/MSI build on v* tags
-│   ├── rust.yml                  # Rust fmt/clippy/test
-│   ├── react-doctor.yml          # React best-practices linting
-│   └── update-registry.yml       # Daily cron: auto-update store.json versions
-├── .planning/                    # Project documentation
-│   ├── codebase/                 # Architecture docs (these files)
-│   └── handoffs/                 # Cross-session handoff notes
-├── .changeset/                   # Changeset versioning
-├── tasks/                        # PRD documents
-├── plans/                        # Implementation plans
-├── icons/                        # macOS .icns icon
-├── package.json                  # Frontend dependencies + scripts
-├── bun.lock                      # Bun lockfile
-├── tsconfig.json                 # TypeScript config
-├── vite.config.ts                # Vite config
-├── vitest.config.ts              # Vitest config
-├── vitest.setup.ts               # Vitest setup (jest-dom)
-├── .eslintrc.cjs                 # ESLint config
-├── .oxfmtrc.json                 # Oxfmt formatter config
-├── .editorconfig                 # Editor settings
-├── justfile                      # Build shortcuts
-├── prek.toml                     # Pre-commit hooks
-├── README.md                     # Project overview
-├── DESIGN.md                     # Design decisions
-├── AGENTS.md                     # Agent instructions
-├── LICENSE                       # MIT license
-└── install-guide.txt             # User-facing install instructions
+│       │   ├── mod.rs          # Version checking & comparison
+│       │   └── tests.rs        # Version unit tests (369 lines)
+│       ├── *_tests.rs          # Rust test files (7 files)
+│       └── lib_tests.rs        # Tauri command contract tests (393 lines)
+│
+├── src/                        # ── React Frontend ──
+│   ├── main.tsx                # React entry point
+│   ├── App.tsx                 # Root component, state-based navigation
+│   ├── Home.tsx                # Home screen: drive/device selection, install
+│   ├── PackageStore.tsx        # Package store: browse, search, install (266 lines)
+│   ├── BiosInstaller.tsx       # BIOS file upload and status
+│   ├── WifiWizard.tsx          # WiFi configuration wizard
+│   ├── DriveSelector.tsx       # SD card drive picker
+│   ├── DeviceSelector.tsx      # Retro handheld device picker
+│   ├── InstallProgress.tsx     # Real-time install progress log
+│   ├── Settings.tsx            # Fork selection (presets + custom)
+│   ├── ConfirmDialog.tsx       # Overlay modal for destructive operations
+│   ├── FormatConfirmDialog.tsx # Format confirmation dialog
+│   ├── ValidationReport.tsx    # Post-install validation report
+│   ├── HealthCheck.tsx         # SD card health status
+│   ├── PackageCard.tsx         # Individual package card in store
+│   ├── styles.css              # All CSS (no framework)
+│   ├── contexts/
+│   │   └── ForkContext.tsx     # Fork selection state (localStorage persisted)
+│   ├── hooks/
+│   │   ├── useForkInstall.ts   # Install orchestration hook (425 lines)
+│   │   ├── useVersionCheck.ts  # Release/update version checking
+│   │   ├── useMountEffect.ts   # useEffect on mount helper
+│   │   └── useScrollToBottom.ts # Auto-scroll for progress log
+│   └── types/
+│       ├── device.ts           # Device profiles & platform mapping
+│       ├── fork.ts             # ForkConfig, presets, URL building
+│       ├── release.ts          # GitHub release fetching & parsing
+│       ├── package.ts          # Package registry fetch, RegistryCache
+│       ├── install.ts          # Install/cancel IPC functions
+│       ├── drive.ts            # RemovableDrive types & formatting
+│       ├── bios.ts             # BIOS catalog types
+│       ├── validate.ts         # Registry schema validation
+│       ├── version.ts          # Version parsing
+│       ├── errors.ts           # Error classification
+│       ├── device-install-map.json  # Device-to-platform mapping
+│       ├── store.json          # Package store schema
+│       └── *.test.ts           # TypeScript tests (10 files)
+│
+├── assets/                     # Brand assets
+│   ├── banner.svg              # README banner (1200×300)
+│   └── logo.svg                # Circular logo mark
+│
+└── icons/
+    └── icon.svg                # App icon source (512px)
 ```
-
-## File Counts
-
-| Area | Files |
-|------|-------|
-| Frontend components | 15 `.tsx` |
-| Frontend tests | 17 `.test.{ts,tsx}` |
-| Frontend types | 10 `.ts` |
-| Frontend hooks | 6 `.ts` |
-| Rust source | 16 `.rs` (excluding tests) |
-| Rust tests | 4 `*_tests.rs` / `tests.rs` |
-| CI workflows | 5 `.yml` |
-| Scripts | 3 `.ts` |
-
-## Naming Conventions
-
-| Layer | Pattern | Example |
-|-------|---------|---------|
-| Frontend components | `PascalCase.tsx` | `DriveSelector.tsx` |
-| Frontend tests | `PascalCase.test.tsx` | `DriveSelector.test.tsx` |
-| Frontend hooks | `useCamelCase.ts` | `useForkInstall.ts` |
-| Frontend types | `kebab-case.ts` | `device.ts` |
-| Rust modules | `snake_case.rs` | `fs_utils.rs` |
-| Rust tests | `snake_case_tests.rs` or inline `#[cfg(test)]` | `drives_tests.rs` |
-| Rust submodules | `mod/filename.rs` | `drives/macos.rs` |
