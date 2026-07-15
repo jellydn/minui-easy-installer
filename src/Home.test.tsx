@@ -50,7 +50,18 @@ vi.mock("./types/install", async () => {
 
 vi.mock("./types/validate", () => ({
   validateInstallation: vi.fn(),
-  checkSdCardHealth: vi.fn(),
+  checkSdCardHealth: vi.fn().mockResolvedValue({
+    success: true,
+    data: {
+      checks: [],
+      passed_count: 0,
+      failed_count: 0,
+      free_space_bytes: null,
+      filesystem: null,
+      support_report: "",
+      read_speed_mbs: null,
+    },
+  }),
 }));
 
 const renderWithFork = (ui: ReactElement) =>
