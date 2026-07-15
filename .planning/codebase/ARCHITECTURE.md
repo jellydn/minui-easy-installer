@@ -1,95 +1,113 @@
 # Architecture
 
-## Pattern: Tauri IPC with Command Handlers
-
-The application follows a client-server pattern via Tauri's IPC bridge:
+## System Layers
 
 ```
-┌─────────────────────┐     IPC (invoke)     ┌──────────────────────┐
-│   React Frontend    │ ◄──────────────────► │    Rust Backend      │
-│   (src/)            │     events           │    (src-tauri/src/)  │
-└─────────────────────┘                      └──────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│  React UI (src/)                                     │
+│  State-based navigation: home|store|wifi|bios|settings│
+│  InstallOrchestrator: vanilla TS state machine        │
+│  useForkInstall: thin React adapter (~129 lines)      │
+│  Tauri IPC: invoke() + listen()                       │
+├─────────────────────────────────────────────────────┤
+│  Tauri IPC Layer (src-tauri/src/lib.rs)               │
+│  TauriAppDispatcher: AppHandle → EventDispatcher      │
+│  20 registered #[tauri::command] handlers              │
+│  InstallManager: tauri::State (singleton)              │
+├─────────────────────────────────────────────────────┤
+│  Rust Domain (src-tauri/src/)                         │
+│  install.rs: install_minui_with_cancel()              │
+│  pipeline.rs: download → extract → copy               │
+│  package.rs, health.rs, wifi.rs, bios.rs, drives.rs   │
+│  version/, validate.rs, fs_utils.rs, platform.rs      │
+└─────────────────────────────────────────────────────┘
 ```
 
-All commands are registered in `src-tauri/src/lib.rs` (~335 lines). Each accepts a single `#[derive(Deserialize)]` struct parameter for clean IPC boundaries.
+## Key Abstractions
 
-## Core Domains
+### InstallManager (`src-tauri/src/install_manager.rs`)
 
-### Install Pipeline
+Owns the install lifecycle. Manages a `CancellationToken` behind a `Mutex`. Exposes:
+- `start(&Arc<Self>, dispatcher, options)` — spawns `tokio::spawn` background task
+- `cancel(&self)` — cancels in-flight install
 
-```
-Download ──► Extract ──► Copy (base) ──► Copy (extras) ──► ROM dirs ──► Version metadata
-```
+Uses the `EventDispatcher` trait to emit progress/complete/error events without knowing about Tauri. `TauriAppDispatcher` bridges `AppHandle` to the trait. `MockDispatcher` records events for tests.
 
-Files: `install.rs` (512 lines), `download.rs`, `extract.rs`, `pipeline.rs`
+### InstallOrchestrator (`src/lib/InstallOrchestrator.ts`)
 
-- **Cancellation**: `start_install` spawns in a background `tokio` task with `CancellationToken`. Emits `install-progress` / `install-complete` / `install-error` Tauri events.
-- **Base archive filtering**: `copy_base_files` copies only the selected device folder + shared items (`Bios`, `Roms`, `Saves`, `MinUI.zip`), leaving other platforms behind.
-- **Extras**: Always installed when available. Failure is non-fatal (logged as warning).
-- **User data preservation**: `roms`, `saves`, `save`, `bios`, `cheats` folders are case-insensitively preserved during updates.
+Vanilla TypeScript state machine (no React). Owns the install + update-all workflow:
+- `start(fork, device, sdMount)` — full install flow with Tauri event listener management
+- `updateAll(fork, device, sdMount, ...)` — MinUI update + sequential package installs
+- `cancel()` — cancels in-flight install
+- `subscribe(listener)` — observer pattern for React sync
 
-### Package Store
+### Pipeline (`src-tauri/src/pipeline.rs`)
 
-File: `src/types/package.ts` (236 lines), `src/PackageStore.tsx` (266 lines)
+Orchestrates download → extract → copy for any archive type:
+- `Pipeline::run()` — full pipeline returning files copied count
+- `Pipeline::run_to_extracted()` — download + extract only (used by packages)
+- `InstallSession` — owns temp dirs; atomic cleanup on drop
+- `create_target_within()` — symlink-race-safe directory creation within SD root
 
-- Registry fetched from `packages.minui.dev/registry/index.json`
-- `RegistryCache` class with injectable TTL
-- Per-device platform paths from `store.json` (e.g., `/Emus/tg5040/DC.pak/`)
-- Schema validation via `validate.ts` before trust
-
-### Drive Detection
-
-Platform-specific via `#[cfg]`-gated modules:
-- `drives/macos.rs` (265 lines) — `df` + `diskutil` parsing
-- `drives/windows.rs` — PowerShell `Get-Volume`
-- `drives/linux.rs` — `lsblk` JSON parsing
-
-Shared `DriveDetector` trait with `list()` method for testability.
-
-### WiFi
-
-Platform-specific modules:
-- `wifi/macos.rs` (345 lines) — 3-tier fallback: `airport` → `system_profiler` → `current_ssid()`
-- `wifi/windows.rs` — `netsh wlan show networks` parsing
-- `wifi/linux.rs` — `nmcli` parsing
-
-Configuration written to `<sd_root>/wifi.txt` (one `SSID:PASSWORD` per line, `#` comments).
-
-### BIOS Installation
-
-File: `bios.rs` (369 lines), `BiosInstaller.tsx`
-
-- Catalog of known BIOS files with target paths
-- Status check (present/missing) per BIOS entry
-- `install_bios_from_bytes`: sanitizes filenames, canonicalizes target paths (symlink-race guard)
-
-### Version Tracking
-
-- **Write side**: Installer writes `minui.txt` to SD root: `{fork_name} {version}`
-- **Read side**: `version/mod.rs` reads `minui.txt` back, parses with `semver`
-- **Packages**: Read `Tools/*/version.txt` (included in archives)
-
-### Health Check
-
-File: `health.rs` — filesystem integrity, free space, presence of MinUI directories.
-
-## Frontend Navigation
-
-`App.tsx` uses state-based navigation (no router):
+### Event System
 
 ```
-"home" ──► Home.tsx (drive selection, install)
-"store" ──► PackageStore.tsx
-"wifi" ──► WifiWizard.tsx
-"bios" ──► BiosInstaller.tsx
-"settings" ──► Settings.tsx (fork selection)
+Frontend                    Backend
+─────────                   ───────
+listen("install-progress")  →  InstallManager::start()
+                               → tokio::spawn
+                                 → install_minui_with_cancel()
+                                   → ProgressCallback
+                                     → EventDispatcher::emit_progress()
+                                       → AppHandle::emit("install-progress")
+listen("install-complete")  ←  EventDispatcher::emit_complete()
+listen("install-error")     ←  EventDispatcher::emit_error()
 ```
 
-## Key Design Decisions
+## Data Flow — Install
 
-1. **Single-struct IPC**: All Tauri commands accept one `#[derive(Deserialize)]` struct, avoiding 4-9 individual params
-2. **Platform modules**: `drives/{macos,linux,windows}.rs` and `wifi/{macos,linux,windows}.rs` use `#[cfg]`-gated modules, not traits (except `DriveDetector` for testability)
-3. **No router**: State-based navigation (`"home" | "store" | "wifi" | "bios" | "settings"`), no React Router
-4. **Session cache**: Release data and registry both use module-level caches with TTL
-5. **CancellationToken**: Background installs use Tokio cancellation for clean abort
-6. **Fork system**: `ForkConfig` interface with presets + custom `owner/repo` input, persisted to `localStorage`
+1. User selects device + SD card in `Home.tsx`
+2. `useForkInstall.installMinUI()` → `InstallOrchestrator.start()`
+3. Orchestrator: `listen("install-progress")` for real-time updates
+4. Orchestrator: `fetchMinUIRelease(fork)` → GitHub API → version + archive URLs
+5. Orchestrator: `startInstallAndWait({...})` → Tauri IPC → `start_install` command
+6. `start_install`: wraps `AppHandle` in `TauriAppDispatcher`, calls `manager.start()`
+7. `InstallManager.start()`: creates `CancellationToken`, spawns `tokio::spawn`
+8. Background task: `install_minui_with_cancel()` → 4 sequential steps:
+   - Step 1: Base archive — Pipeline::run("base", ...) → download → extract → copy to SD
+   - Step 2: Extras archive — Pipeline::run("extras", ...) → download → extract → copy (non-fatal)
+   - Step 3: ROM directories — `create_rom_dirs()` → standard folders
+   - Step 4: Version metadata — `write_version_metadata()` → minui.txt
+9. Task completes → `emit_complete(InstallResult)` → frontend receives "install-complete"
+10. Orchestrator runs `validateInstallation()` → shows result in UI
+
+## Data Flow — Package Install
+
+1. `PackageStore.tsx` fetches registry → `fetchPackageRegistry()` → `fetch_url()` → packages.minui.dev
+2. User clicks "Install" → `installPackage({...})` → Tauri IPC
+3. Backend: `Pipeline::run_to_extracted("package", ...)` → download → extract
+4. Backend: `create_target_within(sd_mount, targetDir, platform, pakName)` → validated dir
+5. Files copied from extracted temp to validated SD target
+6. UI updates via `detect_installed_packages()` to reflect installed state
+
+## Data Flow — Health Check
+
+1. `HealthCheck.tsx` auto-runs on `sdMount` change (useEffect)
+2. `checkSdCardHealth({sdMount, devicePlatform})` → Tauri IPC
+3. Backend (`health.rs`):
+   - `detect_filesystem()` — diskutil (macOS) or fsutil (Windows)
+   - `get_free_space()` — fs_utils
+   - `benchmark_read_speed()` — writes 64MB test file, reads back, measures MB/s
+   - `scan_pak_dirs()` — walks Tools/ for *.pak directories
+   - MinUI folder check (Tools, Emus)
+4. Returns `HealthCheckResult` with checks, speed, support report
+
+## Preserved Folders
+
+During install, these folders are **never** overwritten or deleted (case-insensitive matching):
+
+```rust
+const PRESERVED_FOLDERS: &[&str] = &["roms", "saves", "save", "bios", "cheats"];
+```
+
+The `is_preserved_path()` function in `install.rs` checks whether a destination path is under one of these folders and skips it during `copy_dir_recursive`.

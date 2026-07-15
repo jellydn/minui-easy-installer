@@ -1,83 +1,98 @@
-# Coding Conventions
+# Code Conventions
 
-## Rust (`src-tauri/`)
+## Formatting & Linting
 
-### Formatting & Linting
-- `cargo fmt` — enforced in CI (`cargo fmt --check`)
-- `cargo clippy -- -D warnings` — zero warnings allowed
+| Scope | Tool | Command |
+|-------|------|---------|
+| TypeScript | oxfmt | `bun run fmt` |
+| TypeScript | oxlint | `bun run lint` |
+| Rust | cargo fmt | `cd src-tauri && cargo fmt` |
+| Rust | cargo clippy | `cd src-tauri && cargo clippy -- -D warnings` |
+| All | just | `just check` (runs all four) |
 
-### Naming
-- `snake_case` for functions, variables, modules
-- `CamelCase` for types, structs, enums
-- `SCREAMING_SNAKE_CASE` for constants
+Pre-commit hooks (`prek.toml`): trailing whitespace removal, EOF newline, LF normalization, lint `--fix`.
 
-### Documentation
-- `///` doc comments on all `pub` and `pub(crate)` functions
-- `//` inline comments for non-obvious logic (explain *why*, not *what*)
+## TypeScript Style
 
-### Module Organization
-- Platform-specific code in `drives/{macos,linux,windows}.rs` and `wifi/{macos,linux,windows}.rs`
-- `#[cfg(target_os = "...")]` module declarations in the dispatcher file
-- Tests in `#[cfg(test)] mod tests` within platform files, or in `*_tests.rs` for cross-platform tests
+- **Strict mode** enabled in `tsconfig.json`
+- No CSS framework — all styles in `src/styles.css`
+- IPC wrappers in `src/types/` — one file per domain (`install.ts`, `release.ts`, etc.)
+- Components co-located with tests: `HealthCheck.tsx` ↔ `HealthCheck.test.tsx`
+- Mocking: `vi.mock()` for Tauri IPC modules (`@tauri-apps/api/event`, `../types/release`, etc.)
+- Error handling: `errorMessage(err)` normalizes `Error | string | {message}` values
+- IPC results: `Result<T, AppError>` pattern from `src/types/errors.ts`
 
-### Error Handling
-- IPC commands return `Result<T, String>` — errors are serialized as strings
-- `eprintln!` used for non-fatal warnings (event emit failure, temp cleanup failure)
-- Panic allowed only for unrecoverable state (e.g., mutex poison on main thread)
+## Rust Style
 
-### Patterns
-- Tauri commands accept single `#[derive(Deserialize)]` structs, not individual params
-- `if let Ok(...)` for graceful failure handling in spawned tasks
-- `.unwrap()` only in main-thread code where failure means app crash
+- `Result<T, String>` for all Tauri commands (Tauri v2 rejects with plain strings)
+- `#[serde(rename_all = "camelCase")]` on all IPC types
+- `#[cfg(test)]` modules with `#[path = "..."]` for test file location
+- Comments: `///` doc comments on public items, `//` for inline explanation
+- No `unsafe` code
+- `tempfile` for all temp directory needs (auto-cleanup)
+- `cargo fmt --check` + `cargo clippy -- -D warnings` in CI
 
-### Security
-- Path canonicalization + re-validation for symlink race guards (`create_target_within`, `install_bios_from_bytes`)
-- Platform name sanitization (alphanumeric + hyphens only)
-- `fs::copy` dereferences symlinks (no symlink escape via `copy_dir_recursive`)
+## Error Handling
 
-## TypeScript (`src/`)
+### TypeScript (`src/types/errors.ts`)
 
-### Formatting & Linting
-- `oxfmt` — zero-config formatter
-- `oxlint` — Rust-based linter (0 warnings, 0 errors in CI)
-- ESLint for additional rules (`no-async-promise-executor`, React hooks)
+```typescript
+// Normalize any error value to a string
+errorMessage(err: unknown): string
 
-### Naming
-- `camelCase` for variables, functions
-- `PascalCase` for components, types, interfaces
-- `kebab-case` for file names
+// Wrap any value in an Error with stack trace
+asError(err: unknown): Error
 
-### Patterns
-- No `any` or `@ts-ignore` in main `src/` codebase
-- `console.error` only for genuine errors; no `console.log` in production
-- React components use plain CSS classes from `styles.css` (no CSS-in-JS)
-- State management via React context (`ForkContext`) + `useState`/`useCallback`
-- No router — state-based navigation in `App.tsx`
+// Classify Rust error strings into error codes
+classifyError(errorMsg: string, defaultCode?: AppErrorCode): AppErrorCode
+```
 
-### Component Structure
-- Each component in its own file
-- Custom hooks in `hooks/` directory
-- Type definitions in `types/` directory
-- Tests co-located with source files as `*.test.ts` / `*.test.tsx`
+### Rust
 
-### Fork System
-- `FORK_PRESETS` is the single source of truth for known forks
-- `buildCustomFork()` creates `ForkConfig` from `owner/repo` string
-- `rehydrateFork()` matches stored state to a preset or creates custom
-- Fork selection persisted to `localStorage` via `ForkProvider`
+- IPCs return `Result<T, String>` (Tauri v2 convention)
+- Extras archive failure is non-fatal (logged as warning in `InstallResult.extras_warning`)
+- Install cancellation returns `Err("Install cancelled")`
+- Poisoned mutex returns `Err("Internal error: state lock is poisoned")`
 
-## General
+## Security Patterns
 
-### File Size
-- Source files target <500 lines
-- Test files may exceed (e.g., `install_copy_tests.rs` at 478 lines)
-- Largest source files: `install.rs` (512), `useForkInstall.ts` (425), `validate.rs` (420)
+### Symlink Escape Prevention
 
-### Git
-- Conventional commits: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `test:`, `ci:`, `chore:`
-- Pre-commit hooks via `prek` (trailing whitespace, EOF, LF, lint --fix)
-- Squash-merge to main
+| Function | File | Pattern |
+|----------|------|---------|
+| `create_target_within` | `pipeline.rs` | Canonicalize ancestor → validate → create → re-validate canonical |
+| `install_bios_from_bytes` | `bios.rs` | Sanitize subdir/filename → canonicalize parent → write → re-validate canonical |
+| `copy_dir_recursive` | `fs_utils.rs` | `fs::copy` dereferences symlinks (no symlink escape) |
+| `copy_extras_files` | `install.rs` | Sanitize `extras_platform` (alphanumeric + hyphens only) |
 
-### No TODOs
-- Zero `TODO`, `FIXME`, `HACK`, `XXX`, `WORKAROUND`, or `BUG` annotations
-- Tracked work in GitHub Issues rather than inline comments
+### Other Security Rules
+
+- Never write to SD card without explicit user confirmation (`ConfirmDialog.tsx`)
+- Never format drives in MVP (command exists but never called from UI)
+- Never log WiFi passwords or secrets
+- Registry data validated before use (`validate.ts`)
+- `fetch_url` restricted to hardcoded `ALLOWED_URLS` (SSRF prevention)
+- CSP tightly scoped in `tauri.conf.json`
+
+## Commit Convention
+
+Conventional commits: `<type>(<scope>): <subject>`
+
+| Type | Usage |
+|------|-------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `refactor` | Code restructuring without behavior change |
+| `perf` | Performance improvement |
+| `test` | Test addition or fix |
+| `docs` | Documentation only |
+| `style` | Formatting (no logic change) |
+| `chore` | Build/maintenance |
+
+## IPC Conventions
+
+- Options structs with `#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]` and `#[serde(rename_all = "camelCase")]`
+- Commands prefixed by domain: `check_sd_card_health`, `install_package`, `scan_wifi_networks`
+- Async commands for I/O-bound operations, sync for in-memory operations
+- `tauri::State<'_, Arc<InstallManager>>` for shared state
+- `AppHandle` for event emission in commands

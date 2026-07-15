@@ -1,62 +1,78 @@
 # External Integrations
 
-## GitHub API
+## GitHub Releases API
 
-**Endpoint**: `https://api.github.com/repos/{owner}/{repo}/releases/latest`
-
-Used by `src/types/release.ts` (`fetchMinUIRelease`) to fetch the latest MinUI release from any configured fork. Defaults to `shauninman/MinUI`.
-
-### Data Flow
-
-1. Frontend calls `fetchMinUIRelease(fork)` with a `ForkConfig` (`src/types/fork.ts`)
-2. Release data is parsed by `parseGitHubRelease()` — extracts `tag_name`, finds assets with "base" and "extras" in filenames
-3. Results cached in a session-scoped `Map<string, MinUIRelease>` keyed by `owner/repo`
-
-### CSP Allowlist
-
-`tauri.conf.json` CSP includes:
-- `api.github.com`
-- `github.com`
-- `*.githubusercontent.com`
-
-### Fork Support
-
-Three preset forks in `src/types/fork.ts`:
-- `shauninman/MinUI` (official)
-- `danklammer/MinUI-Zero`
-- `jellydn/MinUITSP` (TrimUI focus)
-
-Custom forks accepted via `owner/repo` input in Settings UI.
+- **Endpoint**: `https://api.github.com/repos/{owner}/{repo}/releases/latest`
+- **Purpose**: Fetch MinUI release metadata (version, archive URLs, checksums)
+- **Config**: `src/types/release.ts` (`fetchMinUIRelease`)
+- **Fork support**: User-supplied `ForkConfig` with custom owner/repo determines the API URL
 
 ## Package Registry
 
-**Endpoint**: `https://packages.minui.dev/registry/index.json`
+- **Endpoint**: `https://packages.minui.dev/registry/index.json`
+- **Purpose**: Fetch available add-on packages (WiFi, SSH, tools, etc.)
+- **Config**: `src/types/package.ts` (`fetchPackageRegistry`)
+- **Caching**: Session-scoped (fetched once per app launch)
 
-Fetched by `src/types/package.ts` (`fetchPackageRegistry`). Static JSON with package metadata, download URLs, and per-device platform paths.
+## CSP (Content Security Policy)
 
-### Caching
+Defined in `src-tauri/tauri.conf.json`. Allowlisted domains:
 
-- `RegistryCache` class with configurable TTL (default 5 minutes)
-- `clearRegistryCache()` exported for testing
-- Schema validated by `src/types/validate.ts` before use
+| Domain | Purpose |
+|--------|---------|
+| `packages.minui.dev` | Package registry JSON |
+| `api.github.com` | MinUI release metadata |
+| `github.com` | Release redirects |
+| `*.githubusercontent.com` | Archive downloads, fork release assets |
 
-### Store Schema
+## SSRF Protection
 
-`src/types/store.json` defines the expected schema for the registry JSON, including `StoreEmuPak`, `StoreToolPak`, and `StoreRegistry` interfaces.
+The `fetch_url` Tauri command restricts HTTP fetches to a hardcoded allowlist:
 
-## CSP
+```rust
+const ALLOWED_URLS: &[&str] = &["https://packages.minui.dev/registry/index.json"];
+```
 
-`tauri.conf.json` enforces a tightly scoped Content Security Policy:
-- `packages.minui.dev` — package registry
-- `api.github.com` — release API
-- `github.com` + `*.githubusercontent.com` — release downloads
-- `tauri://localhost` — IPC
+Add new endpoints to `ALLOWED_URLS` in `src-tauri/src/lib.rs` as needed.
 
-## No Other Integrations
+## WiFi Scanning (macOS)
 
-- No database — all state is filesystem-based (SD card, localStorage)
-- No auth providers — desktop app, no user accounts
-- No payment processing
-- No monitoring/analytics
-- No email/SMS
-- No webhooks
+Three-tier fallback (`src-tauri/src/wifi.rs`):
+
+| Tier | Command | macOS Version |
+|------|---------|---------------|
+| 1 | `/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -s` | < 14.4 |
+| 2 | `system_profiler SPAirPortDataType` | ≥ 14.4 (airport removed) |
+| 3 | Current SSID fallback only | All |
+
+## WiFi Scanning (Windows)
+
+- `netsh wlan show networks mode=bssid` for network scanning
+- `netsh wlan show interfaces` for current SSID
+
+## Filesystem Detection
+
+| OS | Command | Source |
+|----|---------|--------|
+| macOS | `diskutil info <mount>` | `src-tauri/src/health.rs` |
+| Windows | `fsutil fsinfo volumeinfo <mount>` | `src-tauri/src/health.rs` |
+| Linux | Not supported (MVP) | Returns `None` |
+
+## Drive Detection
+
+| OS | Method | Source |
+|----|--------|--------|
+| macOS | `diskutil list -plist` + parsing | `src-tauri/src/drives.rs` |
+| Windows | Win32 API (`GetLogicalDrives`, `GetDriveTypeW`) | `src-tauri/src/drives.rs` |
+
+## HTTP Client
+
+- Single `reqwest::Client` via `OnceLock` with 10-second timeout and connection pooling
+- Used for: GitHub API, package registry, archive downloads (streaming)
+- Defined in `src-tauri/src/lib.rs` (`http_client()`)
+
+## Archive Downloads
+
+- Streaming download via `reqwest` with progress callbacks
+- SHA-256 checksum verification after download (`download.rs`)
+- Archives downloaded to temp dir before extraction (`pipeline.rs`)
