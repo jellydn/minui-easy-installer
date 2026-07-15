@@ -1,5 +1,5 @@
 import type { AppError, AppErrorCode } from "./errors";
-import { classifyError } from "./errors";
+import { asError, classifyError, errorMessage } from "./errors";
 
 export interface InstallResult {
   success: boolean;
@@ -86,7 +86,7 @@ export async function installMinui(options: {
       error: { message: errorMsg, code },
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    const message = errorMessage(err);
     return {
       success: false,
       error: { message, code: "UNKNOWN_ERROR" },
@@ -112,15 +112,17 @@ export async function startInstall(options: {
 }): Promise<string> {
   const { invoke } = await import("@tauri-apps/api/core");
   return await invoke<string>("start_install", {
-    baseUrl: options.baseUrl,
-    extrasUrl: options.extrasUrl || null,
-    baseChecksum: options.baseChecksum || null,
-    extrasChecksum: options.extrasChecksum || null,
-    sdMount: options.sdMount,
-    platform: options.platform,
-    extrasPlatform: options.extrasPlatform,
-    version: options.version,
-    forkName: options.forkName || null,
+    options: {
+      baseUrl: options.baseUrl,
+      extrasUrl: options.extrasUrl || null,
+      baseChecksum: options.baseChecksum || null,
+      extrasChecksum: options.extrasChecksum || null,
+      sdMount: options.sdMount,
+      platform: options.platform,
+      extrasPlatform: options.extrasPlatform,
+      version: options.version,
+      forkName: options.forkName || null,
+    },
   });
 }
 
@@ -171,7 +173,7 @@ export async function startInstallAndWait(options: {
       })
       .catch((err) => {
         cleanup();
-        reject(err);
+        reject(asError(err));
       });
   });
 }

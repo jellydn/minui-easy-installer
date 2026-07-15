@@ -1,3 +1,5 @@
+import { errorMessage } from "./errors";
+
 export interface ValidationCheck {
   name: string;
   passed: boolean;
@@ -53,7 +55,7 @@ export async function validateInstallation(options: {
 
     return { success: true, data: result };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    const message = errorMessage(err);
     return {
       success: false,
       error: { message, code: "VALIDATION_ERROR" },
@@ -134,7 +136,7 @@ export async function checkSdCardHealth(options: {
 
     return { success: true, data: result };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    const message = errorMessage(err);
     return {
       success: false,
       error: { message, code: "VALIDATION_ERROR" },

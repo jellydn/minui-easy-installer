@@ -1,5 +1,5 @@
 import type { AppError } from "./errors";
-import { classifyError } from "./errors";
+import { classifyError, errorMessage } from "./errors";
 import storeData from "./store.json";
 import { parseRegistryFromJson } from "./registry-convert";
 
@@ -126,7 +126,7 @@ export async function installPackage(options: {
       error: { message: errorMsg, code },
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    const message = errorMessage(err);
     return {
       success: false,
       error: { message, code: "UNKNOWN_ERROR" },
@@ -233,7 +233,7 @@ export async function fetchPackageRegistry(): Promise<PackageRegistryFetchResult
       },
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    const message = errorMessage(err);
     return {
       success: false,
       error: { message, code: "NETWORK_ERROR" },
