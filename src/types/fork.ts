@@ -23,6 +23,12 @@ export const FORK_PRESETS: Record<string, ForkConfig> = {
     repo: "MinUI-Zero",
     minuiTxtPrefix: "MinUI-Zero",
   },
+  minuitsp: {
+    label: "MinUITSP",
+    owner: "jellydn",
+    repo: "MinUITSP",
+    minuiTxtPrefix: "MinUITSP",
+  },
 };
 
 /** Build the GitHub API releases URL for a given fork. */
