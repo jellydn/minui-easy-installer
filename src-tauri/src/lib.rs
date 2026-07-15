@@ -1,7 +1,5 @@
 use std::sync::Arc;
-use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio_util::sync::CancellationToken;
 
 mod bios;
 mod download;
@@ -10,12 +8,37 @@ mod extract;
 mod fs_utils;
 mod health;
 mod install;
+mod install_manager;
 mod package;
 mod pipeline;
 mod platform;
 mod validate;
 mod version;
 mod wifi;
+
+use install_manager::{EventDispatcher, InstallManager};
+
+/// Thin adapter: bridges Tauri's `AppHandle` to the `EventDispatcher`
+/// trait so `InstallManager` can emit events without knowing about Tauri.
+struct TauriAppDispatcher {
+    handle: AppHandle,
+}
+
+impl EventDispatcher for TauriAppDispatcher {
+    fn emit_progress(&self, event: install::InstallProgressEvent) {
+        if let Err(e) = self.handle.emit("install-progress", event) {
+            eprintln!("Warning: failed to emit install progress event: {}", e);
+        }
+    }
+
+    fn emit_complete(&self, result: install::InstallResult) {
+        let _ = self.handle.emit("install-complete", result);
+    }
+
+    fn emit_error(&self, error: String) {
+        let _ = self.handle.emit("install-error", error);
+    }
+}
 
 #[tauri::command]
 async fn get_removable_drives() -> Result<Vec<drives::RemovableDrive>, String> {
@@ -48,24 +71,6 @@ fn verify_archive_checksum(opts: VerifyChecksumOptions) -> Result<bool, String> 
     download::verify_checksum(&opts.file_path, &opts.expected_checksum)
 }
 
-/// Registry of in-flight install cancellation tokens.
-///
-/// The UI never runs concurrent installs in a single window, so we keep
-/// at most one token at a time. A new install replaces the previous
-/// (cancelling the old one — safer than letting it run orphaned).
-#[derive(Default)]
-pub struct InstallRegistry {
-    pub token: Mutex<Option<CancellationToken>>,
-}
-
-impl InstallRegistry {
-    pub fn new() -> Self {
-        Self {
-            token: Mutex::new(None),
-        }
-    }
-}
-
 /// Synchronous install (deprecated — prefer start_install for progress streaming).
 #[tauri::command]
 async fn install_minui(options: install::InstallOptions) -> Result<install::InstallResult, String> {
@@ -79,73 +84,17 @@ async fn install_minui(options: install::InstallOptions) -> Result<install::Inst
 #[tauri::command]
 async fn start_install(
     app_handle: AppHandle,
-    registry: tauri::State<'_, Arc<InstallRegistry>>,
+    manager: tauri::State<'_, Arc<InstallManager>>,
     options: install::InstallOptions,
 ) -> Result<String, String> {
-    let token = CancellationToken::new();
-    {
-        let mut slot = registry
-            .token
-            .lock()
-            .map_err(|_| "Internal error: state lock is poisoned".to_string())?;
-        if let Some(old) = slot.take() {
-            old.cancel();
-        }
-        *slot = Some(token.clone());
-    }
-
-    let handle = app_handle.clone();
-    let progress = Arc::new(move |event: install::InstallProgressEvent| {
-        if let Err(e) = handle.emit("install-progress", event) {
-            eprintln!("Warning: failed to emit install progress event: {}", e);
-        }
-    });
-
-    let handle_for_dl = app_handle.clone();
-    let download_progress: pipeline::DownloadProgressCallback = Arc::new(move |bytes, total| {
-        let event = install::InstallProgressEvent {
-            step: "download".to_string(),
-            details: String::new(),
-            current_bytes: Some(bytes),
-            total_bytes: total,
-        };
-        if let Err(e) = handle_for_dl.emit("install-progress", event) {
-            eprintln!("Warning: failed to emit download progress event: {}", e);
-        }
-    });
-
-    let registry_for_task = registry.inner().clone();
-    let result_handle = app_handle.clone();
-    tokio::spawn(async move {
-        let res =
-            install::install_minui_with_cancel(&options, progress, download_progress, token).await;
-        if let Ok(mut slot) = registry_for_task.token.lock() {
-            *slot = None;
-        }
-        match res {
-            Ok(r) => {
-                let _ = result_handle.emit("install-complete", r);
-            }
-            Err(e) => {
-                let _ = result_handle.emit("install-error", e);
-            }
-        }
-    });
-
-    Ok("current".to_string())
+    let dispatcher = Arc::new(TauriAppDispatcher { handle: app_handle });
+    manager.inner().start(dispatcher, options)
 }
 
 /// Cancel an in-flight install. No-op if no install is running.
 #[tauri::command]
-fn cancel_install(registry: tauri::State<'_, Arc<InstallRegistry>>) -> Result<(), String> {
-    let slot = registry
-        .token
-        .lock()
-        .map_err(|_| "Internal error: state lock is poisoned".to_string())?;
-    if let Some(token) = slot.as_ref() {
-        token.cancel();
-    }
-    Ok(())
+fn cancel_install(manager: tauri::State<'_, Arc<InstallManager>>) -> Result<(), String> {
+    manager.cancel()
 }
 
 #[tauri::command]
@@ -292,9 +241,9 @@ async fn fetch_url(url: String) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let registry = Arc::new(InstallRegistry::new());
+    let manager = Arc::new(InstallManager::new());
     tauri::Builder::default()
-        .manage(registry)
+        .manage(manager)
         .invoke_handler(tauri::generate_handler![
             get_removable_drives,
             format_drive,
