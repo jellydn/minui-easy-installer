@@ -355,8 +355,19 @@ pub async fn install_minui_with_cancel(
         .await
         {
             Ok(n) => extras_files_copied = n,
-            Err(e) => extras_warning = Some(e),
+            Err(e) => {
+                // Cancellation is fatal even during the non-fatal extras phase
+                if cancel.is_cancelled() {
+                    return Err(e);
+                }
+                extras_warning = Some(e);
+            }
         }
+    }
+
+    // Bail out before further disk writes if the user cancelled mid-flight
+    if cancel.is_cancelled() {
+        return Err("Installation cancelled".to_string());
     }
 
     // ── Step 3: ROM directories ────────────────────────────
