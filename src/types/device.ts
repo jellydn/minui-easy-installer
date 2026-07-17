@@ -19,7 +19,7 @@ const DEFAULT_INSTALL_PATH_RULES: InstallPathRules = {
 };
 
 const DEVICE_PROFILES: DeviceProfile[] = [
-  // TrimUI — base uses "trimui", extras uses "tg5040"
+  // TrimUI — base archive uses "trimui" for both; TG5040 devices use extras folder "tg5040" (upstream MinUI)
   {
     id: "trimui-brick",
     name: "TrimUI Brick",

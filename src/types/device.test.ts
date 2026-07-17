@@ -45,4 +45,13 @@ describe("getDeviceProfile", () => {
     expect(profile?.platform).toBe("miyoo355");
     expect(profile?.extrasPlatform).toBe("my355");
   });
+
+  it("maps TrimUI Brick and Smart Pro to tg5040 extras (upstream MinUI runtime)", () => {
+    const brick = getDeviceProfile("trimui-brick");
+    const smartPro = getDeviceProfile("trimui-smart-pro");
+    expect(brick?.platform).toBe("trimui");
+    expect(brick?.extrasPlatform).toBe("tg5040");
+    expect(smartPro?.platform).toBe("trimui");
+    expect(smartPro?.extrasPlatform).toBe("tg5040");
+  });
 });
