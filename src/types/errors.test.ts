@@ -15,6 +15,7 @@ describe("errorMessage", () => {
   it("extracts message property from error-like objects", () => {
     expect(errorMessage({ message: "hello" })).toBe("hello");
     expect(errorMessage({ message: 42 })).toBe("42");
+    expect(errorMessage({ message: true })).toBe("true");
   });
 
   it("falls back to Unknown error for unrecognised values", () => {
@@ -22,6 +23,10 @@ describe("errorMessage", () => {
     expect(errorMessage(undefined)).toBe("Unknown error");
     expect(errorMessage(42)).toBe("Unknown error");
     expect(errorMessage({})).toBe("Unknown error");
+    // Non-primitive message values must not coerce to "null" / "[object Object]"
+    expect(errorMessage({ message: null })).toBe("Unknown error");
+    expect(errorMessage({ message: undefined })).toBe("Unknown error");
+    expect(errorMessage({ message: { nested: true } })).toBe("Unknown error");
   });
 });
 

@@ -41,7 +41,10 @@ export function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
   if (err && typeof err === "object" && "message" in err) {
-    return String((err as { message: unknown }).message);
+    const msg = (err as { message: unknown }).message;
+    // Only coerce primitives — avoid "null" / "[object Object]" noise
+    if (typeof msg === "string") return msg;
+    if (typeof msg === "number" || typeof msg === "boolean") return String(msg);
   }
   return "Unknown error";
 }
