@@ -87,6 +87,14 @@
       "description": "Developer utilities and system info"
     },
     {
+      "name": "DotClean",
+      "repository": "https://github.com/tanbase/minui-dotclean-pak",
+      "version": "0.2.0",
+      "pak_name": "DotClean",
+      "device": ["trimui-brick", "trimui-smart-pro"],
+      "description": "Clean macOS junk files (.DS_Store, ._*, __MACOSX) from the SD card"
+    },
+    {
       "name": "SSH Server",
       "repository": "https://github.com/josegonzalez/minui-dropbear-server-pak",
       "version": "0.9.0",
