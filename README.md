@@ -18,13 +18,13 @@
 
 ## Download
 
-The latest release is **[v0.2.0](https://github.com/jellydn/minui-easy-installer/releases/tag/v0.2.0)**.
+The latest release is **[v0.3.0](https://github.com/jellydn/minui-easy-installer/releases/tag/v0.3.0)**.
 
 | Platform | Download |
 |----------|----------|
-| **macOS** (Apple Silicon) | [MinUI.Easy.Installer_0.2.0_aarch64.dmg](https://github.com/jellydn/minui-easy-installer/releases/download/v0.2.0/MinUI.Easy.Installer_0.2.0_aarch64.dmg) |
-| **Windows** (x64) | [MinUI.Easy.Installer_0.2.0_x64-setup.exe](https://github.com/jellydn/minui-easy-installer/releases/download/v0.2.0/MinUI.Easy.Installer_0.2.0_x64-setup.exe) |
-| **Windows** (x64 MSI) | [MinUI.Easy.Installer_0.2.0_x64_en-US.msi](https://github.com/jellydn/minui-easy-installer/releases/download/v0.2.0/MinUI.Easy.Installer_0.2.0_x64_en-US.msi) |
+| **macOS** (Apple Silicon) | [MinUI.Easy.Installer_0.3.0_aarch64.dmg](https://github.com/jellydn/minui-easy-installer/releases/download/v0.3.0/MinUI.Easy.Installer_0.3.0_aarch64.dmg) |
+| **Windows** (x64) | [MinUI.Easy.Installer_0.3.0_x64-setup.exe](https://github.com/jellydn/minui-easy-installer/releases/download/v0.3.0/MinUI.Easy.Installer_0.3.0_x64-setup.exe) |
+| **Windows** (x64 MSI) | [MinUI.Easy.Installer_0.3.0_x64_en-US.msi](https://github.com/jellydn/minui-easy-installer/releases/download/v0.3.0/MinUI.Easy.Installer_0.3.0_x64_en-US.msi) |
 
 📦 [All releases](https://github.com/jellydn/minui-easy-installer/releases)
 
