@@ -14,6 +14,7 @@ import type {
   InstallProgressEvent,
   InstallResult,
 } from "../types/install";
+import { errorMessage } from "../types/errors";
 import { cancelInstall, startInstallAndWait } from "../types/install";
 import { fetchPackageRegistry, installPackage } from "../types/package";
 import { fetchMinUIRelease, type MinUIRelease } from "../types/release";
@@ -418,8 +419,4 @@ function stepToInstallPhase(step: string, current: InstallPhase): InstallPhase {
     default:
       return current;
   }
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : "Unknown error";
 }

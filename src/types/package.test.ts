@@ -171,9 +171,16 @@ describe("RegistryCache", () => {
   test("set() with different data doesn't leave stale state", () => {
     const cache = new RegistryCache();
     const pakA = makeRegistry().packages[0];
-    const pakB = { ...pakA, name: "PakB", version: "2.0.0", category: "Emulators" as const };
+    const pakB = {
+      ...pakA,
+      name: "PakB",
+      version: "2.0.0",
+      category: "Emulators" as const,
+    };
 
-    cache.set(makeRegistry({ packages: [{ ...pakA, name: "PakA", version: "1.0.0" }] }));
+    cache.set(
+      makeRegistry({ packages: [{ ...pakA, name: "PakA", version: "1.0.0" }] }),
+    );
     cache.set(makeRegistry({ packages: [pakB] }));
 
     const result = cache.get()!;

@@ -71,6 +71,43 @@ describe("useForkInstall", () => {
     );
   });
 
+  it("installMinUI extracts the message when startInstallAndWait rejects with a plain string (Tauri v2 invoke)", async () => {
+    const { fetchMinUIRelease } = await import("../types/release");
+    const { startInstallAndWait } = await import("../types/install");
+
+    (fetchMinUIRelease as Mock).mockResolvedValue({
+      success: true,
+      data: {
+        version: "2025.01.01",
+        baseArchiveUrl: "https://example.com/base.zip",
+        extrasArchiveUrl: null,
+        checksums: null,
+        fork: FORK_PRESETS.minuitsp,
+      },
+    });
+    // Tauri v2 invoke() rejects with a plain string when a Rust command returns Err(String)
+    (startInstallAndWait as Mock).mockRejectedValue(
+      "Download failed with status: 404 Not Found",
+    );
+
+    const { result } = renderUseForkInstall({
+      selectedDevice: "trimui-smart-pro",
+      selectedDriveMount: "/sd",
+      versionCheck: null,
+      packageUpdates: [],
+      onAfterUpdate: () => {},
+    });
+
+    await act(async () => {
+      await result.current.installMinUI();
+    });
+
+    expect(result.current.install.phase).toBe("error");
+    // Must surface the real error, NOT "Unknown error"
+    expect(result.current.install.error).toContain("404");
+    expect(result.current.install.error).not.toContain("Unknown error");
+  });
+
   it("installMinUI surfaces the version-metadata warning via extrasWarning", async () => {
     const { fetchMinUIRelease } = await import("../types/release");
     const { startInstallAndWait } = await import("../types/install");

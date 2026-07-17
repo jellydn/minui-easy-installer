@@ -55,14 +55,19 @@ function ValidationReportUI({
       <div className="validation-device-path">
         <h3>Device-Specific Path</h3>
         <p>
-          Checked: <code className="device-path-code">{result.device_path || "unknown"}</code>
+          Checked:{" "}
+          <code className="device-path-code">
+            {result.device_path || "unknown"}
+          </code>
         </p>
       </div>
 
       {result.multiple_device_folders_warning && (
         <div className="validation-warning validation-warning-multiple-devices">
           <h3>⚠️ Multiple Device Folders Detected</h3>
-          <p className="warning-message">{result.multiple_device_folders_warning}</p>
+          <p className="warning-message">
+            {result.multiple_device_folders_warning}
+          </p>
         </div>
       )}
 

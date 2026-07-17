@@ -1,3 +1,5 @@
+import { errorMessage } from "./errors";
+
 export interface InstalledVersion {
   version: string;
   source: string;
@@ -35,7 +37,7 @@ export async function checkMinuiVersion(options: {
 
     return { success: true, data: result };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    const message = errorMessage(err);
     return {
       success: false,
       error: { message, code: "VERSION_ERROR" },
