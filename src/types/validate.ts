@@ -25,6 +25,8 @@ export interface HealthCheckResult {
   free_space_bytes: number | null;
   filesystem: string | null;
   support_report: string;
+  /** Sequential read speed in MB/s, if the benchmark ran. */
+  read_speed_mbs: number | null;
 }
 
 export type ValidationError = {

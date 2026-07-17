@@ -1,86 +1,129 @@
 # Testing
 
-## Test Runners
+## Frameworks
 
-| Layer | Runner | Config |
-|-------|--------|--------|
-| Rust | `cargo test` | `Cargo.toml` |
-| TypeScript | `vitest` | `vitest.config.ts` |
-| Full suite | `just check` + `cargo test` + `vitest run` | `justfile` |
+| Scope | Framework | Runner | Environment |
+|-------|-----------|--------|-------------|
+| TypeScript unit/component | Vitest | `bun test` / `npx vitest run` | jsdom |
+| TypeScript hook tests | `@testing-library/react` | Vitest | jsdom |
+| TypeScript vanilla tests | Vitest | Vitest | Node (no jsdom needed) |
+| Rust unit tests | `#[test]` + `#[tokio::test]` | `cargo test` | Native |
+| Rust IPC contract tests | `#[test]` in `lib_tests.rs` | `cargo test` | Native |
 
-## Test Counts
+## Running Tests
 
-| Layer | Tests | Files |
-|-------|-------|-------|
-| Rust | 170 passed, 1 ignored | 7 test files + inline `#[cfg(test)]` modules |
-| TypeScript | 127 passed | 17 test files |
-| **Total** | **297** | **24** |
+```bash
+# TypeScript (Vitest)
+bun test                      # Run all
+npx vitest run                # Run all (no watch)
 
-## Rust Testing
+# Rust
+cd src-tauri && cargo test    # Run all (175+ tests)
 
-### Test File Organization
+# All checks
+just check                    # lint + typecheck + cargo fmt + cargo clippy
+```
 
-| File | Lines | Scope |
-|------|-------|-------|
-| `lib_tests.rs` | 393 | Tauri command contract tests (IPC boundary) |
-| `install_tests.rs` | — | Full install pipeline tests |
-| `install_copy_tests.rs` | 478 | `copy_base_files` and copy-specific tests |
-| `install_extras_tests.rs` | — | Extras installation edge cases |
-| `bios_tests.rs` | 298 | BIOS catalog, status, file installation |
-| `drives_tests.rs` | 417 | Drive detection mocking |
-| `wifi_tests.rs` | — | WiFi config write + platform-specific scan tests |
-| `version/tests.rs` | 369 | Version parsing and comparison |
+## Test Organization
 
-### Patterns
-- `tempfile` crate for temporary directories (no real SD card needed)
-- Inline `#[cfg(test)] mod tests` for parser/utility functions
-- External `*_tests.rs` for integration and IPC contract tests
-- `#[cfg(target_os = "macos")]` gating for platform-specific test modules
+### TypeScript — `src/`
 
-### Mocking
-- `DriveDetector` trait with `&dyn DriveDetector` for mock drive detection
-- Test-specific functions use controlled inputs (no external shell/network calls)
-- Health check tests use `/nonexistent` paths (cross-platform)
+```
+Component.tsx           →  Component.test.tsx          (co-located)
+types/foo.ts            →  types/foo.test.ts           (co-located)
+hooks/useFoo.ts         →  hooks/useFoo.test.ts        (co-located)
+lib/InstallOrchestrator.ts → lib/InstallOrchestrator.test.ts  (co-located)
+```
 
-## TypeScript Testing
+19 test files, 147 tests total.
 
-### Framework
-- **Vitest** with `jsdom` environment
-- **@testing-library/react** for component rendering
-- **@testing-library/user-event** for simulated user interaction
+### Rust — `src-tauri/src/`
 
-### Test File Organization
+```
+foo.rs                  →  #[cfg(test)] #[path = "foo_tests.rs"] mod tests;
+lib.rs                  →  #[cfg(test)] #[path = "lib_tests.rs"] mod tests;
+```
 
-| File | Type | Scope |
-|------|------|-------|
-| `types/fork.test.ts` | Unit | Fork presets, URL building, rehydration (20 tests) |
-| `types/install.test.ts` | Unit | Install IPC functions, error handling (260 lines) |
-| `types/release.test.ts` | Unit | GitHub release parsing, caching (315 lines) |
-| `types/package.test.ts` | Unit | Registry fetch, RegistryCache TTL (13 cache tests) |
-| `types/validate.test.ts` | Unit | Schema validation |
-| `types/version.test.ts` | Unit | Version parsing |
-| `types/device.test.ts` | Unit | Device profile lookup |
-| `types/drive.test.ts` | Unit | Drive size formatting |
-| `types/bios.test.ts` | Unit | BIOS catalog |
-| `hooks/useForkInstall.test.ts` | Hook | Install hook with ForkProvider (272 lines) |
-| `hooks/useVersionCheck.test.ts` | Hook | Version check hook |
-| `Home.test.tsx` | Component | Home screen rendering |
-| `PackageStore.test.tsx` | Component | Package store rendering |
-| `DriveSelector.test.tsx` | Component | Drive picker rendering |
-| `BiosInstaller.test.tsx` | Component | BIOS installer rendering |
-| `Settings.test.tsx` | Component | Settings/fork selection |
-| `WifiWizard.test.tsx` | Component | WiFi wizard rendering |
+Named test modules: `install_tests.rs`, `install_copy_tests.rs`, `install_extras_tests.rs`, `install_manager_tests.rs`, `bios_tests.rs`, `version/tests.rs`, `lib_tests.rs`.
 
-### Patterns
-- `vi.mock("@tauri-apps/api/core")` for Tauri IPC mocking
-- `vi.useFakeTimers()` for `RegistryCache` TTL tests
-- `ForkProvider` wrapper for components that use `useFork()`
-- `makeRegistry()` factory function for test data fixtures
+## Mocking Strategy
 
-## CI Testing
+### TypeScript
 
-| Workflow | Runner | What |
-|----------|--------|------|
-| `rust.yml` | `ubuntu-latest` | `cargo fmt --check`, `cargo clippy`, `cargo test` |
-| `build.yml` | `macos-latest`, `windows-latest`, `ubuntu-latest` | `cargo build --release` |
-| `react-doctor.yml` | — | React code health check |
+```typescript
+// Tauri event listener
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
+}));
+
+// IPC functions (one per domain)
+vi.mock("../types/release", () => ({ fetchMinUIRelease: vi.fn() }));
+vi.mock("../types/install", () => ({
+  startInstallAndWait: vi.fn(),
+  cancelInstall: vi.fn(),
+}));
+vi.mock("../types/validate", () => ({ validateInstallation: vi.fn() }));
+vi.mock("../types/package", () => ({
+  fetchPackageRegistry: vi.fn(),
+  installPackage: vi.fn(),
+}));
+```
+
+Mock functions return `Result<T, AppError>` objects or reject with `Error`/`string` (Tauri v2 invoke).
+
+### Rust
+
+- `MockDispatcher` in `install_manager.rs` records events into `Vec`s for assertions
+- `tempfile::tempdir()` for isolated filesystem tests
+- `/nonexistent/path/here` for file-not-found scenarios
+- Real `reqwest::Client` with unreachable URLs (`127.0.0.1:1`) for network error tests
+
+## Test Categories
+
+### InstallOrchestrator tests (9 tests, no React)
+
+- Initial state (idle, isInstalling=false)
+- Subscribe emits initial state synchronously
+- dismissInstall resets to idle
+- dismissValidation clears validationResult
+- cancel sets error phase
+- start errors when device unknown
+- start errors when install fails
+- start completes successfully with validation
+- isInstalling getter (downloading=true, idle/complete/error=false)
+
+### useForkInstall tests (4 tests, jsdom + ForkProvider)
+
+- installMinUI surfaces error when startInstallAndWait throws
+- installMinUI handles Tauri v2 plain-string rejections
+- installMinUI surfaces version-metadata warning
+- dismissInstall resets to initial state
+
+### InstallManager tests (4 tests)
+
+- Poisoned mutex returns error
+- Cancel on idle is no-op
+- Start cancels previous install
+- Smoke: start doesn't panic
+
+### Health check tests (5 tests)
+
+- Nonexistent mount errors
+- Empty card reports missing folders
+- Card with folders reports them present
+- Read speed benchmark creates + cleans temp file
+- scan_pak_dirs discovers .pak directories recursively
+
+### IPC contract tests (lib_tests.rs, 17+ tests)
+
+Each `#[tauri::command]` has a contract test that calls the underlying function directly:
+- Shape tests: verify return types and error propagation
+- Error tests: verify errors on nonexistent paths / bad URLs
+- Round-trip tests: verify real operations on temp dirs
+
+## Coverage Expectations
+
+- All IPC commands have at least one contract test
+- All new modules include co-located tests
+- Security-critical paths (symlink guards, path sanitization) have targeted tests
+- High coverage is not enforced; correctness of critical paths is prioritized

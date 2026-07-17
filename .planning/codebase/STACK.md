@@ -2,67 +2,77 @@
 
 ## Languages & Runtimes
 
-| Layer | Language | Runtime |
-|-------|----------|---------|
+| Component | Language | Runtime |
+|-----------|----------|---------|
 | Backend | Rust (edition 2021) | Tauri v2 |
-| Frontend | TypeScript 5.6+ | React 18 + Vite 6 |
+| Frontend | TypeScript 5.x | React 18 (Vite dev server) |
 | Package manager | — | Bun |
+| OS floor | — | macOS 10.15+, Windows 10+ |
 
-## Backend Dependencies (`src-tauri/Cargo.toml`)
+## Core Frameworks
 
-| Crate | Version | Purpose |
-|-------|---------|---------|
-| `tauri` | 2 | Desktop app framework |
-| `serde` + `serde_json` | 1 | IPC serialization |
-| `reqwest` | 0.12 | HTTP client (streaming downloads) |
-| `semver` | 1 | Version parsing/comparison |
-| `sha2` + `hex` + `base64` | 0.10 / 0.4 / 0.22 | Checksum verification |
-| `tempfile` | 3 | Temporary directories for extraction |
-| `zip` | 0.6 | Archive extraction |
-| `tokio` + `tokio-util` + `futures-util` | 1 / 0.7 / 0.3 | Async runtime |
-| `libc` | 0.2 | Unix system calls (disk space, stat) |
-| `windows-sys` | 0.59 | Windows filesystem API |
+### Backend — `src-tauri/`
 
-## Frontend Dependencies (`package.json`)
+| Dependency | Purpose |
+|-----------|---------|
+| `tauri` v2 | Desktop app framework, IPC bridge, window management |
+| `serde` + `serde_json` | Serialization for IPC and config files |
+| `reqwest` | HTTP client (GitHub API, package registry) with OnceLock pooling |
+| `tokio` + `tokio-util` | Async runtime + CancellationToken for cancellable installs |
+| `zip` | Archive extraction |
+| `sha2` + `hex` | SHA-256 checksum verification for downloads |
+| `tempfile` | Temp directory management (extract before copy pattern) |
+| `base64` | BIOS file decoding (frontend sends binary as base64 through JSON IPC) |
 
-### Runtime
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `react` + `react-dom` | ^18.3 | UI framework |
-| `@tauri-apps/api` | ^2.0 | Tauri IPC bridge |
+### Frontend — `src/`
 
-### Dev
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `@tauri-apps/cli` | ^2.0 | Tauri build tooling |
-| `vite` | ^6.0 | Bundler & dev server |
-| `typescript` | ^5.6 | Static typing |
-| `oxlint` | ^1.69 | Fast Rust-based linter |
-| `vitest` | ^4.1 | Test runner |
-| `jsdom` | ^29.1 | DOM environment for tests |
-| `@testing-library/react` | ^16.3 | Component testing |
-| `@testing-library/user-event` | ^14.6 | User interaction simulation |
-| `@vitest/coverage-v8` | ^4.1 | Code coverage |
+| Dependency | Purpose |
+|-----------|---------|
+| React 18 | UI framework |
+| `@tauri-apps/api` | Tauri IPC (`invoke`, `listen` for events) |
+| `@testing-library/react` | Component tests |
+| `vitest` | Test runner (jsdom environment) |
 
-## Toolchain
+## Build & Development
 
-| Tool | Purpose |
+| Tool | File | Purpose |
+|------|------|---------|
+| Vite | `vite.config.ts` | Frontend dev server (port 1420), production bundling |
+| Cargo | `src-tauri/Cargo.toml` | Rust compilation, dependency management |
+| Bun | `package.json` → `bun.lock` | JS dependency management, `bun run` scripts |
+| Tauri CLI | `cargo tauri dev/build` | Orchestrates Vite + Cargo, code signing, bundling |
+
+## Linting & Formatting
+
+| Tool | File | Scope |
+|------|------|-------|
+| `oxlint` | `.oxfmtrc.json` | TypeScript/React linting (95 rules, Rust-based, zero-config) |
+| `oxfmt` | `.oxfmtrc.json` | TypeScript/React formatting |
+| `cargo fmt` | Rust default | Rust formatting |
+| `cargo clippy` | `-D warnings` | Rust linting (strict mode) |
+| `prek` | `prek.toml` | Pre-commit hooks (trailing whitespace, EOF fixer, LF normalization) |
+
+## CI/CD — `.github/workflows/react-doctor.yml`
+
+| Job | OS | Checks |
+|-----|----|--------|
+| `check` | ubuntu-latest | typecheck + lint + vitest |
+| `build` (macOS) | macos-latest | `cargo build` + `cargo test` + `cargo clippy` + `cargo fmt --check` |
+| `build` (Windows) | windows-latest | `cargo build` |
+| `build` (Linux) | ubuntu-latest | `cargo build` + `cargo test` + `cargo clippy` + `cargo fmt --check` |
+
+## Configuration Files
+
+| File | Purpose |
 |------|---------|
-| `just` | Task runner (`justfile`) |
-| `prek` | Pre-commit hooks (trailing whitespace, EOF, LF, lint) |
-| `oxfmt` | TypeScript formatter (oxc-based, zero-config) |
-| `cargo fmt` | Rust formatter |
-| `cargo clippy` | Rust linter (deny warnings in CI) |
-| `eslint` | JavaScript rules (no-async-promise-executor, etc.) |
-
-## No-CSS-Framework Policy
-
-Plain `src/styles.css` — no Tailwind, no shadcn, no CSS-in-JS. All styling is hand-written CSS.
-
-## Platform Targets
-
-| OS | Minimum Version | Notes |
-|----|-----------------|-------|
-| macOS | 10.15+ | Apple Silicon (aarch64) DMG |
-| Windows | 10+ | x64 MSI + EXE installer |
-| Linux | Ubuntu (CI only) | Not in MVP; `ubuntu-latest` in build matrix for regression catches |
+| `package.json` | npm scripts (`dev`, `build`, `typecheck`, `lint`, `fmt`, `test`) |
+| `tsconfig.json` | TypeScript strict mode |
+| `vite.config.ts` | Vite config (HMR on port 1420, Tauri integration) |
+| `vitest.config.ts` | Vitest config (jsdom env, setup file) |
+| `vitest.setup.ts` | Test environment setup |
+| `src-tauri/tauri.conf.json` | Tauri app config (CSP, window, bundle settings) |
+| `src-tauri/Cargo.toml` | Rust dependencies and metadata |
+| `.oxfmtrc.json` | oxlint/oxfmt config |
+| `.editorconfig` | Editor settings |
+| `prek.toml` | Pre-commit hook config |
+| `justfile` | Task runner (`just check`, `just fmt`) |

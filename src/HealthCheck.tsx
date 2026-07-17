@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatSize } from "./types/drive";
 import type { HealthCheckResult } from "./types/validate";
 import { checkSdCardHealth } from "./types/validate";
@@ -16,7 +16,12 @@ function HealthCheck({ sdMount, devicePlatform }: HealthCheckProps) {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const handleCheck = async () => {
+  // Track the last-checked mount so we don't re-check the same drive.
+  const lastSdMount = useRef<string | null>(null);
+
+  const runCheck = useCallback(async () => {
+    if (!sdMount) return;
+
     setIsChecking(true);
     setError(null);
     setHealthResult(null);
@@ -33,7 +38,15 @@ function HealthCheck({ sdMount, devicePlatform }: HealthCheckProps) {
     }
 
     setIsChecking(false);
-  };
+  }, [sdMount, devicePlatform]);
+
+  // Auto-run when a new SD card is selected.
+  useEffect(() => {
+    if (sdMount && sdMount !== lastSdMount.current) {
+      lastSdMount.current = sdMount;
+      void runCheck();
+    }
+  }, [sdMount, runCheck]);
 
   const handleCopyReport = async () => {
     if (!healthResult) return;
@@ -43,7 +56,6 @@ function HealthCheck({ sdMount, devicePlatform }: HealthCheckProps) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
       const textarea = document.createElement("textarea");
       textarea.value = healthResult.support_report;
       document.body.appendChild(textarea);
@@ -61,11 +73,11 @@ function HealthCheck({ sdMount, devicePlatform }: HealthCheckProps) {
 
       <button
         type="button"
-        onClick={handleCheck}
+        onClick={runCheck}
         disabled={isChecking}
         className="health-check-btn"
       >
-        {isChecking ? "Checking..." : "Check Health"}
+        {isChecking ? "Checking..." : "Re-check Health"}
       </button>
 
       {error && <p className="error">{error}</p>}
@@ -105,6 +117,12 @@ function HealthCheck({ sdMount, devicePlatform }: HealthCheckProps) {
           {healthResult.free_space_bytes !== null && (
             <p className="health-space">
               Free Space: {formatSize(healthResult.free_space_bytes)}
+            </p>
+          )}
+
+          {healthResult.read_speed_mbs != null && (
+            <p className="health-speed">
+              Read Speed: {healthResult.read_speed_mbs.toFixed(1)} MB/s
             </p>
           )}
 

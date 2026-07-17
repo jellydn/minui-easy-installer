@@ -1,80 +1,86 @@
-# Technical Concerns
+# Concerns & Technical Debt
 
-## Known Gaps
+## Resolved Items (v0.2.0)
 
-| Area | Gap | Priority | Status |
-|------|-----|----------|--------|
-| Linux support | Drive detection + WiFi scanning exist, `ubuntu-latest` in build matrix — not in MVP release | Low | ✅ Resolved |
-| macOS 14.4+ | `airport` WiFi scanning restored via `system_profiler` fallback — `parse_system_profiler_networks()` extracts all visible networks from "Other Local Wireless Networks" section | Medium | ✅ Resolved |
-| Install cancellation | Frontend cancel button wired up via `useForkInstall` → `cancel_install` IPC | Medium | ✅ Resolved |
-| Windows formatting | `format_drive` returns error — not yet implemented | Low | Open |
-| Package registry | Hardcoded versions in `store.json` — mitigated by daily cron auto-update | Low | Open |
+| Issue | Resolution | Commit |
+|-------|-----------|--------|
+| macOS 14.4+ airport deprecation | Added `system_profiler SPAirPortDataType` 3-tier fallback in `wifi.rs` | `feat(wifi)` |
+| Linux CI gap | Added Linux CI job in `react-doctor.yml` | CI update |
+| Shared error handling | `errorMessage()`/`asError()` utilities in `src/types/errors.ts` | `feat(errors)` |
+| InstallManager IPC tangle | Extracted `EventDispatcher` trait + `InstallManager` from `lib.rs` | `f4cc561` |
+| useForkInstall complexity | Extracted `InstallOrchestrator` vanilla TS class (425→129 lines) | `2f214d6` |
+| InstallPhase enum shallowness | Deleted enum; 4 steps inlined in `install_minui_with_cancel()` | `cf77933` |
+| Per-request HTTP client | `OnceLock<reqwest::Client>` with connection pooling | `97db2f8` |
+| Concurrent package I/O contention | `Promise.all` → sequential `for...of` in `updateAll()` | `68a54e2` |
+| useRef render mutation | `useState(() => new InstallOrchestrator())` lazy init | `8ff18a9` |
+| Health check: no speed test | 64MB sequential read benchmark with 5 MB/s threshold | `a58e6f1` |
+| Health check: macOS-only fs | `fsutil` for Windows filesystem detection | `a58e6f1` |
+| Health check: hardcoded PAKs | `scan_pak_dirs()` walks `Tools/` for `*.pak` directories | `a58e6f1` |
 
-## File Size & Complexity
+## Medium Priority
 
-All previously flagged files have been addressed:
+### rom_dirs_created counter accuracy
 
-| File | Before | After | Resolution |
-|------|--------|-------|------------|
-| `install_tests.rs` | 789 | Split into 3 files | Split by concern |
-| `lib.rs` | 647 | 335 | Contract tests extracted |
-| `wifi.rs` | 535 | Split into 4 files | Platform modules |
-| `package.ts` | 455 | 236 | Registry conversion extracted |
+- **File**: `src-tauri/src/install.rs` (`create_rom_dirs`)
+- **Issue**: After removing the `exists()` guard (perf simplification), `rom_dirs_created` always equals `ROM_DIRS.len()` (16), even when directories already exist
+- **Impact**: Misleading counter in `InstallResult` — shows 16 "created" on every install
+- **Fix**: Either restore the `exists()` check or drop the field from `InstallResult`
 
-Largest source files (non-test):
-- `install.rs` (512 lines) — acceptable, orchestration logic
-- `useForkInstall.ts` (425 lines) — acceptable, install state machine
-- `validate.rs` (420 lines) — acceptable, post-install checks
+### fetch_url OnceLock panic
 
-## Panic Risks (Rust)
+- **File**: `src-tauri/src/lib.rs` (`http_client()`)
+- **Issue**: `reqwest::Client::builder().build().expect(...)` panics on first use if TLS backend is missing
+- **Impact**: App crashes on `fetch_url` instead of returning a graceful error. Extremely unlikely in practice (desktop app with bundled TLS)
+- **Fix**: Consider `OnceLock::get_or_try_init` if available, or restore `map_err` at the call site
 
-| File | Pattern | Risk |
-|------|---------|------|
-| `lib.rs` | `registry.token.lock().unwrap()` | Mutex poisoning on `cancel_install` |
-| `lib.rs` | `app.get_webview_window("main").unwrap()` | Window not found in `setup` |
-| `download.rs` | `tempfile::tempdir().unwrap()` | Disk full / permissions |
-| `health.rs` | Various unwraps | IO errors during health checks |
+### WiFi SSID with special characters
 
-The `install_minui_with_cancel` callbacks use `if let Err(e) = ...` for event emission (non-panicking).
+- **File**: `src-tauri/src/wifi.rs`
+- **Issue**: `wifi.txt` format is `SSID:PASSWORD` per line. SSIDs containing `:` or `#` (comments) could cause parsing issues
+- **Impact**: Edge case — rare in practice
+- **Fix**: Document limitation or escape special characters
 
-## Mutex Patterns
+## Low Priority
 
-```rust
-// Pattern 1: unwrap (panic on poison) — main thread
-let mut slot = registry.token.lock().unwrap();
+### async test in install_manager_tests
 
-// Pattern 2: if let Ok (silent on poison) — spawned tasks
-if let Ok(mut slot) = registry_for_task.token.lock() { ... }
-```
+- **File**: `src-tauri/src/install_manager_tests.rs`
+- **Issue**: Test `start_cancels_previous_install` uses `#[tokio::test]` but `start()` spawns a background task that may not complete before the test ends
+- **Impact**: Test may be flaky on slow CI
+- **Fix**: Add a small delay or use a completion signal
 
-## `unsafe` Usage
+### Large TypeScript files
 
-One `unsafe` block in `src-tauri/src/fs_utils.rs`:
-```rust
-unsafe { libc::statvfs(path.as_ptr() as *const i8, &mut stat) }
-```
-Well-audited FFI for disk space on Unix.
+- `src/lib/InstallOrchestrator.ts`: ~340 lines — state machine with multiple methods
+- `src/App.tsx`: ~130 lines — screen router
+- `src/PackageStore.tsx`: ~200 lines — package browser
+- **Impact**: Readability — all under 500 lines, no immediate concern
 
-## Debug Logging in Production
+### Device platform data
 
-| File | Statement | When |
-|------|-----------|------|
-| `lib.rs` | `eprintln!("Warning: failed to emit install progress event: {}", e)` | Event emit failure |
-| `extract.rs` | `eprintln!("Warning: failed to remove temp archive: {}", e)` | Temp cleanup failure |
-| `install.rs` | `eprintln!("Warning: failed to write version metadata: {}", e)` | Metadata write failure |
-| `pipeline.rs` | `eprintln!("create_target_within: cleanup failed ...")` | Security cleanup failure |
+- **File**: `src/types/device-install-map.json`
+- **Issue**: JSON loaded at compile time via TypeScript import. Adding a new device requires touching the JSON + `device.ts` + potentially `platform.rs`
+- **Impact**: Maintenance overhead for new device support
+- **Fix**: Centralize device definitions into a single source of truth
 
-All non-fatal warnings. Consider surfacing to UI or redirecting to log file in production.
+### deprecated install_minui command
 
-## Frontend `console` Usage
+- **File**: `src-tauri/src/lib.rs`
+- **Issue**: Synchronous `install_minui` command still registered but marked deprecated
+- **Impact**: Dead code path — no frontend callers
+- **Fix**: Remove when confident no external consumers exist
 
-- `src/hooks/useVersionCheck.ts` — `console.error` on version check failure
-- No `console.log` or `console.warn` in production code (excluding tests)
+## No Current Concerns
 
-## TypeScript `any` Usage
+These areas were reviewed and found clean:
 
-Minimal — only in `scripts/discover-packages.ts` for GitHub API JSON. No `@ts-ignore` or `@ts-expect-error` in `src/`.
-
-## TODOs & FIXMEs
-
-Zero `TODO`, `FIXME`, `HACK`, `XXX`, `WORKAROUND`, or `BUG` annotations found. Tracked work in GitHub Issues.
+| Area | Status |
+|------|--------|
+| Symlink escape prevention | Hardened — `create_target_within`, `install_bios_from_bytes`, `copy_dir_recursive` |
+| Path traversal in package install | Validated — `create_target_within` canonicalize-before-create |
+| CSP bypass | Tightly scoped in `tauri.conf.json` + SSRF `ALLOWED_URLS` |
+| WiFi password logging | Never logged — `wifi.txt` written to SD card only |
+| Registry data validation | Schema validated before use |
+| ROM/save preservation | Case-insensitive preserved folder matching |
+| Temp file cleanup | `InstallSession` drop + `benchmark_read_speed` cleanup in all paths |
+| Concurrent installs | Prevented — `InstallManager` holds single token, cancels previous on new start |

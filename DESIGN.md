@@ -335,7 +335,7 @@ Cancel/Proceed action buttons. The install plan shows:
 
 - **Base**: All folders from base archive copied to SD root (incl. ROMS)
 - **Extras**: Device emulators/tools to `/Emus/{platform}/` and `/Tools/{platform}/`,
-  plus shared BIOS (uses extras platform name, e.g. `tg5040` for TrimUI Smart Pro)
+  plus shared BIOS (uses extras platform name, e.g. `tg5040` for TrimUI Brick and Smart Pro per upstream MinUI)
 - **Preserved**: Existing ROMS, Saves, BIOS, CHEATS unchanged
 
 Cancel uses secondary styling, Proceed uses primary inversion.
@@ -347,7 +347,7 @@ description, install destination path, and install button. Category uses muted
 text. Installed packages show muted "Installed" label instead of install button.
 
 **Install destination**: Shows the exact platform path packages will install to,
-e.g. `/Emus/tg5040/DC.pak/`. The platform folder uses the device's extras
+e.g. `/Emus/tg5040/DC.pak/` on TrimUI Brick or Smart Pro. The platform folder uses the device's extras
 platform name (resolved from `DeviceProfile.extrasPlatform`), not the device ID.
 
 ### Install Button
