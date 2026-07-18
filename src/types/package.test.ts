@@ -216,6 +216,7 @@ describe("fetchPackageRegistry", () => {
     expect(names).toContain("SSH Server");
     expect(names).toContain("Grout");
     expect(names).toContain("Syncthing");
+    expect(names).toContain("DotClean");
 
     // Verify Grout uses custom download_url
     const grout = result.data.packages.find((p) => p.name === "Grout")!;
@@ -233,7 +234,18 @@ describe("fetchPackageRegistry", () => {
     const mediaPlayer = result.data.packages.find(
       (p) => p.name === "Media Player",
     )!;
-    expect(mediaPlayer.supportedDevices).toEqual(["brick"]);
+    expect(mediaPlayer.supportedDevices).toEqual(["trimui-brick"]);
+
+    const dotClean = result.data.packages.find((p) => p.name === "DotClean")!;
+    expect(dotClean.supportedDevices).toEqual([
+      "trimui-brick",
+      "trimui-smart-pro",
+    ]);
+    expect(dotClean.artifactUrl).toBe(
+      "https://github.com/tanbase/minui-dotclean-pak/releases/download/0.2.0/DotClean.pak.zip",
+    );
+    expect(dotClean.category).toBe("Utilities");
+    expect(dotClean.installPathRules.targetDir).toBe("/Tools");
 
     // Verify default tools have empty supportedDevices
     const wifi = result.data.packages.find((p) => p.name === "Wifi")!;

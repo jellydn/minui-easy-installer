@@ -87,6 +87,14 @@
       "description": "Developer utilities and system info"
     },
     {
+      "name": "DotClean",
+      "repository": "https://github.com/tanbase/minui-dotclean-pak",
+      "version": "0.2.0",
+      "pak_name": "DotClean",
+      "device": ["trimui-brick", "trimui-smart-pro"],
+      "description": "Clean macOS junk files (.DS_Store, ._*, __MACOSX) from the SD card"
+    },
+    {
       "name": "SSH Server",
       "repository": "https://github.com/josegonzalez/minui-dropbear-server-pak",
       "version": "0.9.0",
@@ -140,7 +148,7 @@
       "repository": "https://github.com/josegonzalez/trimui-brick-media-player-pak",
       "version": "0.2.1",
       "pak_name": "Media Player",
-      "device": ["brick"],
+      "device": ["trimui-brick"],
       "description": "Play audio and video files"
     },
     {
@@ -148,7 +156,7 @@
       "repository": "https://github.com/josegonzalez/trimui-brick-moonlight-pak",
       "version": "0.4.0",
       "pak_name": "Moonlight",
-      "device": ["brick"],
+      "device": ["trimui-brick"],
       "description": "Stream games from your PC via Moonlight"
     },
     {
@@ -219,7 +227,7 @@
       "repository": "https://github.com/josegonzalez/trimui-brick-usb-mass-storage-pak",
       "version": "0.4.1",
       "pak_name": "USB Mass Storage",
-      "device": ["brick"],
+      "device": ["trimui-brick"],
       "description": "Use your device as a USB mass storage drive"
     },
     {
