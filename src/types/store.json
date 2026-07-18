@@ -148,7 +148,7 @@
       "repository": "https://github.com/josegonzalez/trimui-brick-media-player-pak",
       "version": "0.2.1",
       "pak_name": "Media Player",
-      "device": ["brick"],
+      "device": ["trimui-brick"],
       "description": "Play audio and video files"
     },
     {
@@ -156,7 +156,7 @@
       "repository": "https://github.com/josegonzalez/trimui-brick-moonlight-pak",
       "version": "0.4.0",
       "pak_name": "Moonlight",
-      "device": ["brick"],
+      "device": ["trimui-brick"],
       "description": "Stream games from your PC via Moonlight"
     },
     {
@@ -227,7 +227,7 @@
       "repository": "https://github.com/josegonzalez/trimui-brick-usb-mass-storage-pak",
       "version": "0.4.1",
       "pak_name": "USB Mass Storage",
-      "device": ["brick"],
+      "device": ["trimui-brick"],
       "description": "Use your device as a USB mass storage drive"
     },
     {

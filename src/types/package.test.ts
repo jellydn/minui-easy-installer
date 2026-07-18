@@ -234,7 +234,7 @@ describe("fetchPackageRegistry", () => {
     const mediaPlayer = result.data.packages.find(
       (p) => p.name === "Media Player",
     )!;
-    expect(mediaPlayer.supportedDevices).toEqual(["brick"]);
+    expect(mediaPlayer.supportedDevices).toEqual(["trimui-brick"]);
 
     const dotClean = result.data.packages.find((p) => p.name === "DotClean")!;
     expect(dotClean.supportedDevices).toEqual([
