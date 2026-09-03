@@ -35,7 +35,7 @@
     {
       "name": "Portmaster",
       "repository": "https://github.com/ben16w/minui-portmaster",
-      "version": "2.13.0",
+      "version": "2.14.0",
       "pak_name": "PORTS",
       "rom_folder": "Roms/Ports (PORTS)",
       "description": "Run ported PC games on your device"
@@ -43,7 +43,7 @@
     {
       "name": "PSP",
       "repository": "https://github.com/ben16w/minui-psp",
-      "version": "5.1.0",
+      "version": "6.2.0",
       "pak_name": "PSP",
       "rom_folder": "Roms/PlayStation Portable (PSP)",
       "description": "PlayStation Portable emulator"
@@ -68,7 +68,7 @@
     {
       "name": "Cloud Backups",
       "repository": "https://github.com/ben16w/minui-cloud-backups",
-      "version": "1.1.0",
+      "version": "2.0.1",
       "pak_name": "Cloud Backups",
       "description": "Backup saves and configs to the cloud"
     },
@@ -114,7 +114,7 @@
     {
       "name": "Favorites",
       "repository": "https://github.com/ben16w/minui-favorites",
-      "version": "0.4.0",
+      "version": "1.0.1",
       "pak_name": "Favorites",
       "description": "Mark and filter your favorite games"
     },
@@ -218,7 +218,7 @@
     {
       "name": "Tailscale",
       "repository": "https://github.com/ben16w/minui-tailscale",
-      "version": "1.2.0",
+      "version": "2.0.0",
       "pak_name": "Tailscale",
       "description": "Secure remote access via Tailscale VPN"
     },
